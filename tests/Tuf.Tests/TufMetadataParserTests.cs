@@ -205,4 +205,16 @@ public class TufMetadataParserTests
         var result = TufMetadataParser.ParseRoot(json);
         Assert.Equal(1, result.Signed.Version);
     }
+
+    [Fact]
+    public void DebugCanonicalJsonHash()
+    {
+        var json = LoadFixture("root.json");
+        var result = TufMetadataParser.ParseRoot(json);
+        var hash = System.Security.Cryptography.SHA256.HashData(result.SignedBytes);
+        var hashHex = Convert.ToHexString(hash).ToLower();
+
+        // Expected OLPC canonical JSON hash (securesystemslib format):
+        Assert.Equal("ffffdfdd0d8747dcc3f8f73c6055d75f2bf36062664ccf98fdd6760ab578d85c", hashHex);
+    }
 }

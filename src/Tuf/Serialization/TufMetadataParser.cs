@@ -22,11 +22,125 @@ internal static class TufMetadataParser
             Sig = s.Sig ?? ""
         }).ToList() ?? [];
 
-        // Extract the raw "signed" bytes for signature verification
-        var signedBytes = JsonSerializer.SerializeToUtf8Bytes(
-            envelope.Signed, TufEnvelopeJsonContext.Default.JsonElement);
+        // Extract the raw "signed" bytes from the original JSON for signature verification.
+        // We must use the exact bytes from the original, not re-serialize, to preserve canonical form.
+        var signedBytes = ExtractSignedBytes(json);
 
         return (signatures, signedBytes, envelope.Signed);
+    }
+
+    /// <summary>
+    /// Extracts the canonical JSON bytes of the "signed" value from the TUF envelope JSON.
+    /// TUF signatures are computed over canonical JSON (sorted keys, no whitespace).
+    /// </summary>
+    private static byte[] ExtractSignedBytes(byte[] json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var signedElement = doc.RootElement.GetProperty("signed");
+        return CanonicalizeJson(signedElement);
+    }
+
+    /// <summary>
+    /// Produces canonical JSON (sorted keys, no whitespace) from a JsonElement.
+    /// This follows the canonical JSON format used by TUF/securesystemslib.
+    /// </summary>
+    /// <summary>
+    /// Produces OLPC Canonical JSON bytes from a JsonElement.
+    /// Per http://wiki.laptop.org/go/Canonical_JSON and securesystemslib:
+    /// - Sorted dict keys
+    /// - No whitespace between tokens
+    /// - Only \ and " are escaped in strings (raw bytes for everything else including newlines)
+    /// - Integers only (no floats)
+    /// </summary>
+    private static byte[] CanonicalizeJson(JsonElement element)
+    {
+        using var ms = new MemoryStream();
+        WriteCanonical(ms, element);
+        return ms.ToArray();
+    }
+
+    private static void WriteCanonical(MemoryStream ms, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                ms.WriteByte((byte)'{');
+                var properties = element.EnumerateObject()
+                    .OrderBy(p => p.Name, StringComparer.Ordinal)
+                    .ToList();
+                for (var i = 0; i < properties.Count; i++)
+                {
+                    if (i > 0)
+                        ms.WriteByte((byte)',');
+                    WriteCanonicalString(ms, properties[i].Name);
+                    ms.WriteByte((byte)':');
+                    WriteCanonical(ms, properties[i].Value);
+                }
+                ms.WriteByte((byte)'}');
+                break;
+
+            case JsonValueKind.Array:
+                ms.WriteByte((byte)'[');
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (index > 0)
+                        ms.WriteByte((byte)',');
+                    WriteCanonical(ms, item);
+                    index++;
+                }
+                ms.WriteByte((byte)']');
+                break;
+
+            case JsonValueKind.String:
+                WriteCanonicalString(ms, element.GetString()!);
+                break;
+
+            case JsonValueKind.Number:
+                var numBytes = System.Text.Encoding.UTF8.GetBytes(element.GetRawText());
+                ms.Write(numBytes);
+                break;
+
+            case JsonValueKind.True:
+                ms.Write("true"u8);
+                break;
+
+            case JsonValueKind.False:
+                ms.Write("false"u8);
+                break;
+
+            case JsonValueKind.Null:
+                ms.Write("null"u8);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Writes a string in OLPC canonical form: only \ and " are escaped.
+    /// All other characters (including control characters like \n) are written as raw UTF-8 bytes.
+    /// </summary>
+    private static void WriteCanonicalString(MemoryStream ms, string value)
+    {
+        ms.WriteByte((byte)'"');
+        var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        foreach (var b in utf8Bytes)
+        {
+            switch (b)
+            {
+                case (byte)'\\':
+                    ms.WriteByte((byte)'\\');
+                    ms.WriteByte((byte)'\\');
+                    break;
+                case (byte)'"':
+                    ms.WriteByte((byte)'\\');
+                    ms.WriteByte((byte)'"');
+                    break;
+                default:
+                    ms.WriteByte(b);
+                    break;
+            }
+        }
+        ms.WriteByte((byte)'"');
     }
 
     /// <summary>
