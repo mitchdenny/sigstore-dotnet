@@ -38,7 +38,7 @@ public class TrustedRoot
     /// </summary>
     public static TrustedRoot Deserialize(string json)
     {
-        throw new NotImplementedException();
+        return TrustedRootSerializer.Deserialize(json);
     }
 }
 

@@ -1,3 +1,5 @@
+using Sigstore.Bundle;
+
 namespace Sigstore.Common;
 
 /// <summary>
@@ -31,7 +33,7 @@ public class SigstoreBundle
     /// </summary>
     public static SigstoreBundle Deserialize(string json)
     {
-        throw new NotImplementedException();
+        return BundleSerializer.Deserialize(json);
     }
 
     /// <summary>
@@ -39,7 +41,7 @@ public class SigstoreBundle
     /// </summary>
     public static SigstoreBundle Deserialize(Stream stream)
     {
-        throw new NotImplementedException();
+        return BundleSerializer.Deserialize(stream);
     }
 
     /// <summary>
@@ -47,7 +49,7 @@ public class SigstoreBundle
     /// </summary>
     public string Serialize()
     {
-        throw new NotImplementedException();
+        return BundleSerializer.Serialize(this);
     }
 }
 
