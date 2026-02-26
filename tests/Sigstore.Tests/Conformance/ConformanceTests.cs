@@ -62,7 +62,7 @@ public class ConformanceTests
         var trustedRootPath = Path.Combine(testDir, "trusted_root.json");
         ITrustRootProvider trustRootProvider = File.Exists(trustedRootPath)
             ? new FileTrustRootProvider(trustedRootPath)
-            : new PublicGoodTrustRootProvider();
+            : new TufTrustRootProvider();
 
         var verifier = new SigstoreVerifier(trustRootProvider);
         var policy = new VerificationPolicy();

@@ -91,6 +91,10 @@ jobs:
 
       - name: Pack
         run: |
+          dotnet pack src/Tuf/Tuf.csproj \
+            -c Release \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            -o ./artifacts
           dotnet pack src/Sigstore/Sigstore.csproj \
             -c Release \
             -p:PackageVersion=${{ steps.version.outputs.version }} \
@@ -159,10 +163,12 @@ jobs:
 
           \`\`\`bash
           dotnet add package Sigstore --version ${PACKAGE_VERSION}
+          dotnet add package Tuf --version ${PACKAGE_VERSION}
           \`\`\`
 
           \`\`\`xml
           <PackageReference Include="Sigstore" Version="${PACKAGE_VERSION}" />
+          <PackageReference Include="Tuf" Version="${PACKAGE_VERSION}" />
           \`\`\`
 
           > Requires [GitHub Packages NuGet source](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry) configured.
@@ -243,11 +249,13 @@ jobs:
 
           \`\`\`bash
           dotnet add package Sigstore --version ${VERSION}
+          dotnet add package Tuf --version ${VERSION}
           \`\`\`
 
           ### Links
           - 📖 [Documentation](https://mitchdenny.github.io/sigstore-dotnet/)
-          - 📦 [NuGet](https://www.nuget.org/packages/Sigstore/${VERSION})
+          - 📦 [Sigstore on NuGet](https://www.nuget.org/packages/Sigstore/${VERSION})
+          - 📦 [Tuf on NuGet](https://www.nuget.org/packages/Tuf/${VERSION})
 
           ---
           *Released from commit ${{ github.sha }}*

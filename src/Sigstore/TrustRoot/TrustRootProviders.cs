@@ -53,6 +53,12 @@ public sealed class InMemoryTrustRootProvider : ITrustRootProvider
 /// sigstore/root-signing GitHub repository. Caches the result for the lifetime
 /// of the provider.
 /// </summary>
+/// <remarks>
+/// This provider fetches trusted_root.json directly without TUF verification.
+/// Consider using <see cref="TufTrustRootProvider"/> instead for cryptographic
+/// verification of the trust root chain.
+/// </remarks>
+[Obsolete("Use TufTrustRootProvider for cryptographically verified trust root fetching.")]
 public sealed class PublicGoodTrustRootProvider : ITrustRootProvider, IDisposable
 {
     /// <summary>
