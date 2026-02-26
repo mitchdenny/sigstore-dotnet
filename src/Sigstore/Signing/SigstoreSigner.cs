@@ -1,8 +1,13 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Sigstore.Common;
+using Sigstore.Crypto;
 using Sigstore.Fulcio;
 using Sigstore.Oidc;
 using Sigstore.Rekor;
 using Sigstore.Timestamp;
+using FulcioCertificateRequest = Sigstore.Fulcio.CertificateRequest;
 
 namespace Sigstore.Signing;
 
@@ -74,17 +79,62 @@ public class SigstoreSigner
     {
         _ = artifact ?? throw new ArgumentNullException(nameof(artifact));
 
-        // TODO: Implement full signing workflow per Sigstore Client Spec:
-        // 1. Authenticate with OIDC IdP → receive identity token
-        // 2. Generate ephemeral keypair
-        // 3. Request certificate from Fulcio (CSR + OIDC token)
-        // 4. Sign the artifact with ephemeral private key
-        // 5. Timestamp the signature via RFC 3161 TSA
-        // 6. Submit metadata to Rekor transparency log
-        // 7. Package everything into a Sigstore Bundle
-        // 8. Destroy the ephemeral private key
+        // 1. Get OIDC token
+        var oidcToken = await _tokenProvider.GetTokenAsync(cancellationToken);
 
-        throw new NotImplementedException();
+        using var keyPair = new EphemeralKeyPair();
+
+        // 2-3. Create CSR and get signing certificate from Fulcio
+        var csr = keyPair.CreateCsr(oidcToken.Subject);
+        var certResponse = await _fulcioClient.GetSigningCertificateAsync(
+            new FulcioCertificateRequest
+            {
+                CertificateSigningRequest = csr,
+                IdentityToken = oidcToken.RawToken
+            },
+            cancellationToken);
+
+        // 4. Hash the artifact
+        var hash = await SHA256.HashDataAsync(artifact, cancellationToken);
+
+        // 5. Sign the hash
+        var signature = keyPair.Sign(hash);
+
+        // 6. Get timestamp
+        var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
+
+        // 7. Submit to Rekor
+        var leafCertPem = ExportCertificatePem(certResponse.CertificateChain[0]);
+        var tlogEntry = await _rekorClient.SubmitEntryAsync(
+            new RekorEntry
+            {
+                Signature = signature,
+                ArtifactDigest = hash,
+                DigestAlgorithm = HashAlgorithmType.Sha2_256,
+                VerificationMaterial = leafCertPem
+            },
+            cancellationToken);
+
+        // 8. Assemble bundle
+        return new SigstoreBundle
+        {
+            MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json",
+            VerificationMaterial = new VerificationMaterial
+            {
+                Certificate = certResponse.CertificateChain[0],
+                TlogEntries = [tlogEntry],
+                Rfc3161Timestamps = [timestampResponse.RawBytes]
+            },
+            MessageSignature = new MessageSignature
+            {
+                MessageDigest = new HashOutput
+                {
+                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Digest = hash
+                },
+                Signature = signature
+            }
+        };
     }
 
     /// <summary>
@@ -113,7 +163,90 @@ public class SigstoreSigner
     {
         _ = inTotoStatement ?? throw new ArgumentNullException(nameof(inTotoStatement));
 
-        // TODO: Implement DSSE attestation signing
-        throw new NotImplementedException();
+        const string payloadType = "application/vnd.in-toto+json";
+        var payloadBytes = Encoding.UTF8.GetBytes(inTotoStatement);
+
+        // 1. Get OIDC token
+        var oidcToken = await _tokenProvider.GetTokenAsync(cancellationToken);
+
+        using var keyPair = new EphemeralKeyPair();
+
+        // 2-3. Create CSR and get signing certificate from Fulcio
+        var csr = keyPair.CreateCsr(oidcToken.Subject);
+        var certResponse = await _fulcioClient.GetSigningCertificateAsync(
+            new FulcioCertificateRequest
+            {
+                CertificateSigningRequest = csr,
+                IdentityToken = oidcToken.RawToken
+            },
+            cancellationToken);
+
+        // 4. Compute PAE (Pre-Authentication Encoding) for DSSE
+        var pae = ComputePae(payloadType, payloadBytes);
+
+        // 5. Sign the PAE
+        var signature = keyPair.Sign(pae);
+
+        // 6. Get timestamp
+        var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
+
+        // 7. Submit to Rekor — hash the PAE for the artifact digest
+        var paeHash = SHA256.HashData(pae);
+        var leafCertPem = ExportCertificatePem(certResponse.CertificateChain[0]);
+        var tlogEntry = await _rekorClient.SubmitEntryAsync(
+            new RekorEntry
+            {
+                Signature = signature,
+                ArtifactDigest = paeHash,
+                DigestAlgorithm = HashAlgorithmType.Sha2_256,
+                VerificationMaterial = leafCertPem
+            },
+            cancellationToken);
+
+        // 8. Assemble bundle with DSSE envelope
+        return new SigstoreBundle
+        {
+            MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json",
+            VerificationMaterial = new VerificationMaterial
+            {
+                Certificate = certResponse.CertificateChain[0],
+                TlogEntries = [tlogEntry],
+                Rfc3161Timestamps = [timestampResponse.RawBytes]
+            },
+            DsseEnvelope = new DsseEnvelope
+            {
+                PayloadType = payloadType,
+                Payload = payloadBytes,
+                Signatures =
+                [
+                    new DsseSignature
+                    {
+                        KeyId = "",
+                        Sig = signature
+                    }
+                ]
+            }
+        };
+    }
+
+    /// <summary>
+    /// Computes the DSSE Pre-Authentication Encoding (PAE).
+    /// PAE = "DSSEv1" + SP + len(type) + SP + type + SP + len(body) + SP + body
+    /// </summary>
+    internal static byte[] ComputePae(string payloadType, byte[] payload)
+    {
+        var typeBytes = Encoding.UTF8.GetBytes(payloadType);
+        var prefix = Encoding.UTF8.GetBytes(
+            $"DSSEv1 {typeBytes.Length} {payloadType} {payload.Length} ");
+        var result = new byte[prefix.Length + payload.Length];
+        prefix.CopyTo(result, 0);
+        payload.CopyTo(result, prefix.Length);
+        return result;
+    }
+
+    private static string ExportCertificatePem(byte[] derBytes)
+    {
+        using var cert = X509CertificateLoader.LoadCertificate(derBytes);
+        return cert.ExportCertificatePem();
     }
 }
