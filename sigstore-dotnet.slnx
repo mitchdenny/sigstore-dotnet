@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/SignAndVerifyRoundTrip/SignAndVerifyRoundTrip.csproj" />
+    <Project Path="samples/SignArtifact/SignArtifact.csproj" />
+    <Project Path="samples/VerifyBundle/VerifyBundle.csproj" />
+    <Project Path="samples/VerifyGitHubActions/VerifyGitHubActions.csproj" />
+    <Project Path="samples/VerifyWithCustomTrustRoot/VerifyWithCustomTrustRoot.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sigstore/Sigstore.csproj" />
   </Folder>
