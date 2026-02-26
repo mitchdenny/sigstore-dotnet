@@ -1,0 +1,50 @@
+name: 'Generate Version'
+description: 'Generates version strings for NuGet packages based on latest git tag'
+
+outputs:
+  preview:
+    description: 'Preview version for GitHub Packages (X.Y.0-preview.[run].[sha].[attempt])'
+    value: ${{ steps.version.outputs.preview }}
+  pr:
+    description: 'PR version for GitHub Packages (X.Y.0-pr.[pr].[run].[sha].[attempt])'
+    value: ${{ steps.version.outputs.pr }}
+  release:
+    description: 'Release version (X.Y.0)'
+    value: ${{ steps.version.outputs.release }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get latest version from git tags
+      id: latest
+      shell: bash
+      run: |
+        git fetch --tags --quiet 2>/dev/null || true
+        LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)
+        if [ -z "$LATEST_TAG" ]; then
+          LATEST_VERSION="0.0.0"
+        else
+          LATEST_VERSION="${LATEST_TAG#v}"
+        fi
+        echo "Latest version: $LATEST_VERSION"
+        echo "latest=$LATEST_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Calculate next version
+      id: version
+      shell: bash
+      run: |
+        LATEST_VERSION="${{ steps.latest.outputs.latest }}"
+        MAJOR=$(echo "$LATEST_VERSION" | cut -d'.' -f1)
+        MINOR=$(echo "$LATEST_VERSION" | cut -d'.' -f2)
+        NEXT_MINOR=$((MINOR + 1))
+        BASE_VERSION="${MAJOR}.${NEXT_MINOR}.0"
+
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+        PREVIEW_VERSION="${BASE_VERSION}-preview.${{ github.run_id }}.${SHORT_SHA}.${{ github.run_attempt }}"
+        PR_VERSION="${BASE_VERSION}-pr.${{ github.event.pull_request.number }}.${{ github.run_id }}.${SHORT_SHA}.${{ github.run_attempt }}"
+        RELEASE_VERSION="${BASE_VERSION}"
+
+        echo "preview=$PREVIEW_VERSION" >> $GITHUB_OUTPUT
+        echo "pr=$PR_VERSION" >> $GITHUB_OUTPUT
+        echo "release=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+        echo "Preview: $PREVIEW_VERSION | PR: $PR_VERSION | Release: $RELEASE_VERSION"

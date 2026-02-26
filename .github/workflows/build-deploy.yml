@@ -1,0 +1,326 @@
+name: Build and Deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Restore
+        run: dotnet restore sigstore-dotnet.slnx
+
+      - name: Build
+        run: dotnet build sigstore-dotnet.slnx --no-restore
+
+      - name: Test
+        run: |
+          dotnet test sigstore-dotnet.slnx \
+            --no-build \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Test Results
+          path: ./TestResults/*.trx
+          reporter: dotnet-trx
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test-results
+          path: ./TestResults/
+
+  build-pr:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: version
+        uses: ./.github/actions/version
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Pack
+        run: |
+          dotnet pack src/Sigstore/Sigstore.csproj \
+            -c Release \
+            -p:PackageVersion=${{ steps.version.outputs.pr }} \
+            -o ./artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-pr
+          path: ./artifacts/*.nupkg
+
+  build-release:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: version
+        uses: ./.github/actions/version
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Pack
+        run: |
+          dotnet pack src/Sigstore/Sigstore.csproj \
+            -c Release \
+            -p:PackageVersion=${{ steps.version.outputs.release }} \
+            -o ./artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-release
+          path: ./artifacts/*.nupkg
+
+  publish-pr:
+    runs-on: ubuntu-latest
+    needs: build-pr
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: version
+        uses: ./.github/actions/version
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-pr
+          path: ./artifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post package info to PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.pr }}
+        run: |
+          # Delete previous package comments
+          gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --json comments \
+            --jq '.comments[]? | select(.body | startswith("## 📦 PR Package Published")) | .databaseId' 2>/dev/null | \
+          while IFS= read -r comment_id; do
+            if [ -n "$comment_id" ]; then
+              gh api --method DELETE \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${{ github.repository }}/issues/comments/$comment_id" || true
+            fi
+          done
+
+          cat > /tmp/pr_comment.md << EOF
+          ## 📦 PR Package Published
+
+          **Version:** \`${PACKAGE_VERSION}\`
+
+          ### Install
+
+          \`\`\`bash
+          dotnet add package Sigstore --version ${PACKAGE_VERSION}
+          \`\`\`
+
+          Or in your csproj:
+          \`\`\`xml
+          <PackageReference Include="Sigstore" Version="${PACKAGE_VERSION}" />
+          \`\`\`
+
+          ### NuGet Configuration
+
+          Add a \`NuGet.config\` with the GitHub Packages feed:
+
+          \`\`\`xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget" value="https://api.nuget.org/v3/index.json" />
+              <add key="github" value="https://nuget.pkg.github.com/mitchdenny/index.json" />
+            </packageSources>
+            <packageSourceMapping>
+              <packageSource key="nuget">
+                <package pattern="*" />
+              </packageSource>
+              <packageSource key="github">
+                <package pattern="Sigstore*" />
+              </packageSource>
+            </packageSourceMapping>
+          </configuration>
+          \`\`\`
+
+          ---
+          *Published at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*
+          EOF
+
+          sed -i 's/^          //' /tmp/pr_comment.md
+
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file /tmp/pr_comment.md \
+            --repo ${{ github.repository }}
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: build-release
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: version
+        uses: ./.github/actions/version
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-release
+          path: ./artifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.release }}
+        run: |
+          # Check if release already exists
+          if gh release view "v${PACKAGE_VERSION}" --repo ${{ github.repository }} >/dev/null 2>&1; then
+            echo "Release v${PACKAGE_VERSION} already exists, skipping"
+            exit 0
+          fi
+
+          cat > /tmp/release_notes.md << EOF
+          ## Sigstore v${PACKAGE_VERSION}
+
+          ### Install
+
+          \`\`\`bash
+          dotnet add package Sigstore --version ${PACKAGE_VERSION}
+          \`\`\`
+
+          ### Links
+          - 📖 [Documentation](https://mitchdenny.github.io/sigstore-dotnet/)
+          - 📦 [GitHub Packages](https://github.com/mitchdenny/sigstore-dotnet/packages)
+
+          ---
+          *Released from commit ${{ github.sha }}*
+          EOF
+
+          gh release create "v${PACKAGE_VERSION}" \
+            --title "v${PACKAGE_VERSION}" \
+            --notes-file /tmp/release_notes.md \
+            ./artifacts/*.nupkg
+
+  deploy-docs:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Install docfx
+        run: dotnet tool install -g docfx
+
+      - name: Build documentation
+        run: docfx docfx.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
