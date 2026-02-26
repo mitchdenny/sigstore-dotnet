@@ -77,14 +77,13 @@ runs:
             MINOR=$(echo "$DEV_VERSION" | cut -d'.' -f2)
             BASE_VERSION="${MAJOR}.${MINOR}.0"
           else
-            # Fall back to latest release tag, increment minor
+            # Fall back to latest release tag and use its major.minor
             LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -v '-' | sort -V | tail -n1)
             if [ -n "$LATEST_TAG" ]; then
               LATEST_VERSION="${LATEST_TAG#v}"
               MAJOR=$(echo "$LATEST_VERSION" | cut -d'.' -f1)
               MINOR=$(echo "$LATEST_VERSION" | cut -d'.' -f2)
-              NEXT_MINOR=$((MINOR + 1))
-              BASE_VERSION="${MAJOR}.${NEXT_MINOR}.0"
+              BASE_VERSION="${MAJOR}.${MINOR}.0"
             else
               BASE_VERSION="0.1.0"
             fi
