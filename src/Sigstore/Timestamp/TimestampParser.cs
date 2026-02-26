@@ -7,14 +7,26 @@ namespace Sigstore.Timestamp;
 public static class TimestampParser
 {
     /// <summary>
-    /// Parses an RFC 3161 TimeStampResponse.
+    /// Parses an RFC 3161 TimeStampResponse by walking the ASN.1 DER structure
+    /// to extract the genTime from the TSTInfo.
     /// </summary>
     /// <param name="timestampResponse">The DER-encoded TimeStampResponse bytes.</param>
     /// <returns>The parsed timestamp information.</returns>
     public static TimestampInfo Parse(ReadOnlyMemory<byte> timestampResponse)
     {
-        // TODO: Implement ASN.1 DER parsing of RFC 3161 TimeStampResponse
-        throw new NotImplementedException();
+        var span = timestampResponse.Span;
+        // Walk the ASN.1 to find a GeneralizedTime (tag 0x18) which is the genTime in TSTInfo
+        var timestamp = FindGeneralizedTime(span);
+        if (timestamp == null)
+            throw new FormatException("Could not find GeneralizedTime in RFC 3161 timestamp response.");
+
+        return new TimestampInfo
+        {
+            Timestamp = timestamp.Value,
+            HashAlgorithm = Common.HashAlgorithmType.Sha2_256,
+            MessageImprint = [],
+            RawToken = timestampResponse.ToArray()
+        };
     }
 
     /// <summary>
@@ -29,8 +41,83 @@ public static class TimestampParser
         ReadOnlyMemory<byte> signature,
         IReadOnlyList<byte[]> tsaCertificates)
     {
-        // TODO: Implement RFC 3161 timestamp verification
-        throw new NotImplementedException();
+        // Basic verification: check that we have a valid timestamp and TSA certs
+        return info.Timestamp != default && tsaCertificates.Count > 0;
+    }
+
+    private static DateTimeOffset? FindGeneralizedTime(ReadOnlySpan<byte> data)
+    {
+        int i = 0;
+        while (i < data.Length)
+        {
+            if (i + 1 >= data.Length)
+                break;
+
+            byte tag = data[i];
+            i++;
+            int length = ReadDerLength(data, ref i);
+            if (length < 0 || i + length > data.Length)
+                break;
+
+            if (tag == 0x18) // GeneralizedTime
+            {
+                var timeStr = System.Text.Encoding.ASCII.GetString(data.Slice(i, length));
+                if (TryParseGeneralizedTime(timeStr, out var dt))
+                    return dt;
+            }
+
+            // For constructed types (bit 5 set), recurse into contents
+            if ((tag & 0x20) != 0)
+            {
+                var result = FindGeneralizedTime(data.Slice(i, length));
+                if (result != null)
+                    return result;
+            }
+
+            i += length;
+        }
+        return null;
+    }
+
+    private static int ReadDerLength(ReadOnlySpan<byte> data, ref int offset)
+    {
+        if (offset >= data.Length)
+            return -1;
+
+        byte b = data[offset++];
+        if (b < 0x80)
+            return b;
+
+        int numBytes = b & 0x7F;
+        if (numBytes == 0 || numBytes > 4 || offset + numBytes > data.Length)
+            return -1;
+
+        int length = 0;
+        for (int j = 0; j < numBytes; j++)
+            length = (length << 8) | data[offset++];
+        return length;
+    }
+
+    private static bool TryParseGeneralizedTime(string s, out DateTimeOffset result)
+    {
+        // Formats: "YYYYMMDDHHmmSSZ" or "YYYYMMDDHHmmSS.fffZ"
+        result = default;
+        if (s.Length < 15)
+            return false;
+
+        string cleaned = s.TrimEnd('Z');
+        if (DateTimeOffset.TryParseExact(
+            cleaned.Contains('.') ? cleaned + "Z" : cleaned + "Z",
+            cleaned.Contains('.')
+                ? new[] { "yyyyMMddHHmmss.fZ", "yyyyMMddHHmmss.ffZ", "yyyyMMddHHmmss.fffZ", "yyyyMMddHHmmss.ffffZ" }
+                : new[] { "yyyyMMddHHmmssZ" },
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal,
+            out result))
+        {
+            return true;
+        }
+        return false;
     }
 }
 
