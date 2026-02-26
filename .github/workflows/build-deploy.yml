@@ -2,10 +2,19 @@ name: Build and Deploy
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'release/*'
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'release/*'
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Produce a GA release (no prerelease suffix). Only valid on release/* branches.'
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -53,20 +62,27 @@ jobs:
           name: test-results
           path: ./TestResults/
 
-  build-pr:
+  build:
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'pull_request'
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      base_version: ${{ steps.version.outputs.base_version }}
+      is_release: ${{ steps.version.outputs.is_release }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate version
         id: version
         uses: ./.github/actions/version
+        with:
+          release: ${{ inputs.release || false }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -77,52 +93,19 @@ jobs:
         run: |
           dotnet pack src/Sigstore/Sigstore.csproj \
             -c Release \
-            -p:PackageVersion=${{ steps.version.outputs.pr }} \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
             -o ./artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nuget-packages-pr
+          name: nuget-packages
           path: ./artifacts/*.nupkg
 
-  build-release:
+  publish-github:
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Generate version
-        id: version
-        uses: ./.github/actions/version
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Pack
-        run: |
-          dotnet pack src/Sigstore/Sigstore.csproj \
-            -c Release \
-            -p:PackageVersion=${{ steps.version.outputs.release }} \
-            -o ./artifacts
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages-release
-          path: ./artifacts/*.nupkg
-
-  publish-pr:
-    runs-on: ubuntu-latest
-    needs: build-pr
-    if: github.event_name == 'pull_request'
+    needs: build
+    if: ${{ needs.build.outputs.is_release != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -132,114 +115,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate version
-        id: version
-        uses: ./.github/actions/version
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: nuget-packages-pr
-          path: ./artifacts
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Push to GitHub Packages
-        run: |
-          dotnet nuget push ./artifacts/*.nupkg \
-            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --api-key ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Post package info to PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PACKAGE_VERSION: ${{ steps.version.outputs.pr }}
-        run: |
-          # Delete previous package comments
-          gh pr view ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }} \
-            --json comments \
-            --jq '.comments[]? | select(.body | startswith("## 📦 PR Package Published")) | .databaseId' 2>/dev/null | \
-          while IFS= read -r comment_id; do
-            if [ -n "$comment_id" ]; then
-              gh api --method DELETE \
-                -H "Accept: application/vnd.github+json" \
-                "/repos/${{ github.repository }}/issues/comments/$comment_id" || true
-            fi
-          done
-
-          cat > /tmp/pr_comment.md << EOF
-          ## 📦 PR Package Published
-
-          **Version:** \`${PACKAGE_VERSION}\`
-
-          ### Install
-
-          \`\`\`bash
-          dotnet add package Sigstore --version ${PACKAGE_VERSION}
-          \`\`\`
-
-          Or in your csproj:
-          \`\`\`xml
-          <PackageReference Include="Sigstore" Version="${PACKAGE_VERSION}" />
-          \`\`\`
-
-          ### NuGet Configuration
-
-          Add a \`NuGet.config\` with the GitHub Packages feed:
-
-          \`\`\`xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <configuration>
-            <packageSources>
-              <clear />
-              <add key="nuget" value="https://api.nuget.org/v3/index.json" />
-              <add key="github" value="https://nuget.pkg.github.com/mitchdenny/index.json" />
-            </packageSources>
-            <packageSourceMapping>
-              <packageSource key="nuget">
-                <package pattern="*" />
-              </packageSource>
-              <packageSource key="github">
-                <package pattern="Sigstore*" />
-              </packageSource>
-            </packageSourceMapping>
-          </configuration>
-          \`\`\`
-
-          ---
-          *Published at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*
-          EOF
-
-          sed -i 's/^          //' /tmp/pr_comment.md
-
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body-file /tmp/pr_comment.md \
-            --repo ${{ github.repository }}
-
-  publish-release:
-    runs-on: ubuntu-latest
-    needs: build-release
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Generate version
-        id: version
-        uses: ./.github/actions/version
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-release
+          name: nuget-packages
           path: ./artifacts
 
       - name: Setup .NET
@@ -254,43 +133,158 @@ jobs:
             --api-key ${{ secrets.GITHUB_TOKEN }} \
             --skip-duplicate
 
-      - name: Create GitHub Release
+      - name: Post package info to PR
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-          PACKAGE_VERSION: ${{ steps.version.outputs.release }}
+          PACKAGE_VERSION: ${{ needs.build.outputs.version }}
         run: |
-          # Check if release already exists
-          if gh release view "v${PACKAGE_VERSION}" --repo ${{ github.repository }} >/dev/null 2>&1; then
-            echo "Release v${PACKAGE_VERSION} already exists, skipping"
-            exit 0
-          fi
+          # Delete previous package comments
+          gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --json comments \
+            --jq '.comments[]? | select(.body | startswith("## 📦 Package Published")) | .databaseId' 2>/dev/null | \
+          while IFS= read -r comment_id; do
+            if [ -n "$comment_id" ]; then
+              gh api --method DELETE \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${{ github.repository }}/issues/comments/$comment_id" || true
+            fi
+          done
 
-          cat > /tmp/release_notes.md << EOF
-          ## Sigstore v${PACKAGE_VERSION}
+          cat > /tmp/pr_comment.md << EOF
+          ## 📦 Package Published
 
-          ### Install
+          **Version:** \`${PACKAGE_VERSION}\`
 
           \`\`\`bash
           dotnet add package Sigstore --version ${PACKAGE_VERSION}
           \`\`\`
 
+          \`\`\`xml
+          <PackageReference Include="Sigstore" Version="${PACKAGE_VERSION}" />
+          \`\`\`
+
+          > Requires [GitHub Packages NuGet source](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry) configured.
+
+          ---
+          *Published at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*
+          EOF
+
+          sed -i 's/^          //' /tmp/pr_comment.md
+
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file /tmp/pr_comment.md \
+            --repo ${{ github.repository }}
+
+  publish-nuget:
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ needs.build.outputs.is_release == 'true' }}
+    environment: nuget-production
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Authenticate to NuGet.org
+        uses: nuget/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USERNAME }}
+
+      - name: Push to NuGet.org
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
+
+      - name: Create git tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.base_version }}
+        run: |
+          TAG="v${VERSION}"
+
+          if gh release view "$TAG" --repo ${{ github.repository }} >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+            exit 0
+          fi
+
+          cat > /tmp/release_notes.md << EOF
+          ## Sigstore ${VERSION}
+
+          ### Install
+
+          \`\`\`bash
+          dotnet add package Sigstore --version ${VERSION}
+          \`\`\`
+
           ### Links
           - 📖 [Documentation](https://mitchdenny.github.io/sigstore-dotnet/)
-          - 📦 [GitHub Packages](https://github.com/mitchdenny/sigstore-dotnet/packages)
+          - 📦 [NuGet](https://www.nuget.org/packages/Sigstore/${VERSION})
 
           ---
           *Released from commit ${{ github.sha }}*
           EOF
 
-          gh release create "v${PACKAGE_VERSION}" \
-            --title "v${PACKAGE_VERSION}" \
+          gh release create "$TAG" \
+            --title "$TAG" \
             --notes-file /tmp/release_notes.md \
+            --target ${{ github.sha }} \
             ./artifacts/*.nupkg
+
+      - name: Bump version tags
+        env:
+          VERSION: ${{ needs.build.outputs.base_version }}
+        run: |
+          MAJOR=$(echo "$VERSION" | cut -d'.' -f1)
+          MINOR=$(echo "$VERSION" | cut -d'.' -f2)
+
+          # Tag main with next dev version so main builds target X.(Y+1).0
+          NEXT_MINOR=$((MINOR + 1))
+          DEV_TAG="v${MAJOR}.${NEXT_MINOR}.0-dev"
+
+          # Only create dev tag if it doesn't exist
+          if ! git tag -l "$DEV_TAG" | grep -q "$DEV_TAG"; then
+            # Fetch main branch tip
+            git fetch origin main --quiet
+            git tag "$DEV_TAG" origin/main
+            git push origin "$DEV_TAG"
+            echo "Created dev tag: $DEV_TAG on main"
+          else
+            echo "Dev tag $DEV_TAG already exists, skipping"
+          fi
 
   deploy-docs:
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
