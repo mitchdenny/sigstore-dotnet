@@ -6,7 +6,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <PackageId>Sigstore.Tuf</PackageId>
+    <PackageId>Tuf</PackageId>
     <Description>A .NET implementation of The Update Framework (TUF) client for secure software update verification.</Description>
     <Authors>Mitch Denny</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
