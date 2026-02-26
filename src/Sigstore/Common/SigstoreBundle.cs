@@ -105,7 +105,9 @@ public class MessageSignature
 /// </summary>
 public class HashOutput
 {
+    /// <summary>The hash algorithm used.</summary>
     public HashAlgorithmType Algorithm { get; set; }
+    /// <summary>The digest bytes.</summary>
     public byte[] Digest { get; set; } = [];
 }
 
@@ -114,11 +116,17 @@ public class HashOutput
 /// </summary>
 public enum HashAlgorithmType
 {
+    /// <summary>Unspecified hash algorithm.</summary>
     Unspecified = 0,
+    /// <summary>SHA2-256.</summary>
     Sha2_256 = 1,
+    /// <summary>SHA2-384.</summary>
     Sha2_384 = 2,
+    /// <summary>SHA2-512.</summary>
     Sha2_512 = 3,
+    /// <summary>SHA3-256.</summary>
     Sha3_256 = 4,
+    /// <summary>SHA3-384.</summary>
     Sha3_384 = 5
 }
 
@@ -168,9 +176,13 @@ public class TransparencyLogEntry
 /// </summary>
 public class InclusionProof
 {
+    /// <summary>The index of the entry in the log.</summary>
     public long LogIndex { get; set; }
+    /// <summary>The size of the Merkle tree at the time of the proof.</summary>
     public long TreeSize { get; set; }
+    /// <summary>The root hash of the Merkle tree.</summary>
     public byte[] RootHash { get; set; } = [];
+    /// <summary>The intermediate hashes forming the inclusion proof path.</summary>
     public List<byte[]> Hashes { get; set; } = [];
 
     /// <summary>
@@ -184,8 +196,11 @@ public class InclusionProof
 /// </summary>
 public class DsseEnvelope
 {
+    /// <summary>The payload content type (e.g., "application/vnd.in-toto+json").</summary>
     public string PayloadType { get; set; } = "";
+    /// <summary>The raw payload bytes.</summary>
     public byte[] Payload { get; set; } = [];
+    /// <summary>The signatures over the PAE-encoded payload.</summary>
     public List<DsseSignature> Signatures { get; set; } = [];
 }
 
@@ -194,6 +209,8 @@ public class DsseEnvelope
 /// </summary>
 public class DsseSignature
 {
+    /// <summary>The key identifier for the signer.</summary>
     public string KeyId { get; set; } = "";
+    /// <summary>The raw signature bytes.</summary>
     public byte[] Sig { get; set; } = [];
 }

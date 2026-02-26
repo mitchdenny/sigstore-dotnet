@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Sigstore</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Sigstore</PackageId>
     <Description>A .NET library for generating and verifying Sigstore signatures.</Description>
     <Authors>Mitch Denny</Authors>

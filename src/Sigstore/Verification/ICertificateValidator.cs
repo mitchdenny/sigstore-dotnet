@@ -31,8 +31,11 @@ public interface ICertificateValidator
 /// </summary>
 public class CertificateValidationResult
 {
+    /// <summary>Whether the certificate chain is valid.</summary>
     public bool IsValid { get; init; }
+    /// <summary>The reason validation failed, or null on success.</summary>
     public string? FailureReason { get; init; }
+    /// <summary>The Subject Alternative Name extracted from the leaf certificate.</summary>
     public string? SubjectAlternativeName { get; init; }
 }
 

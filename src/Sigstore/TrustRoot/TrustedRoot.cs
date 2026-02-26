@@ -47,14 +47,23 @@ public class TrustedRoot
 /// </summary>
 public class TransparencyLogInfo
 {
+    /// <summary>The base URL of the transparency log.</summary>
     public string BaseUrl { get; set; } = "";
+    /// <summary>The hash algorithm used by the log.</summary>
     public Common.HashAlgorithmType HashAlgorithm { get; set; }
+    /// <summary>The DER-encoded public key bytes of the log.</summary>
     public byte[] PublicKeyBytes { get; set; } = [];
+    /// <summary>The algorithm and encoding details of the public key.</summary>
     public Common.PublicKeyDetails KeyDetails { get; set; }
+    /// <summary>The log ID (SHA-256 hash of the public key).</summary>
     public byte[] LogId { get; set; } = [];
+    /// <summary>The checkpoint key ID for Rekor v2 verification.</summary>
     public byte[]? CheckpointKeyId { get; set; }
+    /// <summary>The operator of the transparency log.</summary>
     public string? Operator { get; set; }
+    /// <summary>The start of the log's validity period.</summary>
     public DateTimeOffset? ValidFrom { get; set; }
+    /// <summary>The end of the log's validity period.</summary>
     public DateTimeOffset? ValidTo { get; set; }
 }
 
@@ -63,9 +72,14 @@ public class TransparencyLogInfo
 /// </summary>
 public class CertificateAuthorityInfo
 {
+    /// <summary>The URI of the certificate authority.</summary>
     public string Uri { get; set; } = "";
+    /// <summary>The certificate chain (DER-encoded, leaf to root).</summary>
     public List<byte[]> CertChain { get; set; } = [];
+    /// <summary>The operator of the certificate authority.</summary>
     public string? Operator { get; set; }
+    /// <summary>The start of the CA's validity period.</summary>
     public DateTimeOffset? ValidFrom { get; set; }
+    /// <summary>The end of the CA's validity period.</summary>
     public DateTimeOffset? ValidTo { get; set; }
 }

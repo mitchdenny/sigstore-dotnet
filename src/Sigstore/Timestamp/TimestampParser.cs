@@ -326,10 +326,16 @@ public static class TimestampParser
 /// </summary>
 public class TimestampInfo
 {
+    /// <summary>The timestamp value (genTime) from the TSTInfo.</summary>
     public required DateTimeOffset Timestamp { get; init; }
+    /// <summary>The hash algorithm used for the message imprint.</summary>
     public required Common.HashAlgorithmType HashAlgorithm { get; init; }
+    /// <summary>The message imprint digest from the TSTInfo.</summary>
     public required byte[] MessageImprint { get; init; }
+    /// <summary>The raw RFC 3161 timestamp token bytes.</summary>
     public required byte[] RawToken { get; init; }
+    /// <summary>Certificates embedded in the timestamp response.</summary>
     public List<byte[]> EmbeddedCertificates { get; init; } = [];
+    /// <summary>The DER-encoded issuer name of the timestamp signer.</summary>
     public byte[]? SignerIssuerDer { get; init; }
 }
