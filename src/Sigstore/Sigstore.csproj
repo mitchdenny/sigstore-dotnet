@@ -7,7 +7,7 @@
     <PackageId>Sigstore</PackageId>
     <Description>A .NET library for generating and verifying Sigstore signatures.</Description>
     <Authors>Mitch Denny</Authors>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mitchdenny/sigstore-dotnet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mitchdenny/sigstore-dotnet</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

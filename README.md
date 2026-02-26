@@ -2,7 +2,7 @@
 
 A .NET library for generating and verifying [Sigstore](https://www.sigstore.dev/) signatures.
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Overview
 
@@ -89,4 +89,4 @@ dotnet test sigstore-dotnet.slnx
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
