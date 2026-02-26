@@ -22,7 +22,52 @@ public static class MerkleVerifier
         IReadOnlyList<byte[]> proofHashes,
         ReadOnlySpan<byte> expectedRootHash)
     {
-        // TODO: Implement RFC 6962 §2.1.1 Merkle inclusion proof verification
-        throw new NotImplementedException();
+        if (leafIndex < 0 || leafIndex >= treeSize)
+            return false;
+
+        if (treeSize == 1 && proofHashes.Count == 0)
+            return leafHash.SequenceEqual(expectedRootHash);
+
+        long index = leafIndex;
+        long size = treeSize;
+        Span<byte> current = stackalloc byte[32];
+        leafHash.CopyTo(current);
+
+        for (int i = 0; i < proofHashes.Count; i++)
+        {
+            var proof = proofHashes[i].AsSpan();
+            if (index % 2 == 1 || index == size - 1)
+            {
+                // proof goes on the left
+                current = HashChildren(proof, current);
+            }
+            else
+            {
+                // proof goes on the right
+                current = HashChildren(current, proof);
+            }
+
+            index /= 2;
+            size = (size + 1) / 2;
+        }
+
+        return current.SequenceEqual(expectedRootHash);
+    }
+
+    internal static byte[] HashChildren(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        Span<byte> buffer = stackalloc byte[1 + 32 + 32];
+        buffer[0] = 0x01;
+        left.CopyTo(buffer.Slice(1));
+        right.CopyTo(buffer.Slice(33));
+        return System.Security.Cryptography.SHA256.HashData(buffer);
+    }
+
+    internal static byte[] HashLeaf(ReadOnlySpan<byte> data)
+    {
+        Span<byte> buffer = stackalloc byte[1 + data.Length];
+        buffer[0] = 0x00;
+        data.CopyTo(buffer.Slice(1));
+        return System.Security.Cryptography.SHA256.HashData(buffer);
     }
 }
