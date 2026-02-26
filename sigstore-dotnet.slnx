@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sigstore/Sigstore.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sigstore.Tests/Sigstore.Tests.csproj" />
+  </Folder>
+</Solution>
