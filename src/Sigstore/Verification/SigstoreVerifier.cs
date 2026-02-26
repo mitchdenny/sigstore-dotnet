@@ -140,6 +140,41 @@ public class SigstoreVerifier
                     intermediates.Add(X509CertificateLoader.LoadCertificate(verificationMaterial.CertificateChain[i]));
             }
 
+            // Step 2b: Verify SCTs if CT logs are configured
+            if (trustRoot.CtLogs.Count > 0)
+            {
+                // Find the issuer cert from intermediates, cert chain, or trusted root CAs
+                X509Certificate2? issuerCert = null;
+                if (intermediates is { Count: > 0 })
+                {
+                    issuerCert = intermediates[0];
+                }
+                else
+                {
+                    // Try to find issuer in trusted root certificate authorities
+                    foreach (var ca in trustRoot.CertificateAuthorities)
+                    {
+                        foreach (var caCertBytes in ca.CertChain)
+                        {
+                            try
+                            {
+                                using var caCert = X509CertificateLoader.LoadCertificate(caCertBytes);
+                                if (leafCert.IssuerName.RawData.AsSpan().SequenceEqual(caCert.SubjectName.RawData))
+                                {
+                                    issuerCert = X509CertificateLoader.LoadCertificate(caCertBytes);
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                        if (issuerCert != null) break;
+                    }
+                }
+
+                if (!SctVerifier.VerifyScts(leafCert, issuerCert, trustRoot.CtLogs))
+                    return Fail("No valid Signed Certificate Timestamp (SCT) found for any configured CT log.");
+            }
+
             // Step 3: Establish signature time
             var verifiedTimestamps = new List<VerifiedTimestamp>();
 
