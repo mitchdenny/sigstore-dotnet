@@ -85,10 +85,4 @@ else
     return 1;
 }
 
-// --- Helper: Wraps an already-loaded TrustedRoot ---
 
-class InMemoryTrustRootProvider(TrustedRoot trustRoot) : ITrustRootProvider
-{
-    public Task<TrustedRoot> GetTrustRootAsync(CancellationToken ct = default)
-        => Task.FromResult(trustRoot);
-}

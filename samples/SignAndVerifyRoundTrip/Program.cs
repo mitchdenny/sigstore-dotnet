@@ -76,8 +76,8 @@ await using (var signStream = File.OpenRead(artifactPath))
     // Re-parse the bundle from JSON (simulates loading from disk)
     SigstoreBundle parsedBundle = SigstoreBundle.Deserialize(bundleJson);
 
-    // Create verifier with trust root
-    var verifier = new SigstoreVerifier(new FileTrustRootProvider("trusted_root.json"));
+    // Create verifier — default constructor downloads Sigstore public-good trust root
+    var verifier = new SigstoreVerifier();
 
     // For the round-trip, we don't enforce a specific identity —
     // in production, you would always check the signer's identity.
@@ -113,16 +113,4 @@ await using (var signStream = File.OpenRead(artifactPath))
     }
 }
 
-// --- Helper ---
 
-class FileTrustRootProvider : ITrustRootProvider
-{
-    private readonly string _path;
-    public FileTrustRootProvider(string path) => _path = path;
-
-    public async Task<Sigstore.TrustRoot.TrustedRoot> GetTrustRootAsync(CancellationToken ct = default)
-    {
-        string json = await File.ReadAllTextAsync(_path, ct);
-        return Sigstore.TrustRoot.TrustedRoot.Deserialize(json);
-    }
-}

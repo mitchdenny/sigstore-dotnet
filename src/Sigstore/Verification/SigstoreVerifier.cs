@@ -47,12 +47,12 @@ public class SigstoreVerifier
 
     /// <summary>
     /// Creates a verifier with default implementations for the Sigstore public good instance.
+    /// Downloads the trusted root from the Sigstore public-good TUF target on first use.
     /// </summary>
     public SigstoreVerifier()
     {
-        // TODO: Wire up default implementations
-        _trustRootProvider = null!;
-        _certificateValidator = null!;
+        _trustRootProvider = new TrustRoot.PublicGoodTrustRootProvider();
+        _certificateValidator = new DefaultCertificateValidator();
     }
 
     /// <summary>
@@ -492,7 +492,8 @@ public class SigstoreVerifier
         using var ecdsa = leafCert.GetECDsaPublicKey();
         if (ecdsa != null)
         {
-            bool valid = ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
+            bool valid = ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256,
+                DSASignatureFormat.Rfc3279DerSequence);
             return valid
                 ? (true, null)
                 : (false, "ECDSA signature verification failed.");

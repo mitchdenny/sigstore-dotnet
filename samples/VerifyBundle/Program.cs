@@ -7,6 +7,7 @@
 //   dotnet run -- myfile.txt myfile.txt.sigstore.json user@example.com https://accounts.google.com
 
 using Sigstore.Common;
+using Sigstore.TrustRoot;
 using Sigstore.Verification;
 
 if (args.Length < 4)
@@ -45,10 +46,9 @@ var policy = new VerificationPolicy
     }
 };
 
-// 3. Create a verifier with the trusted root
-//    In production, you'd use a TUF-based trust root provider.
-//    For this sample, we construct the verifier with a trust root provider.
-var verifier = new SigstoreVerifier(new FileTrustRootProvider("trusted_root.json"));
+// 3. Create a verifier — the default constructor downloads the Sigstore
+//    public-good trusted root automatically.
+var verifier = new SigstoreVerifier();
 
 // 4. Verify the bundle against the artifact
 await using var artifactStream = File.OpenRead(artifactPath);
@@ -73,17 +73,4 @@ else
     return 1;
 }
 
-// --- Helper: A simple trust root provider that loads from a JSON file ---
 
-class FileTrustRootProvider : ITrustRootProvider
-{
-    private readonly string _path;
-
-    public FileTrustRootProvider(string path) => _path = path;
-
-    public async Task<Sigstore.TrustRoot.TrustedRoot> GetTrustRootAsync(CancellationToken ct = default)
-    {
-        string json = await File.ReadAllTextAsync(_path, ct);
-        return Sigstore.TrustRoot.TrustedRoot.Deserialize(json);
-    }
-}

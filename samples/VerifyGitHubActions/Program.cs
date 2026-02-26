@@ -43,8 +43,8 @@ var policy = new VerificationPolicy
     CertificateIdentity = CertificateIdentity.ForGitHubActions(repository)
 };
 
-// 3. Verify
-var verifier = new SigstoreVerifier(new FileTrustRootProvider("trusted_root.json"));
+// 3. Verify — default constructor downloads Sigstore public-good trust root
+var verifier = new SigstoreVerifier();
 await using var artifactStream = File.OpenRead(artifactPath);
 
 try
@@ -64,16 +64,4 @@ catch (VerificationException ex)
     return 1;
 }
 
-// --- Helper ---
 
-class FileTrustRootProvider : ITrustRootProvider
-{
-    private readonly string _path;
-    public FileTrustRootProvider(string path) => _path = path;
-
-    public async Task<Sigstore.TrustRoot.TrustedRoot> GetTrustRootAsync(CancellationToken ct = default)
-    {
-        string json = await File.ReadAllTextAsync(_path, ct);
-        return Sigstore.TrustRoot.TrustedRoot.Deserialize(json);
-    }
-}

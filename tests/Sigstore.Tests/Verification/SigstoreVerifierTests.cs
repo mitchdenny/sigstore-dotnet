@@ -121,7 +121,7 @@ public class SigstoreVerifierTests
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
-        var signature = key.SignData(artifact, HashAlgorithmName.SHA256);
+        var signature = key.SignData(artifact, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
 
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator("test@example.com"));
         var bundle = new SigstoreBundle
@@ -171,7 +171,7 @@ public class SigstoreVerifierTests
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
-        var signature = key.SignData(artifact, HashAlgorithmName.SHA256);
+        var signature = key.SignData(artifact, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
 
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator());
         var bundle = new SigstoreBundle
@@ -235,7 +235,7 @@ public class SigstoreVerifierTests
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
-        var signature = key.SignData(artifact, HashAlgorithmName.SHA256);
+        var signature = key.SignData(artifact, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
 
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator());
         var bundle = new SigstoreBundle
