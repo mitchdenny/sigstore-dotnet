@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Sigstore</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <PackageId>Sigstore</PackageId>
     <Description>A .NET library for generating and verifying Sigstore signatures.</Description>
     <Authors>Mitch Denny</Authors>
