@@ -6,14 +6,18 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <PackageId>Tuf</PackageId>
-    <Description>A .NET implementation of The Update Framework (TUF) client.</Description>
+    <PackageId>Sigstore.Tuf</PackageId>
+    <Description>A .NET implementation of The Update Framework (TUF) client for secure software update verification.</Description>
     <Authors>Mitch Denny</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mitchdenny/sigstore-dotnet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mitchdenny/sigstore-dotnet</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
