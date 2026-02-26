@@ -117,31 +117,31 @@ internal sealed class DsseSignatureJson
     public string? Sig { get; set; }
 }
 
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    WriteIndented = false)]
+[JsonSerializable(typeof(BundleJson))]
+internal sealed partial class BundleJsonContext : JsonSerializerContext;
+
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(BundleJson))]
+internal sealed partial class BundleJsonReadContext : JsonSerializerContext;
+
 internal static class BundleSerializer
 {
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false
-    };
-
-    private static readonly JsonSerializerOptions s_readOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
-
     public static SigstoreBundle Deserialize(string json)
     {
-        var dto = JsonSerializer.Deserialize<BundleJson>(json, s_readOptions)
+        var dto = JsonSerializer.Deserialize(json, BundleJsonReadContext.Default.BundleJson)
                   ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
         return FromDto(dto);
     }
 
     public static SigstoreBundle Deserialize(Stream stream)
     {
-        var dto = JsonSerializer.Deserialize<BundleJson>(stream, s_readOptions)
+        var dto = JsonSerializer.Deserialize(stream, BundleJsonReadContext.Default.BundleJson)
                   ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
         return FromDto(dto);
     }
@@ -149,7 +149,7 @@ internal static class BundleSerializer
     public static string Serialize(SigstoreBundle bundle)
     {
         var dto = ToDto(bundle);
-        return JsonSerializer.Serialize(dto, s_options);
+        return JsonSerializer.Serialize(dto, BundleJsonContext.Default.BundleJson);
     }
 
     private static SigstoreBundle FromDto(BundleJson dto)

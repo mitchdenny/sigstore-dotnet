@@ -61,17 +61,17 @@ internal sealed class CertChainJson
     public List<Bundle.CertificateJson>? Certificates { get; set; }
 }
 
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(TrustedRootJson))]
+internal sealed partial class TrustedRootJsonContext : JsonSerializerContext;
+
 internal static class TrustedRootSerializer
 {
-    private static readonly JsonSerializerOptions s_readOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
-
     public static TrustedRoot Deserialize(string json)
     {
-        var dto = JsonSerializer.Deserialize<TrustedRootJson>(json, s_readOptions)
+        var dto = JsonSerializer.Deserialize(json, TrustedRootJsonContext.Default.TrustedRootJson)
                   ?? throw new JsonException("Failed to deserialize TrustedRoot.");
         return FromDto(dto);
     }
