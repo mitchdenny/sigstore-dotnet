@@ -84,8 +84,8 @@ public static class CheckpointVerifier
             if (!keyId.SequenceEqual(expectedKeyId))
                 continue;
 
-            // Try Ed25519 (64-byte signatures, 32-byte public key)
-            if (signature.Length == 64 && logPublicKey.Length == 32)
+            // Try Ed25519 (64-byte signatures, 32 or 44 byte public key)
+            if (signature.Length == 64 && (logPublicKey.Length == 32 || logPublicKey.Length == 44))
             {
                 try
                 {
@@ -104,7 +104,8 @@ public static class CheckpointVerifier
                 {
                     using var ecdsa = ECDsa.Create();
                     ecdsa.ImportSubjectPublicKeyInfo(logPublicKey, out _);
-                    signatureVerified = ecdsa.VerifyData(noteBodyBytes, signature, HashAlgorithmName.SHA256);
+                    signatureVerified = ecdsa.VerifyData(noteBodyBytes, signature,
+                        HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
                 }
                 catch
                 {
@@ -163,76 +164,24 @@ public static class CheckpointVerifier
 
     private static bool VerifyEd25519(ReadOnlySpan<byte> publicKey, byte[] message, ReadOnlySpan<byte> signature)
     {
-        // Construct SPKI DER encoding for Ed25519
-        byte[] spkiPrefix = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
-        var spki = new byte[spkiPrefix.Length + 32];
-        spkiPrefix.CopyTo(spki, 0);
-        publicKey.CopyTo(spki.AsSpan(spkiPrefix.Length));
-
-        return Ed25519Native.Verify(spki, message, signature);
-    }
-}
-
-/// <summary>
-/// Ed25519 signature verification using OpenSSL native interop.
-/// </summary>
-internal static class Ed25519Native
-{
-    internal static bool Verify(byte[] spki, byte[] message, ReadOnlySpan<byte> signature)
-    {
-        var pkey = IntPtr.Zero;
-        var ctx = IntPtr.Zero;
-        var handle = System.Runtime.InteropServices.GCHandle.Alloc(spki, System.Runtime.InteropServices.GCHandleType.Pinned);
-        try
+        ReadOnlySpan<byte> rawKey;
+        if (publicKey.Length == 44)
         {
-            var ptr = handle.AddrOfPinnedObject();
-            pkey = NativeMethods.d2i_PUBKEY(IntPtr.Zero, ref ptr, spki.Length);
-            if (pkey == IntPtr.Zero)
-                return false;
-
-            ctx = NativeMethods.EVP_MD_CTX_new();
-            if (ctx == IntPtr.Zero)
-                return false;
-
-            if (NativeMethods.EVP_DigestVerifyInit(ctx, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, pkey) != 1)
-                return false;
-
-            var sigArray = signature.ToArray();
-            return NativeMethods.EVP_DigestVerify(ctx, sigArray, (nuint)sigArray.Length, message, (nuint)message.Length) == 1;
+            // SPKI format — extract the 32-byte raw key (skip 12-byte header)
+            rawKey = publicKey.Slice(12);
         }
-        catch
+        else if (publicKey.Length == 32)
+        {
+            rawKey = publicKey;
+        }
+        else
         {
             return false;
         }
-        finally
-        {
-            handle.Free();
-            if (ctx != IntPtr.Zero) NativeMethods.EVP_MD_CTX_free(ctx);
-            if (pkey != IntPtr.Zero) NativeMethods.EVP_PKEY_free(pkey);
-        }
-    }
 
-    private static class NativeMethods
-    {
-        private const string Lib = "libcrypto";
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern IntPtr d2i_PUBKEY(IntPtr a, ref IntPtr pp, int length);
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern IntPtr EVP_MD_CTX_new();
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern void EVP_MD_CTX_free(IntPtr ctx);
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern int EVP_DigestVerifyInit(IntPtr ctx, IntPtr pctx, IntPtr type, IntPtr e, IntPtr pkey);
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern int EVP_DigestVerify(IntPtr ctx, byte[] sig, nuint siglen, byte[] data, nuint datalen);
-
-        [System.Runtime.InteropServices.DllImport(Lib)]
-        internal static extern void EVP_PKEY_free(IntPtr pkey);
+        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
+        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
+        return algorithm.Verify(pk, message, signature);
     }
 }
 

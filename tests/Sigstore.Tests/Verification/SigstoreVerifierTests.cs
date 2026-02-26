@@ -129,10 +129,8 @@ public class SigstoreVerifierTests
             VerificationMaterial = new VerificationMaterial
             {
                 Certificate = cert.RawData,
-                TlogEntries =
-                [
-                    new TransparencyLogEntry { IntegratedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
-                ]
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
+                TlogEntries = []
             },
             MessageSignature = new MessageSignature { Signature = signature }
         };
@@ -179,10 +177,8 @@ public class SigstoreVerifierTests
             VerificationMaterial = new VerificationMaterial
             {
                 Certificate = cert.RawData,
-                TlogEntries =
-                [
-                    new TransparencyLogEntry { IntegratedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
-                ]
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
+                TlogEntries = []
             },
             MessageSignature = new MessageSignature { Signature = signature }
         };
@@ -213,10 +209,8 @@ public class SigstoreVerifierTests
             VerificationMaterial = new VerificationMaterial
             {
                 Certificate = cert.RawData,
-                TlogEntries =
-                [
-                    new TransparencyLogEntry { IntegratedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
-                ]
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
+                TlogEntries = []
             },
             MessageSignature = new MessageSignature { Signature = badSignature }
         };
@@ -243,6 +237,7 @@ public class SigstoreVerifierTests
             VerificationMaterial = new VerificationMaterial
             {
                 Certificate = cert.RawData,
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
                 TlogEntries =
                 [
                     new TransparencyLogEntry
@@ -277,6 +272,73 @@ public class SigstoreVerifierTests
             new X509BasicConstraintsExtension(false, false, 0, true));
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
         return (cert, key);
+    }
+
+    /// <summary>
+    /// Creates a minimal RFC 3161 timestamp response that our TimestampParser.Parse() can extract.
+    /// Builds a valid CMS/SignedData structure with TSTInfo.
+    /// </summary>
+    private static byte[] CreateFakeTimestamp(DateTimeOffset time)
+    {
+        var writer = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+
+        // TimeStampResp ::= SEQUENCE { status, timeStampToken }
+        writer.PushSequence();
+
+        // PKIStatusInfo ::= SEQUENCE { status INTEGER }
+        writer.PushSequence();
+        writer.WriteInteger(0); // granted
+        writer.PopSequence();
+
+        // TimeStampToken ::= ContentInfo (pkcs7-signedData)
+        writer.PushSequence();
+        writer.WriteObjectIdentifier("1.2.840.113549.1.7.2"); // pkcs7-signedData
+        writer.PushSequence(new System.Formats.Asn1.Asn1Tag(System.Formats.Asn1.TagClass.ContextSpecific, 0));
+
+        // SignedData
+        writer.PushSequence();
+        writer.WriteInteger(3); // version
+        writer.PushSetOf(); // digestAlgorithms
+        writer.PushSequence();
+        writer.WriteObjectIdentifier("2.16.840.1.101.3.4.2.1"); // sha-256
+        writer.PopSequence();
+        writer.PopSetOf();
+
+        // encapContentInfo
+        writer.PushSequence();
+        writer.WriteObjectIdentifier("1.2.840.113549.1.9.16.1.4"); // id-smime-ct-TSTInfo
+        writer.PushSequence(new System.Formats.Asn1.Asn1Tag(System.Formats.Asn1.TagClass.ContextSpecific, 0));
+
+        // Build TSTInfo
+        var tstWriter = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+        tstWriter.PushSequence();
+        tstWriter.WriteInteger(1); // version
+        tstWriter.WriteObjectIdentifier("1.2.3.4"); // policy
+        tstWriter.PushSequence(); // messageImprint
+        tstWriter.PushSequence();
+        tstWriter.WriteObjectIdentifier("2.16.840.1.101.3.4.2.1"); // sha-256
+        tstWriter.PopSequence();
+        tstWriter.WriteOctetString(new byte[32]); // empty hash (won't be verified in unit tests)
+        tstWriter.PopSequence();
+        tstWriter.WriteInteger(1); // serialNumber
+        tstWriter.WriteGeneralizedTime(time);
+        tstWriter.PopSequence();
+        var tstInfoBytes = tstWriter.Encode();
+
+        writer.WriteOctetString(tstInfoBytes);
+        writer.PopSequence(new System.Formats.Asn1.Asn1Tag(System.Formats.Asn1.TagClass.ContextSpecific, 0)); // [0]
+        writer.PopSequence(); // encapContentInfo
+
+        writer.PushSetOf(); // signerInfos (empty)
+        writer.PopSetOf();
+
+        writer.PopSequence(); // SignedData
+        writer.PopSequence(new System.Formats.Asn1.Asn1Tag(System.Formats.Asn1.TagClass.ContextSpecific, 0)); // [0]
+        writer.PopSequence(); // ContentInfo
+
+        writer.PopSequence(); // TimeStampResp
+
+        return writer.Encode();
     }
 
     private class FakeTrustRootProvider : ITrustRootProvider

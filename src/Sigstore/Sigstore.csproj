@@ -11,4 +11,8 @@
     <RepositoryUrl>https://github.com/mitchdenny/sigstore-dotnet</RepositoryUrl>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+  </ItemGroup>
+
 </Project>

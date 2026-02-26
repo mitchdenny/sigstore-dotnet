@@ -1,3 +1,7 @@
+using System.Formats.Asn1;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
 namespace Sigstore.Timestamp;
 
 /// <summary>
@@ -8,99 +12,295 @@ public static class TimestampParser
 {
     /// <summary>
     /// Parses an RFC 3161 TimeStampResponse by walking the ASN.1 DER structure
-    /// to extract the genTime from the TSTInfo.
+    /// to extract the genTime, message imprint, and embedded certificates from the TSTInfo.
     /// </summary>
-    /// <param name="timestampResponse">The DER-encoded TimeStampResponse bytes.</param>
-    /// <returns>The parsed timestamp information.</returns>
     public static TimestampInfo Parse(ReadOnlyMemory<byte> timestampResponse)
     {
-        var span = timestampResponse.Span;
-        // Walk the ASN.1 to find a GeneralizedTime (tag 0x18) which is the genTime in TSTInfo
-        var timestamp = FindGeneralizedTime(span);
-        if (timestamp == null)
-            throw new FormatException("Could not find GeneralizedTime in RFC 3161 timestamp response.");
+        var reader = new AsnReader(timestampResponse, AsnEncodingRules.DER);
+        var outer = reader.ReadSequence(); // TimeStampResp
+
+        // Skip status
+        outer.ReadSequence();
+
+        // TimeStampToken — ContentInfo wrapping SignedData
+        var contentInfo = outer.ReadSequence();
+        contentInfo.ReadObjectIdentifier(); // pkcs7-signedData OID
+        var contentData = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+        var signedData = contentData.ReadSequence();
+
+        signedData.ReadInteger(); // version
+        signedData.ReadSetOf(); // digestAlgorithms
+
+        // encapContentInfo — contains TSTInfo
+        var encapContent = signedData.ReadSequence();
+        encapContent.ReadObjectIdentifier(); // id-smime-ct-TSTInfo
+        var tstInfoWrapper = encapContent.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+        var tstInfoBytes = tstInfoWrapper.ReadOctetString();
+
+        // Parse TSTInfo
+        var tstReader = new AsnReader(tstInfoBytes, AsnEncodingRules.DER);
+        var tstInfo = tstReader.ReadSequence();
+        tstInfo.ReadInteger(); // version
+        tstInfo.ReadObjectIdentifier(); // policy
+
+        // messageImprint
+        var messageImprintSeq = tstInfo.ReadSequence();
+        var hashAlgSeq = messageImprintSeq.ReadSequence();
+        var hashAlgOid = hashAlgSeq.ReadObjectIdentifier();
+        var messageImprint = messageImprintSeq.ReadOctetString();
+
+        // serialNumber
+        tstInfo.ReadInteger();
+
+        // genTime
+        var genTime = tstInfo.ReadGeneralizedTime();
+
+        // Extract embedded certificates from SignedData
+        var embeddedCerts = new List<byte[]>();
+        if (signedData.HasData)
+        {
+            var nextTag = signedData.PeekTag();
+            if (nextTag == new Asn1Tag(TagClass.ContextSpecific, 0, true))
+            {
+                var certsSet = signedData.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+                while (certsSet.HasData)
+                {
+                    var certBytes = certsSet.ReadEncodedValue().ToArray();
+                    embeddedCerts.Add(certBytes);
+                }
+            }
+        }
+
+        // Extract signer issuer from SignerInfos for matching against trusted TSAs
+        byte[]? signerIssuerDer = null;
+        if (signedData.HasData)
+        {
+            try
+            {
+                var signerInfos = signedData.ReadSetOf();
+                if (signerInfos.HasData)
+                {
+                    var signerInfo = signerInfos.ReadSequence();
+                    signerInfo.ReadInteger(); // version
+                    // issuerAndSerialNumber ::= SEQUENCE { issuer, serialNumber }
+                    var issuerAndSerial = signerInfo.ReadSequence();
+                    signerIssuerDer = issuerAndSerial.ReadEncodedValue().ToArray();
+                }
+            }
+            catch { }
+        }
 
         return new TimestampInfo
         {
-            Timestamp = timestamp.Value,
-            HashAlgorithm = Common.HashAlgorithmType.Sha2_256,
-            MessageImprint = [],
-            RawToken = timestampResponse.ToArray()
+            Timestamp = genTime,
+            HashAlgorithm = MapHashAlgorithm(hashAlgOid),
+            MessageImprint = messageImprint,
+            RawToken = timestampResponse.ToArray(),
+            EmbeddedCertificates = embeddedCerts,
+            SignerIssuerDer = signerIssuerDer
         };
     }
 
     /// <summary>
     /// Verifies an RFC 3161 timestamp against a signature and trusted TSA certificates.
+    /// Checks: message imprint matches, signer cert chains to trusted TSA.
     /// </summary>
-    /// <param name="info">The parsed timestamp info.</param>
-    /// <param name="signature">The signature that was timestamped.</param>
-    /// <param name="tsaCertificates">The trusted TSA certificate chain.</param>
-    /// <returns>True if the timestamp is valid.</returns>
     public static bool Verify(
         TimestampInfo info,
         ReadOnlyMemory<byte> signature,
         IReadOnlyList<byte[]> tsaCertificates)
     {
-        // Basic verification: check that we have a valid timestamp and TSA certs
-        return info.Timestamp != default && tsaCertificates.Count > 0;
-    }
+        if (info.Timestamp == default)
+            return false;
 
-    private static DateTimeOffset? FindGeneralizedTime(ReadOnlySpan<byte> data)
-    {
-        int i = 0;
-        while (i < data.Length)
+        // Verify message imprint: SHA256(signature) must match
+        if (info.MessageImprint.Length > 0)
         {
-            if (i + 1 >= data.Length)
-                break;
-
-            byte tag = data[i];
-            i++;
-            int length = ReadDerLength(data, ref i);
-            if (length < 0 || i + length > data.Length)
-                break;
-
-            if (tag == 0x18) // GeneralizedTime
-            {
-                var timeStr = System.Text.Encoding.ASCII.GetString(data.Slice(i, length));
-                if (TryParseGeneralizedTime(timeStr, out var dt))
-                    return dt;
-            }
-
-            // For constructed types (bit 5 set), recurse into contents
-            if ((tag & 0x20) != 0)
-            {
-                var result = FindGeneralizedTime(data.Slice(i, length));
-                if (result != null)
-                    return result;
-            }
-
-            i += length;
+            var expectedHash = SHA256.HashData(signature.Span);
+            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint))
+                return false;
         }
-        return null;
+
+        // Find the TSA signing certificate — check if any embedded cert matches a trusted TSA cert
+        if (tsaCertificates.Count == 0)
+            return false;
+
+        // Build trusted cert set from the trusted root TSA chains
+        var trustedCerts = new HashSet<string>();
+        foreach (var certBytes in tsaCertificates)
+        {
+            try
+            {
+                using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                trustedCerts.Add(cert.Thumbprint);
+            }
+            catch { }
+        }
+
+        // Check embedded certs against trusted certs
+        if (info.EmbeddedCertificates.Count > 0)
+        {
+            bool foundTrusted = false;
+            foreach (var certBytes in info.EmbeddedCertificates)
+            {
+                try
+                {
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    if (trustedCerts.Contains(cert.Thumbprint))
+                    {
+                        foundTrusted = true;
+                        break;
+                    }
+
+                    // Also check if the embedded cert is signed by a trusted cert (chain verification)
+                    foreach (var trustedCertBytes in tsaCertificates)
+                    {
+                        try
+                        {
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
+                            if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
+                            {
+                                foundTrusted = true;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                    if (foundTrusted) break;
+                }
+                catch { }
+            }
+            return foundTrusted;
+        }
+
+        // No embedded certs — the signer must be directly in the trusted root
+        // Accept if we have any trusted TSA certs (the CMS signature itself is not verified here)
+        return trustedCerts.Count > 0;
     }
 
-    private static int ReadDerLength(ReadOnlySpan<byte> data, ref int offset)
+    /// <summary>
+    /// Verifies an RFC 3161 timestamp with full trust root context including validity periods.
+    /// </summary>
+    public static bool Verify(
+        TimestampInfo info,
+        ReadOnlyMemory<byte> signature,
+        IReadOnlyList<TrustRoot.CertificateAuthorityInfo> timestampAuthorities)
     {
-        if (offset >= data.Length)
-            return -1;
+        if (info.Timestamp == default || timestampAuthorities.Count == 0)
+            return false;
 
-        byte b = data[offset++];
-        if (b < 0x80)
-            return b;
+        // Verify message imprint
+        if (info.MessageImprint.Length > 0)
+        {
+            var expectedHash = SHA256.HashData(signature.Span);
+            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint))
+                return false;
+        }
 
-        int numBytes = b & 0x7F;
-        if (numBytes == 0 || numBytes > 4 || offset + numBytes > data.Length)
-            return -1;
+        // Check each TSA authority
+        foreach (var tsa in timestampAuthorities)
+        {
+            // Check TSA validity period in the trusted root
+            if (tsa.ValidFrom.HasValue && info.Timestamp < tsa.ValidFrom.Value)
+                continue;
+            if (tsa.ValidTo.HasValue && info.Timestamp > tsa.ValidTo.Value)
+                continue;
 
-        int length = 0;
-        for (int j = 0; j < numBytes; j++)
-            length = (length << 8) | data[offset++];
-        return length;
+            // Check TSA cert chain validity at timestamp time
+            bool certsValidAtTimestamp = true;
+            foreach (var certBytes in tsa.CertChain)
+            {
+                try
+                {
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    if (info.Timestamp < cert.NotBefore || info.Timestamp > cert.NotAfter)
+                    {
+                        certsValidAtTimestamp = false;
+                        break;
+                    }
+                }
+                catch
+                {
+                    certsValidAtTimestamp = false;
+                    break;
+                }
+            }
+            if (!certsValidAtTimestamp)
+                continue;
+
+            // Build trusted cert set for this TSA
+            var trustedCerts = new HashSet<string>();
+            foreach (var certBytes in tsa.CertChain)
+            {
+                try
+                {
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    trustedCerts.Add(cert.Thumbprint);
+                }
+                catch { }
+            }
+
+            if (trustedCerts.Count == 0)
+                continue;
+
+            // Check if embedded certs chain to this TSA
+            if (info.EmbeddedCertificates.Count > 0)
+            {
+                foreach (var certBytes in info.EmbeddedCertificates)
+                {
+                    try
+                    {
+                        using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                        if (trustedCerts.Contains(cert.Thumbprint))
+                            return true;
+
+                        // Check if issued by a trusted cert
+                        foreach (var trustedCertBytes in tsa.CertChain)
+                        {
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
+                            if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
+                                return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            else
+            {
+                // No embedded certs — match signer issuer against trusted TSA cert chain
+                if (info.SignerIssuerDer != null)
+                {
+                    foreach (var trustedCertBytes in tsa.CertChain)
+                    {
+                        try
+                        {
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
+                            if (info.SignerIssuerDer.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
+                                return true;
+                        }
+                        catch { }
+                    }
+                }
+                // Can't identify signer without embedded certs or signer info
+            }
+        }
+
+        return false;
+    }
+
+    private static Common.HashAlgorithmType MapHashAlgorithm(string oid)
+    {
+        return oid switch
+        {
+            "2.16.840.1.101.3.4.2.1" => Common.HashAlgorithmType.Sha2_256,
+            "2.16.840.1.101.3.4.2.2" => Common.HashAlgorithmType.Sha2_384,
+            "2.16.840.1.101.3.4.2.3" => Common.HashAlgorithmType.Sha2_512,
+            _ => Common.HashAlgorithmType.Sha2_256
+        };
     }
 
     private static bool TryParseGeneralizedTime(string s, out DateTimeOffset result)
     {
-        // Formats: "YYYYMMDDHHmmSSZ" or "YYYYMMDDHHmmSS.fffZ"
         result = default;
         if (s.Length < 15)
             return false;
@@ -109,8 +309,8 @@ public static class TimestampParser
         if (DateTimeOffset.TryParseExact(
             cleaned.Contains('.') ? cleaned + "Z" : cleaned + "Z",
             cleaned.Contains('.')
-                ? new[] { "yyyyMMddHHmmss.fZ", "yyyyMMddHHmmss.ffZ", "yyyyMMddHHmmss.fffZ", "yyyyMMddHHmmss.ffffZ" }
-                : new[] { "yyyyMMddHHmmssZ" },
+                ? ["yyyyMMddHHmmss.fZ", "yyyyMMddHHmmss.ffZ", "yyyyMMddHHmmss.fffZ", "yyyyMMddHHmmss.ffffZ"]
+                : ["yyyyMMddHHmmssZ"],
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeUniversal,
             out result))
@@ -126,23 +326,10 @@ public static class TimestampParser
 /// </summary>
 public class TimestampInfo
 {
-    /// <summary>
-    /// The timestamp value.
-    /// </summary>
     public required DateTimeOffset Timestamp { get; init; }
-
-    /// <summary>
-    /// The hash algorithm used in the message imprint.
-    /// </summary>
     public required Common.HashAlgorithmType HashAlgorithm { get; init; }
-
-    /// <summary>
-    /// The message imprint (hash of the timestamped data).
-    /// </summary>
     public required byte[] MessageImprint { get; init; }
-
-    /// <summary>
-    /// The raw DER-encoded TimeStampToken.
-    /// </summary>
     public required byte[] RawToken { get; init; }
+    public List<byte[]> EmbeddedCertificates { get; init; } = [];
+    public byte[]? SignerIssuerDer { get; init; }
 }

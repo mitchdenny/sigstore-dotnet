@@ -91,7 +91,8 @@ public class CheckpointVerifierTests
         var noteBody = $"test-origin\n42\n{rootHashB64}\n";
         var noteBodyBytes = System.Text.Encoding.UTF8.GetBytes(noteBody);
 
-        var signature = ecdsa.SignData(noteBodyBytes, System.Security.Cryptography.HashAlgorithmName.SHA256);
+        var signature = ecdsa.SignData(noteBodyBytes, System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.DSASignatureFormat.Rfc3279DerSequence);
         var pubKeySpki = ecdsa.ExportSubjectPublicKeyInfo();
 
         // Build key ID (first 4 bytes of some identifier)
