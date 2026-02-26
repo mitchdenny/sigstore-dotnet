@@ -52,7 +52,7 @@ public class SigstoreVerifier
     /// </summary>
     public SigstoreVerifier()
     {
-        _trustRootProvider = new TrustRoot.PublicGoodTrustRootProvider();
+        _trustRootProvider = new TrustRoot.TufTrustRootProvider();
         _certificateValidator = new DefaultCertificateValidator();
     }
 

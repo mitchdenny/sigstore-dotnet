@@ -98,7 +98,18 @@ public sealed class TufClient : IDisposable
         if (cached != null && VerifyTargetHashes(cached, targetInfo))
             return cached;
 
-        var targetBytes = await _repository.FetchTargetAsync(targetPath, cancellationToken)
+        // For consistent snapshots, prefix target filename with hash
+        var fetchPath = targetPath;
+        if (_trustedRoot!.Signed.ConsistentSnapshot &&
+            targetInfo.Hashes.TryGetValue("sha256", out var sha256Hash))
+        {
+            var fileName = Path.GetFileName(targetPath);
+            var dirPart = Path.GetDirectoryName(targetPath);
+            var hashPrefixed = $"{sha256Hash}.{fileName}";
+            fetchPath = string.IsNullOrEmpty(dirPart) ? hashPrefixed : $"{dirPart}/{hashPrefixed}";
+        }
+
+        var targetBytes = await _repository.FetchTargetAsync(fetchPath, cancellationToken)
             ?? throw new TufException($"Target '{targetPath}' not found on repository.");
 
         // Verify length

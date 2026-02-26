@@ -20,7 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="TrustRoot\TufData\root.json" LogicalName="Sigstore.TrustRoot.TufData.root.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <ProjectReference Include="..\Tuf\Tuf.csproj" />
   </ItemGroup>
 
 </Project>
