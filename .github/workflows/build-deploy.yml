@@ -90,7 +90,7 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (production)
-        uses: sigstore/sigstore-conformance@v0.0.25
+        uses: sigstore/sigstore-conformance@v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: production
@@ -123,7 +123,7 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (staging)
-        uses: sigstore/sigstore-conformance@v0.0.25
+        uses: sigstore/sigstore-conformance@v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: staging

@@ -198,13 +198,13 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         };
     }
 
-    private static TransparencyLogEntry ParseV2LogEntry(string json)
+    internal static TransparencyLogEntry ParseV2LogEntry(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
         var logIndex = root.TryGetProperty("logIndex", out var li) && li.ValueKind != JsonValueKind.Null
-            ? long.Parse(li.GetString() ?? li.GetRawText())
+            ? ParseInt64(li)
             : 0;
 
         byte[] logId = [];
@@ -221,7 +221,7 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         }
 
         var integratedTime = root.TryGetProperty("integratedTime", out var it) && it.ValueKind != JsonValueKind.Null
-            ? long.Parse(it.GetString() ?? it.GetRawText())
+            ? ParseInt64(it)
             : 0;
 
         byte[]? inclusionPromise = null;
@@ -235,11 +235,11 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         if (root.TryGetProperty("inclusionProof", out var proofElem) && proofElem.ValueKind == JsonValueKind.Object)
         {
             var proofLogIndex = proofElem.TryGetProperty("logIndex", out var pli)
-                ? long.Parse(pli.GetString() ?? pli.GetRawText())
+                ? ParseInt64(pli)
                 : 0;
 
             var treeSize = proofElem.TryGetProperty("treeSize", out var ts)
-                ? long.Parse(ts.GetString() ?? ts.GetRawText())
+                ? ParseInt64(ts)
                 : 0;
 
             byte[] rootHash = [];
@@ -286,6 +286,12 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             InclusionPromise = inclusionPromise
         };
     }
+
+    // Protobuf-JSON may encode int64 as either a string or a number.
+    internal static long ParseInt64(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Number
+            ? element.GetInt64()
+            : long.Parse(element.GetString()!);
 
     /// <inheritdoc />
     public void Dispose()
