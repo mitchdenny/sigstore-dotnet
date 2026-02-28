@@ -11,7 +11,7 @@ public class ConformanceTests
     static string GetTestAssetsDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "sigstore-dotnet.slnx")))
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Sigstore.slnx")))
             dir = dir.Parent;
         return Path.Combine(dir!.FullName, "tests", "sigstore-conformance", "test", "assets", "bundle-verify");
     }
