@@ -41,7 +41,7 @@ public sealed class HttpTimestampAuthority : ITimestampAuthority, IDisposable
         ReadOnlyMemory<byte> signature,
         CancellationToken cancellationToken = default)
     {
-        var url = new Uri(_baseUrl, "api/v1/timestamp");
+        var url = _baseUrl;
 
         // Build RFC 3161 TimeStampReq
         var hash = SHA256.HashData(signature.Span);
