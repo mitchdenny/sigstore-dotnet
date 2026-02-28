@@ -34,12 +34,12 @@ public static class Program
 
     private static Command BuildSignBundleCommand()
     {
-        var stagingOption = new Option<bool>("--staging", "Use Sigstore staging infrastructure");
-        var inTotoOption = new Option<bool>("--in-toto", "Treat input as an in-toto statement");
-        var identityTokenOption = new Option<string>("--identity-token", "OIDC identity token") { Required = true };
-        var bundleOption = new Option<string>("--bundle", "Path to write the bundle to") { Required = true };
-        var trustedRootOption = new Option<string?>("--trusted-root", "Path to a custom trusted root");
-        var signingConfigOption = new Option<string?>("--signing-config", "Path to a custom signing config");
+        var stagingOption = new Option<bool>("--staging");
+        var inTotoOption = new Option<bool>("--in-toto");
+        var identityTokenOption = new Option<string>("--identity-token") { Required = true };
+        var bundleOption = new Option<string>("--bundle") { Required = true };
+        var trustedRootOption = new Option<string?>("--trusted-root");
+        var signingConfigOption = new Option<string?>("--signing-config");
         var fileArgument = new Argument<string>("file");
 
         var command = new Command("sign-bundle", "Sign an artifact and produce a Sigstore bundle");
@@ -78,12 +78,12 @@ public static class Program
 
     private static Command BuildVerifyBundleCommand()
     {
-        var stagingOption = new Option<bool>("--staging", "Use Sigstore staging infrastructure");
-        var bundleOption = new Option<string>("--bundle", "Path to the Sigstore bundle") { Required = true };
-        var certIdentityOption = new Option<string?>("--certificate-identity", "Expected certificate identity");
-        var certIssuerOption = new Option<string?>("--certificate-oidc-issuer", "Expected OIDC issuer");
-        var keyOption = new Option<string?>("--key", "Path to PEM-encoded public key");
-        var trustedRootOption = new Option<string?>("--trusted-root", "Path to a custom trusted root");
+        var stagingOption = new Option<bool>("--staging");
+        var bundleOption = new Option<string>("--bundle") { Required = true };
+        var certIdentityOption = new Option<string?>("--certificate-identity");
+        var certIssuerOption = new Option<string?>("--certificate-oidc-issuer");
+        var keyOption = new Option<string?>("--key");
+        var trustedRootOption = new Option<string?>("--trusted-root");
         var fileArgument = new Argument<string>("file_or_digest");
 
         var command = new Command("verify-bundle", "Verify a Sigstore bundle");
