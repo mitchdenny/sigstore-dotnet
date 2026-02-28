@@ -88,15 +88,62 @@ public class SigstoreVerifier
     }
 
     /// <summary>
+    /// Verifies a Sigstore bundle using a pre-computed artifact digest.
+    /// Used when the original artifact is not available but its hash is known.
+    /// Throws <see cref="VerificationException"/> on failure with detailed reason.
+    /// </summary>
+    /// <param name="artifactDigest">The pre-computed digest of the artifact.</param>
+    /// <param name="digestAlgorithm">The hash algorithm used to compute the digest.</param>
+    /// <param name="bundle">The Sigstore bundle to verify.</param>
+    /// <param name="policy">The verification policy to enforce.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<VerificationResult> VerifyAsync(
+        ReadOnlyMemory<byte> artifactDigest,
+        HashAlgorithmType digestAlgorithm,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        CancellationToken cancellationToken = default)
+    {
+        var (success, result) = await TryVerifyAsync(artifactDigest, digestAlgorithm, bundle, policy, cancellationToken);
+        if (success)
+        {
+            return result!;
+        }
+        throw new VerificationException(result?.FailureReason ?? "Verification failed.");
+    }
+
+    /// <summary>
     /// Attempts to verify a Sigstore bundle against an artifact without throwing on failure.
     /// </summary>
-    public async Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+    public Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
         Stream artifact,
         SigstoreBundle bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
         _ = artifact ?? throw new ArgumentNullException(nameof(artifact));
+        return TryVerifyCoreAsync(ArtifactInput.FromStream(artifact), bundle, policy, cancellationToken);
+    }
+
+    /// <summary>
+    /// Attempts to verify a Sigstore bundle using a pre-computed artifact digest without throwing on failure.
+    /// </summary>
+    public Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+        ReadOnlyMemory<byte> artifactDigest,
+        HashAlgorithmType digestAlgorithm,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        CancellationToken cancellationToken = default)
+    {
+        return TryVerifyCoreAsync(ArtifactInput.FromDigest(artifactDigest, digestAlgorithm), bundle, policy, cancellationToken);
+    }
+
+    private async Task<(bool Success, VerificationResult? Result)> TryVerifyCoreAsync(
+        ArtifactInput artifactInput,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        CancellationToken cancellationToken)
+    {
         _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
         _ = policy ?? throw new ArgumentNullException(nameof(policy));
 
@@ -291,7 +338,7 @@ public class SigstoreVerifier
                 }
 
                 // Step 7: Verify the artifact signature
-                var sigVerifyResult = VerifyArtifactSignature(artifact, bundle, leafCert);
+                var sigVerifyResult = VerifyArtifactSignature(artifactInput, bundle, leafCert);
                 if (!sigVerifyResult.IsValid)
                     return Fail($"Signature verification failed: {sigVerifyResult.Reason}");
 
@@ -320,7 +367,7 @@ public class SigstoreVerifier
                     return Fail($"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
             }
 
-            var sigResult = VerifyArtifactSignature(artifact, bundle, leafCert);
+            var sigResult = VerifyArtifactSignature(artifactInput, bundle, leafCert);
             if (!sigResult.IsValid)
                 return Fail($"Signature verification failed: {sigResult.Reason}");
 
@@ -866,13 +913,13 @@ public class SigstoreVerifier
     }
 
     private static (bool IsValid, string? Reason) VerifyArtifactSignature(
-        Stream artifact,
+        ArtifactInput artifactInput,
         SigstoreBundle bundle,
         X509Certificate2 leafCert)
     {
         if (bundle.MessageSignature != null)
         {
-            return VerifyMessageSignature(artifact, bundle.MessageSignature, leafCert);
+            return VerifyMessageSignature(artifactInput, bundle.MessageSignature, leafCert);
         }
 
         if (bundle.DsseEnvelope != null)
@@ -884,38 +931,53 @@ public class SigstoreVerifier
     }
 
     private static (bool IsValid, string? Reason) VerifyMessageSignature(
-        Stream artifact,
+        ArtifactInput artifactInput,
         MessageSignature messageSig,
         X509Certificate2 leafCert)
     {
         if (messageSig.Signature.Length == 0)
             return (false, "Message signature is empty.");
 
-        // Read artifact bytes
+        if (artifactInput.IsDigest)
+        {
+            // Digest-based verification: compare provided digest with bundle's digest
+            if (messageSig.MessageDigest is { Digest.Length: > 0 } digest)
+            {
+                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest))
+                    return (false, "Message digest in bundle does not match provided artifact digest.");
+            }
+
+            // The signer signed the hash of the artifact. We have the hash (the digest).
+            // Use VerifyHash to verify the signature directly against the digest.
+            return VerifyHashWithCert(artifactInput.Digest.Span, messageSig.Signature, leafCert);
+        }
+
+        // Stream-based verification
         byte[] artifactBytes;
-        if (artifact is MemoryStream ms && ms.TryGetBuffer(out var buffer))
+        var stream = artifactInput.Stream!;
+        if (stream is MemoryStream ms && ms.TryGetBuffer(out var buffer))
         {
             artifactBytes = buffer.ToArray();
         }
         else
         {
             using var memStream = new MemoryStream();
-            artifact.Position = 0;
-            artifact.CopyTo(memStream);
+            stream.Position = 0;
+            stream.CopyTo(memStream);
             artifactBytes = memStream.ToArray();
         }
 
         // Check message digest consistency if present
-        if (messageSig.MessageDigest is { Digest.Length: > 0 } digest)
+        if (messageSig.MessageDigest is { Digest.Length: > 0 } bundleDigest)
         {
-            byte[] computedHash = digest.Algorithm switch
+            byte[] computedHash = bundleDigest.Algorithm switch
             {
                 HashAlgorithmType.Sha2_256 => SHA256.HashData(artifactBytes),
                 HashAlgorithmType.Sha2_384 => SHA384.HashData(artifactBytes),
                 HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
                 _ => SHA256.HashData(artifactBytes)
             };
-            if (!computedHash.AsSpan().SequenceEqual(digest.Digest))
+            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest))
                 return (false, "Message digest in bundle does not match artifact hash.");
         }
 
@@ -970,5 +1032,58 @@ public class SigstoreVerifier
         }
 
         return (false, "Unsupported public key algorithm in certificate.");
+    }
+
+    private static (bool IsValid, string? Reason) VerifyHashWithCert(
+        ReadOnlySpan<byte> hash,
+        byte[] signature,
+        X509Certificate2 leafCert)
+    {
+        // Try ECDSA
+        using var ecdsa = leafCert.GetECDsaPublicKey();
+        if (ecdsa != null)
+        {
+            bool valid = ecdsa.VerifyHash(hash, signature, DSASignatureFormat.Rfc3279DerSequence);
+            return valid
+                ? (true, null)
+                : (false, "ECDSA signature verification failed.");
+        }
+
+        // Try RSA
+        using var rsa = leafCert.GetRSAPublicKey();
+        if (rsa != null)
+        {
+            bool valid = rsa.VerifyHash(hash, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return valid
+                ? (true, null)
+                : (false, "RSA signature verification failed.");
+        }
+
+        return (false, "Unsupported public key algorithm in certificate.");
+    }
+
+    /// <summary>
+    /// Represents either an artifact stream or a pre-computed digest for verification.
+    /// </summary>
+    internal readonly struct ArtifactInput
+    {
+        public Stream? Stream { get; }
+        public ReadOnlyMemory<byte> Digest { get; }
+        public HashAlgorithmType DigestAlgorithm { get; }
+        public bool IsDigest { get; }
+
+        private ArtifactInput(Stream? stream, ReadOnlyMemory<byte> digest, HashAlgorithmType algorithm, bool isDigest)
+        {
+            Stream = stream;
+            Digest = digest;
+            DigestAlgorithm = algorithm;
+            IsDigest = isDigest;
+        }
+
+        public static ArtifactInput FromStream(Stream stream) =>
+            new(stream, default, default, false);
+
+        public static ArtifactInput FromDigest(ReadOnlyMemory<byte> digest, HashAlgorithmType algorithm) =>
+            new(null, digest, algorithm, true);
     }
 }

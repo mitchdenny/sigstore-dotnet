@@ -61,16 +61,8 @@ public static class Program
             var signingConfigPath = parseResult.GetValue(signingConfigOption);
             var file = parseResult.GetRequiredValue(fileArgument);
 
-            try
-            {
-                await SignBundleAsync(staging, inToto, identityToken, bundlePath,
-                    trustedRootPath, signingConfigPath, file, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Error: {ex}");
-                Environment.ExitCode = 1;
-            }
+            await SignBundleAsync(staging, inToto, identityToken, bundlePath,
+                trustedRootPath, signingConfigPath, file, cancellationToken);
         });
 
         return command;
@@ -105,16 +97,8 @@ public static class Program
             var trustedRootPath = parseResult.GetValue(trustedRootOption);
             var fileOrDigest = parseResult.GetRequiredValue(fileArgument);
 
-            try
-            {
-                await VerifyBundleAsync(staging, bundlePath, certIdentity, certIssuer,
-                    keyPath, trustedRootPath, fileOrDigest, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Error: {ex}");
-                Environment.ExitCode = 1;
-            }
+            await VerifyBundleAsync(staging, bundlePath, certIdentity, certIssuer,
+                keyPath, trustedRootPath, fileOrDigest, cancellationToken);
         });
 
         return command;
@@ -208,38 +192,21 @@ public static class Program
         // Determine if input is a digest or file path
         if (IsDigestInput(fileOrDigest))
         {
-            // For digest-based verification with DSSE/in-toto bundles
+            // Parse the digest
+            var hexDigest = fileOrDigest["sha256:".Length..];
+            var digestBytes = Convert.FromHexString(hexDigest);
+
             if (bundle.DsseEnvelope != null)
             {
+                // For DSSE/in-toto bundles, verify subject digest match first
                 VerifyInTotoSubjectDigest(bundle.DsseEnvelope, fileOrDigest);
-                // For DSSE verification, we don't need the artifact stream
-                // The verifier checks the PAE signature, not the artifact hash
-                using var emptyStream = new MemoryStream();
-                await verifier.VerifyAsync(emptyStream, bundle, policy, cancellationToken);
             }
-            else
-            {
-                // For message signature bundles, verify the digest matches
-                var hexDigest = fileOrDigest["sha256:".Length..];
-                var digestBytes = Convert.FromHexString(hexDigest);
 
-                if (bundle.MessageSignature?.MessageDigest != null &&
-                    !bundle.MessageSignature.MessageDigest.Digest.AsSpan().SequenceEqual(digestBytes))
-                {
-                    throw new VerificationException("Provided digest does not match bundle's message digest.");
-                }
-
-                // Create a stream whose hash matches the expected digest
-                // Since the verifier compares computed hash vs bundle digest,
-                // and we've already verified they match, we need the artifact bytes
-                // We can't reconstruct the artifact from just a digest,
-                // but the verifier only needs the hash to match the bundle's hash.
-                // Pass the raw digest bytes — the verifier will hash them and compare
-                // against the bundle's digest. This won't match unless the bundle's digest
-                // IS the hash of the digest bytes, which it isn't.
-                // Instead, we need to bypass artifact hashing for digest-only verification.
-                throw new NotSupportedException("Digest-only verification for message signatures requires library support.");
-            }
+            // Use digest-based verification
+            await verifier.VerifyAsync(
+                new ReadOnlyMemory<byte>(digestBytes),
+                Common.HashAlgorithmType.Sha2_256,
+                bundle, policy, cancellationToken);
         }
         else
         {

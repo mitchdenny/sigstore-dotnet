@@ -264,6 +264,110 @@ public class SigstoreVerifierTests
         Assert.Contains("transparency log entries verified", result!.FailureReason!);
     }
 
+    [Fact]
+    public async Task TryVerifyAsync_DigestBased_Succeeds_WithValidSignature()
+    {
+        var (cert, key) = CreateSelfSignedCert();
+        var artifact = new byte[] { 1, 2, 3 };
+        var hash = SHA256.HashData(artifact);
+        var signature = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
+
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator());
+        var bundle = new SigstoreBundle
+        {
+            VerificationMaterial = new VerificationMaterial
+            {
+                Certificate = cert.RawData,
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
+                TlogEntries = []
+            },
+            MessageSignature = new MessageSignature
+            {
+                MessageDigest = new HashOutput
+                {
+                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Digest = hash
+                },
+                Signature = signature
+            }
+        };
+
+        var policy = new VerificationPolicy { RequireTransparencyLog = false };
+
+        var (success, result) = await verifier.TryVerifyAsync(
+            new ReadOnlyMemory<byte>(hash),
+            HashAlgorithmType.Sha2_256,
+            bundle, policy);
+
+        Assert.True(success);
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryVerifyAsync_DigestBased_Fails_WhenDigestMismatch()
+    {
+        var (cert, key) = CreateSelfSignedCert();
+        var artifact = new byte[] { 1, 2, 3 };
+        var hash = SHA256.HashData(artifact);
+        var signature = key.SignHash(hash, DSASignatureFormat.Rfc3279DerSequence);
+        var wrongHash = SHA256.HashData(new byte[] { 4, 5, 6 });
+
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator());
+        var bundle = new SigstoreBundle
+        {
+            VerificationMaterial = new VerificationMaterial
+            {
+                Certificate = cert.RawData,
+                Rfc3161Timestamps = [CreateFakeTimestamp(DateTimeOffset.UtcNow)],
+                TlogEntries = []
+            },
+            MessageSignature = new MessageSignature
+            {
+                MessageDigest = new HashOutput
+                {
+                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Digest = hash
+                },
+                Signature = signature
+            }
+        };
+
+        var policy = new VerificationPolicy { RequireTransparencyLog = false };
+
+        var (success, result) = await verifier.TryVerifyAsync(
+            new ReadOnlyMemory<byte>(wrongHash),
+            HashAlgorithmType.Sha2_256,
+            bundle, policy);
+
+        Assert.False(success);
+        Assert.Contains("does not match", result!.FailureReason!);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_DigestBased_ThrowsOnFailure()
+    {
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
+        var bundle = new SigstoreBundle { VerificationMaterial = null };
+        var digest = new ReadOnlyMemory<byte>(new byte[32]);
+
+        var ex = await Assert.ThrowsAsync<VerificationException>(
+            () => verifier.VerifyAsync(digest, HashAlgorithmType.Sha2_256, bundle, new VerificationPolicy()));
+
+        Assert.Contains("no verification material", ex.Message);
+    }
+
+    [Fact]
+    public async Task TryVerifyAsync_DigestBased_ThrowsOnNullBundle()
+    {
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => verifier.TryVerifyAsync(
+                new ReadOnlyMemory<byte>(new byte[32]),
+                HashAlgorithmType.Sha2_256,
+                null!, new VerificationPolicy()));
+    }
+
     private static (X509Certificate2 cert, ECDsa key) CreateSelfSignedCert()
     {
         var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

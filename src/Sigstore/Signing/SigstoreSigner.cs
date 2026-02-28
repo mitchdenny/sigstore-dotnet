@@ -123,7 +123,9 @@ public class SigstoreSigner
             {
                 Certificate = certResponse.CertificateChain[0],
                 TlogEntries = [tlogEntry],
-                Rfc3161Timestamps = [timestampResponse.RawBytes]
+                Rfc3161Timestamps = timestampResponse.RawBytes.Length > 0
+                    ? [timestampResponse.RawBytes]
+                    : []
             },
             MessageSignature = new MessageSignature
             {
@@ -211,7 +213,9 @@ public class SigstoreSigner
             {
                 Certificate = certResponse.CertificateChain[0],
                 TlogEntries = [tlogEntry],
-                Rfc3161Timestamps = [timestampResponse.RawBytes]
+                Rfc3161Timestamps = timestampResponse.RawBytes.Length > 0
+                    ? [timestampResponse.RawBytes]
+                    : []
             },
             DsseEnvelope = new DsseEnvelope
             {
