@@ -108,35 +108,79 @@ public static class Program
         string bundlePath, string? trustedRootPath, string? signingConfigPath, string file,
         CancellationToken cancellationToken)
     {
+        // Parse signing config if provided
+        SigningConfig? signingConfig = null;
+        if (signingConfigPath != null)
+        {
+            var configJson = await File.ReadAllTextAsync(signingConfigPath, cancellationToken);
+            signingConfig = SigningConfig.Deserialize(configJson);
+        }
+
         // Create trust root provider
         using var trustRootProvider = CreateTrustRootProvider(staging, trustedRootPath);
 
         // Get the trust root to extract service URLs
         var trustRoot = await trustRootProvider.GetTrustRootAsync(cancellationToken);
 
-        // Find Fulcio URL
-        var fulcioUrl = trustRoot.CertificateAuthorities
-            .Where(ca => ca.ValidTo == null || ca.ValidTo > DateTimeOffset.UtcNow)
-            .Select(ca => ca.Uri)
-            .FirstOrDefault() ?? throw new InvalidOperationException("No Fulcio CA found in trust root");
+        // Find Fulcio URL — use signing config if available, otherwise trust root
+        Uri fulcioUrl;
+        if (signingConfig != null)
+        {
+            var caEndpoint = SigningConfig.SelectBest(signingConfig.CaUrls)
+                ?? throw new InvalidOperationException("No valid CA URL in signing config");
+            fulcioUrl = new Uri(caEndpoint.Url);
+        }
+        else
+        {
+            var caUri = trustRoot.CertificateAuthorities
+                .Where(ca => ca.ValidTo == null || ca.ValidTo > DateTimeOffset.UtcNow)
+                .Select(ca => ca.Uri)
+                .FirstOrDefault() ?? throw new InvalidOperationException("No Fulcio CA found in trust root");
+            fulcioUrl = new Uri(caUri);
+        }
 
-        // Find Rekor URL
-        var rekorUrl = trustRoot.TransparencyLogs
-            .Where(l => l.ValidTo == null || l.ValidTo > DateTimeOffset.UtcNow)
-            .Select(l => l.BaseUrl)
-            .FirstOrDefault() ?? throw new InvalidOperationException("No Rekor log found in trust root");
+        // Find Rekor URL and API version — use signing config if available
+        Uri rekorUrl;
+        int rekorApiVersion = 1;
+        if (signingConfig != null)
+        {
+            var rekorEndpoint = SigningConfig.SelectBest(signingConfig.RekorTlogUrls)
+                ?? throw new InvalidOperationException("No valid Rekor URL in signing config");
+            rekorUrl = new Uri(rekorEndpoint.Url);
+            rekorApiVersion = rekorEndpoint.MajorApiVersion;
+        }
+        else
+        {
+            var rekorUri = trustRoot.TransparencyLogs
+                .Where(l => l.ValidTo == null || l.ValidTo > DateTimeOffset.UtcNow)
+                .Select(l => l.BaseUrl)
+                .FirstOrDefault() ?? throw new InvalidOperationException("No Rekor log found in trust root");
+            rekorUrl = new Uri(rekorUri);
+        }
 
-        // Find TSA URL (optional)
-        var tsaUrl = trustRoot.TimestampAuthorities
-            .Where(t => t.ValidTo == null || t.ValidTo > DateTimeOffset.UtcNow)
-            .Select(t => t.Uri)
-            .FirstOrDefault();
+        // Find TSA URL — use signing config if available
+        Uri? tsaUrl = null;
+        if (signingConfig != null)
+        {
+            var tsaEndpoint = SigningConfig.SelectBest(signingConfig.TsaUrls);
+            if (tsaEndpoint != null)
+                tsaUrl = new Uri(tsaEndpoint.Url);
+        }
+        else
+        {
+            var tsaUri = trustRoot.TimestampAuthorities
+                .Where(t => t.ValidTo == null || t.ValidTo > DateTimeOffset.UtcNow)
+                .Select(t => t.Uri)
+                .FirstOrDefault();
+            if (tsaUri != null)
+                tsaUrl = new Uri(tsaUri);
+        }
 
         // Create HTTP clients
-        using var fulcio = new FulcioHttpClient(new Uri(fulcioUrl));
-        using var rekor = new RekorHttpClient(new Uri(rekorUrl));
+        using var fulcio = new FulcioHttpClient(fulcioUrl);
+        using var rekor = new RekorHttpClient(rekorUrl, rekorApiVersion);
         ITimestampAuthority tsa = tsaUrl != null
-            ? new HttpTimestampAuthority(new Uri(tsaUrl))
+            ? new HttpTimestampAuthority(tsaUrl)
             : new NoOpTimestampAuthority();
 
         // Create OIDC token provider from raw JWT

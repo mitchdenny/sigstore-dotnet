@@ -5,34 +5,38 @@ using Sigstore.Common;
 namespace Sigstore.Rekor;
 
 /// <summary>
-/// HTTP client for Rekor v1 transparency log API.
+/// HTTP client for Rekor transparency log API. Supports both v1 and v2.
 /// </summary>
 public sealed class RekorHttpClient : IRekorClient, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly Uri _baseUrl;
+    private readonly int _majorApiVersion;
 
     /// <summary>
     /// Creates a Rekor client with a new HttpClient.
     /// </summary>
-    public RekorHttpClient(Uri baseUrl)
-        : this(new HttpClient(), baseUrl, ownsHttpClient: true)
+    /// <param name="baseUrl">The Rekor base URL.</param>
+    /// <param name="majorApiVersion">The API version to use (1 or 2). Default: 1.</param>
+    public RekorHttpClient(Uri baseUrl, int majorApiVersion = 1)
+        : this(new HttpClient(), baseUrl, majorApiVersion, ownsHttpClient: true)
     {
     }
 
     /// <summary>
     /// Creates a Rekor client with an existing HttpClient.
     /// </summary>
-    public RekorHttpClient(HttpClient httpClient, Uri baseUrl)
-        : this(httpClient, baseUrl, ownsHttpClient: false)
+    public RekorHttpClient(HttpClient httpClient, Uri baseUrl, int majorApiVersion = 1)
+        : this(httpClient, baseUrl, majorApiVersion, ownsHttpClient: false)
     {
     }
 
-    private RekorHttpClient(HttpClient httpClient, Uri baseUrl, bool ownsHttpClient)
+    private RekorHttpClient(HttpClient httpClient, Uri baseUrl, int majorApiVersion, bool ownsHttpClient)
     {
         _httpClient = httpClient;
         _baseUrl = baseUrl;
+        _majorApiVersion = majorApiVersion;
         _ownsHttpClient = ownsHttpClient;
     }
 
@@ -41,55 +45,104 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         RekorEntry entry,
         CancellationToken cancellationToken = default)
     {
+        if (_majorApiVersion >= 2)
+            return await SubmitEntryV2Async(entry, cancellationToken);
+
+        return await SubmitEntryV1Async(entry, cancellationToken);
+    }
+
+    private async Task<TransparencyLogEntry> SubmitEntryV1Async(
+        RekorEntry entry,
+        CancellationToken cancellationToken)
+    {
         var url = new Uri(_baseUrl, "api/v1/log/entries");
 
-        var hashAlg = entry.DigestAlgorithm switch
-        {
-            HashAlgorithmType.Sha2_256 => "sha256",
-            HashAlgorithmType.Sha2_384 => "sha384",
-            HashAlgorithmType.Sha2_512 => "sha512",
-            _ => "sha256"
-        };
-
+        var hashAlg = FormatHashAlgorithm(entry.DigestAlgorithm);
         var hashValue = Convert.ToHexString(entry.ArtifactDigest.ToArray()).ToLowerInvariant();
         var sigContent = Convert.ToBase64String(entry.Signature.ToArray());
         var pubKeyContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(entry.VerificationMaterial));
 
-        // Build JSON manually for AOT compatibility
         var body = $@"{{""kind"":""hashedrekord"",""apiVersion"":""0.0.1"",""spec"":{{""data"":{{""hash"":{{""algorithm"":""{hashAlg}"",""value"":""{hashValue}""}}}},""signature"":{{""content"":""{sigContent}"",""publicKey"":{{""content"":""{pubKeyContent}""}}}}}}}}";
 
+        var responseBody = await PostJsonAsync(url, body, cancellationToken);
+
+        using var doc = JsonDocument.Parse(responseBody);
+        var root = doc.RootElement;
+
+        // v1 response is { "uuid": { ... entry data ... } }
+        foreach (var prop in root.EnumerateObject())
+        {
+            return ParseV1LogEntry(prop.Value);
+        }
+
+        throw new InvalidOperationException("Rekor response is empty.");
+    }
+
+    private async Task<TransparencyLogEntry> SubmitEntryV2Async(
+        RekorEntry entry,
+        CancellationToken cancellationToken)
+    {
+        var url = new Uri(_baseUrl, "api/v2/log/entries");
+
+        var digestBase64 = Convert.ToBase64String(entry.ArtifactDigest.ToArray());
+        var sigBase64 = Convert.ToBase64String(entry.Signature.ToArray());
+
+        // The verification material is PEM-encoded cert — extract DER bytes
+        var certDerBase64 = ExtractDerFromPem(entry.VerificationMaterial);
+
+        // Build protobuf-JSON CreateEntryRequest
+        var body = $@"{{""hashedRekordRequestV002"":{{""digest"":""{digestBase64}"",""signature"":{{""content"":""{sigBase64}"",""verifier"":{{""x509Certificate"":{{""rawBytes"":""{certDerBase64}""}},""keyDetails"":""PKIX_ECDSA_P256_SHA_256""}}}}}}}}";
+
+        var responseBody = await PostJsonAsync(url, body, cancellationToken);
+
+        // v2 response is a protobuf-JSON TransparencyLogEntry
+        return ParseV2LogEntry(responseBody);
+    }
+
+    private async Task<string> PostJsonAsync(Uri url, string body, CancellationToken cancellationToken)
+    {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
         httpRequest.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        httpRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Rekor request failed ({response.StatusCode}): {responseBody}");
 
-        using var doc = JsonDocument.Parse(responseBody);
-        var root = doc.RootElement;
-
-        // Response is { "uuid": { ... entry data ... } }
-        foreach (var prop in root.EnumerateObject())
-        {
-            var entryData = prop.Value;
-            return ParseLogEntry(entryData);
-        }
-
-        throw new InvalidOperationException("Rekor response is empty.");
+        return responseBody;
     }
 
-    private static TransparencyLogEntry ParseLogEntry(JsonElement entry)
+    private static string ExtractDerFromPem(string pem)
+    {
+        var base64 = pem
+            .Replace("-----BEGIN CERTIFICATE-----", "")
+            .Replace("-----END CERTIFICATE-----", "")
+            .Replace("\n", "")
+            .Replace("\r", "")
+            .Trim();
+        var derBytes = Convert.FromBase64String(base64);
+        return Convert.ToBase64String(derBytes);
+    }
+
+    private static string FormatHashAlgorithm(HashAlgorithmType alg) => alg switch
+    {
+        HashAlgorithmType.Sha2_256 => "sha256",
+        HashAlgorithmType.Sha2_384 => "sha384",
+        HashAlgorithmType.Sha2_512 => "sha512",
+        _ => "sha256"
+    };
+
+    private static TransparencyLogEntry ParseV1LogEntry(JsonElement entry)
     {
         var logIndex = entry.GetProperty("logIndex").GetInt64();
         var body = entry.GetProperty("body").GetString()!;
         var integratedTime = entry.GetProperty("integratedTime").GetInt64();
 
-        // LogID is the hex-encoded SHA-256 of the log's public key
+        // LogID is hex-encoded in v1
         var logIdHex = entry.GetProperty("logID").GetString()!;
         var logId = Convert.FromHexString(logIdHex);
 
-        // Parse verification
         InclusionProof? inclusionProof = null;
         byte[]? inclusionPromise = null;
 
@@ -128,6 +181,96 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         {
             LogIndex = logIndex,
             LogId = logId,
+            Kind = "hashedrekord",
+            KindVersion = "0.0.1",
+            Body = body,
+            IntegratedTime = integratedTime,
+            InclusionProof = inclusionProof,
+            InclusionPromise = inclusionPromise
+        };
+    }
+
+    private static TransparencyLogEntry ParseV2LogEntry(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var logIndex = root.TryGetProperty("logIndex", out var li)
+            ? long.Parse(li.GetString() ?? li.GetRawText())
+            : 0;
+
+        byte[] logId = [];
+        if (root.TryGetProperty("logId", out var logIdElem) && logIdElem.TryGetProperty("keyId", out var keyId))
+            logId = Convert.FromBase64String(keyId.GetString()!);
+
+        string? kind = null;
+        string? version = null;
+        if (root.TryGetProperty("kindVersion", out var kv))
+        {
+            kind = kv.TryGetProperty("kind", out var k) ? k.GetString() : null;
+            version = kv.TryGetProperty("version", out var v) ? v.GetString() : null;
+        }
+
+        var integratedTime = root.TryGetProperty("integratedTime", out var it)
+            ? long.Parse(it.GetString() ?? it.GetRawText())
+            : 0;
+
+        byte[]? inclusionPromise = null;
+        if (root.TryGetProperty("inclusionPromise", out var ip) &&
+            ip.TryGetProperty("signedEntryTimestamp", out var set))
+        {
+            inclusionPromise = Convert.FromBase64String(set.GetString()!);
+        }
+
+        InclusionProof? inclusionProof = null;
+        if (root.TryGetProperty("inclusionProof", out var proofElem))
+        {
+            var proofLogIndex = proofElem.TryGetProperty("logIndex", out var pli)
+                ? long.Parse(pli.GetString() ?? pli.GetRawText())
+                : 0;
+
+            var treeSize = proofElem.TryGetProperty("treeSize", out var ts)
+                ? long.Parse(ts.GetString() ?? ts.GetRawText())
+                : 0;
+
+            byte[] rootHash = [];
+            if (proofElem.TryGetProperty("rootHash", out var rh))
+                rootHash = Convert.FromBase64String(rh.GetString()!);
+
+            var hashes = new List<byte[]>();
+            if (proofElem.TryGetProperty("hashes", out var hashesElem))
+            {
+                foreach (var h in hashesElem.EnumerateArray())
+                    hashes.Add(Convert.FromBase64String(h.GetString()!));
+            }
+
+            string? checkpoint = null;
+            if (proofElem.TryGetProperty("checkpoint", out var cpElem) &&
+                cpElem.TryGetProperty("envelope", out var env))
+            {
+                checkpoint = env.GetString();
+            }
+
+            inclusionProof = new InclusionProof
+            {
+                LogIndex = proofLogIndex,
+                TreeSize = treeSize,
+                RootHash = rootHash,
+                Hashes = hashes,
+                Checkpoint = checkpoint
+            };
+        }
+
+        string? body = null;
+        if (root.TryGetProperty("canonicalizedBody", out var cb))
+            body = cb.GetString();
+
+        return new TransparencyLogEntry
+        {
+            LogIndex = logIndex,
+            LogId = logId,
+            Kind = kind,
+            KindVersion = version,
             Body = body,
             IntegratedTime = integratedTime,
             InclusionProof = inclusionProof,
