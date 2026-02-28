@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sigstore/Sigstore.csproj" />
+    <Project Path="src/Sigstore.Conformance/Sigstore.Conformance.csproj" />
     <Project Path="src/Tuf/Tuf.csproj" />
   </Folder>
   <Folder Name="/tests/">

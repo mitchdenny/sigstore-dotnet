@@ -62,6 +62,74 @@ jobs:
           name: test-results
           path: ./TestResults/
 
+  conformance-production:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build conformance CLI
+        run: dotnet build src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release
+
+      - name: Create entrypoint wrapper
+        run: |
+          cat > sigstore-conformance-client <<'EOF'
+          #!/bin/bash
+          dotnet run --project "$GITHUB_WORKSPACE/src/Sigstore.Conformance/Sigstore.Conformance.csproj" -c Release --no-build -- "$@"
+          EOF
+          chmod +x sigstore-conformance-client
+
+      - name: Run conformance tests (production)
+        uses: sigstore/sigstore-conformance@v0.0.25
+        with:
+          entrypoint: ${{ github.workspace }}/sigstore-conformance-client
+          environment: production
+          xfail: "test_verify*managed-key-happy-path] test_verify*managed-key-and-trusted-root]"
+
+  conformance-staging:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build conformance CLI
+        run: dotnet build src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release
+
+      - name: Create entrypoint wrapper
+        run: |
+          cat > sigstore-conformance-client <<'EOF'
+          #!/bin/bash
+          dotnet run --project "$GITHUB_WORKSPACE/src/Sigstore.Conformance/Sigstore.Conformance.csproj" -c Release --no-build -- "$@"
+          EOF
+          chmod +x sigstore-conformance-client
+
+      - name: Run conformance tests (staging)
+        uses: sigstore/sigstore-conformance@v0.0.25
+        with:
+          entrypoint: ${{ github.workspace }}/sigstore-conformance-client
+          environment: staging
+          xfail: "test_verify*managed-key-happy-path] test_verify*managed-key-and-trusted-root]"
+
   build:
     runs-on: ubuntu-latest
     needs: test
