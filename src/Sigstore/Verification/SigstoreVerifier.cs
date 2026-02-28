@@ -965,7 +965,10 @@ public class SigstoreVerifier
             if (sigElem.TryGetProperty("content", out var sigContent))
             {
                 var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-                var bundleSig = bundle.MessageSignature?.Signature ?? [];
+                // DSSE bundles store signature in the envelope, not MessageSignature
+                var bundleSig = bundle.MessageSignature?.Signature
+                    ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
+                    ?? [];
                 if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
                     return false;
             }
