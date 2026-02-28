@@ -18,7 +18,11 @@ internal sealed class EphemeralKeyPair : IDisposable
 
     public ECDsa Key => _key;
 
-    public byte[] Sign(byte[] data) => _key.SignData(data, HashAlgorithmName.SHA256);
+    public byte[] Sign(byte[] data) => _key.SignData(data, HashAlgorithmName.SHA256,
+        DSASignatureFormat.Rfc3279DerSequence);
+
+    public byte[] SignHash(byte[] hash) => _key.SignHash(hash,
+        DSASignatureFormat.Rfc3279DerSequence);
 
     public string CreateCsr(string subject)
     {

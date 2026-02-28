@@ -98,7 +98,7 @@ public class SigstoreSigner
         var hash = await SHA256.HashDataAsync(artifact, cancellationToken);
 
         // 5. Sign the hash
-        var signature = keyPair.Sign(hash);
+        var signature = keyPair.SignHash(hash);
 
         // 6. Get timestamp
         var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
