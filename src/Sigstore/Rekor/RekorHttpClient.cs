@@ -96,7 +96,15 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         var responseBody = await PostJsonAsync(url, body, cancellationToken);
 
         // v2 response is a protobuf-JSON TransparencyLogEntry
-        return ParseV2LogEntry(responseBody);
+        try
+        {
+            return ParseV2LogEntry(responseBody);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to parse Rekor v2 response: {ex.Message}. Response: {responseBody[..Math.Min(responseBody.Length, 500)]}", ex);
+        }
     }
 
     private async Task<string> PostJsonAsync(Uri url, string body, CancellationToken cancellationToken)
@@ -195,35 +203,36 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        var logIndex = root.TryGetProperty("logIndex", out var li)
+        var logIndex = root.TryGetProperty("logIndex", out var li) && li.ValueKind != JsonValueKind.Null
             ? long.Parse(li.GetString() ?? li.GetRawText())
             : 0;
 
         byte[] logId = [];
-        if (root.TryGetProperty("logId", out var logIdElem) && logIdElem.TryGetProperty("keyId", out var keyId))
+        if (root.TryGetProperty("logId", out var logIdElem) && logIdElem.ValueKind == JsonValueKind.Object
+            && logIdElem.TryGetProperty("keyId", out var keyId))
             logId = Convert.FromBase64String(keyId.GetString()!);
 
         string? kind = null;
         string? version = null;
-        if (root.TryGetProperty("kindVersion", out var kv))
+        if (root.TryGetProperty("kindVersion", out var kv) && kv.ValueKind == JsonValueKind.Object)
         {
             kind = kv.TryGetProperty("kind", out var k) ? k.GetString() : null;
             version = kv.TryGetProperty("version", out var v) ? v.GetString() : null;
         }
 
-        var integratedTime = root.TryGetProperty("integratedTime", out var it)
+        var integratedTime = root.TryGetProperty("integratedTime", out var it) && it.ValueKind != JsonValueKind.Null
             ? long.Parse(it.GetString() ?? it.GetRawText())
             : 0;
 
         byte[]? inclusionPromise = null;
-        if (root.TryGetProperty("inclusionPromise", out var ip) &&
-            ip.TryGetProperty("signedEntryTimestamp", out var set))
+        if (root.TryGetProperty("inclusionPromise", out var ip) && ip.ValueKind == JsonValueKind.Object
+            && ip.TryGetProperty("signedEntryTimestamp", out var set))
         {
             inclusionPromise = Convert.FromBase64String(set.GetString()!);
         }
 
         InclusionProof? inclusionProof = null;
-        if (root.TryGetProperty("inclusionProof", out var proofElem))
+        if (root.TryGetProperty("inclusionProof", out var proofElem) && proofElem.ValueKind == JsonValueKind.Object)
         {
             var proofLogIndex = proofElem.TryGetProperty("logIndex", out var pli)
                 ? long.Parse(pli.GetString() ?? pli.GetRawText())
@@ -245,8 +254,8 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             }
 
             string? checkpoint = null;
-            if (proofElem.TryGetProperty("checkpoint", out var cpElem) &&
-                cpElem.TryGetProperty("envelope", out var env))
+            if (proofElem.TryGetProperty("checkpoint", out var cpElem) && cpElem.ValueKind == JsonValueKind.Object
+                && cpElem.TryGetProperty("envelope", out var env))
             {
                 checkpoint = env.GetString();
             }
