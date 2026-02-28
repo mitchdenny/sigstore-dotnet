@@ -183,8 +183,9 @@ public static class Program
 
         if (keyPath != null)
         {
-            // Key-based verification — not yet supported
-            throw new NotSupportedException("Public key verification is not yet supported.");
+            var keyPem = await File.ReadAllTextAsync(keyPath, cancellationToken);
+            var keyDer = ConvertPemPublicKeyToDer(keyPem);
+            policy.PublicKey = keyDer;
         }
 
         var verifier = new SigstoreVerifier(trustRootProvider);
@@ -267,6 +268,18 @@ public static class Program
         }
 
         throw new VerificationException("Digest does not match any subject in the in-toto statement.");
+    }
+
+    private static byte[] ConvertPemPublicKeyToDer(string pem)
+    {
+        var base64 = pem
+            .Replace("-----BEGIN PUBLIC KEY-----", "")
+            .Replace("-----END PUBLIC KEY-----", "")
+            .Replace("\n", "")
+            .Replace("\r", "")
+            .Trim();
+
+        return Convert.FromBase64String(base64);
     }
 }
 

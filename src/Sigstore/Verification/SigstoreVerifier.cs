@@ -152,6 +152,12 @@ public class SigstoreVerifier
             // Step 1: Load trusted root
             var trustRoot = await _trustRootProvider.GetTrustRootAsync(cancellationToken);
 
+            // Managed-key verification path: skip all certificate-based logic
+            if (policy.PublicKey != null)
+            {
+                return VerifyWithPublicKey(artifactInput, bundle, policy, trustRoot);
+            }
+
             // Step 2: Parse the bundle — extract certificate
             var verificationMaterial = bundle.VerificationMaterial;
             if (verificationMaterial == null)
@@ -385,6 +391,377 @@ public class SigstoreVerifier
         {
             return Fail($"Verification error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Managed-key verification: verifies a bundle using a raw public key instead of certificates.
+    /// Skips certificate chain validation, SCT checks, and identity checks.
+    /// </summary>
+    private static (bool Success, VerificationResult? Result) VerifyWithPublicKey(
+        ArtifactInput artifactInput,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        TrustRoot.TrustedRoot trustRoot)
+    {
+        var verificationMaterial = bundle.VerificationMaterial;
+        if (verificationMaterial == null)
+            return Fail("Bundle has no verification material.");
+
+        // Establish timestamps from tlog entries and RFC 3161 timestamps
+        var verifiedTimestamps = new List<VerifiedTimestamp>();
+
+        foreach (var tsBytes in verificationMaterial.Rfc3161Timestamps)
+        {
+            try
+            {
+                var tsInfo = TimestampParser.Parse(tsBytes);
+                byte[] signatureToTimestamp = GetSignatureBytes(bundle);
+                if (trustRoot.TimestampAuthorities.Count > 0)
+                {
+                    if (TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities))
+                    {
+                        verifiedTimestamps.Add(new VerifiedTimestamp
+                        {
+                            Source = TimestampSource.TimestampAuthority,
+                            Timestamp = tsInfo.Timestamp
+                        });
+                    }
+                }
+                else
+                {
+                    verifiedTimestamps.Add(new VerifiedTimestamp
+                    {
+                        Source = TimestampSource.TimestampAuthority,
+                        Timestamp = tsInfo.Timestamp
+                    });
+                }
+            }
+            catch { }
+        }
+
+        foreach (var entry in verificationMaterial.TlogEntries)
+        {
+            if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
+            {
+                if (VerifySignedEntryTimestamp(entry, trustRoot))
+                {
+                    verifiedTimestamps.Add(new VerifiedTimestamp
+                    {
+                        Source = TimestampSource.TransparencyLog,
+                        Timestamp = DateTimeOffset.FromUnixTimeSeconds(entry.IntegratedTime)
+                    });
+                }
+            }
+        }
+
+        if (verifiedTimestamps.Count == 0)
+            return Fail("No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
+
+        // Verify tlog inclusion proofs (using the public key for cross-verification)
+        if (policy.RequireTransparencyLog)
+        {
+            int verifiedEntries = 0;
+            foreach (var entry in verificationMaterial.TlogEntries)
+            {
+                if (VerifyTlogEntryForPublicKey(entry, trustRoot, bundle, policy.PublicKey!))
+                    verifiedEntries++;
+            }
+
+            if (verifiedEntries < policy.TransparencyLogThreshold)
+                return Fail($"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+        }
+
+        // Verify the artifact signature with the public key
+        var sigResult = VerifyArtifactSignatureWithKey(artifactInput, bundle, policy.PublicKey!);
+        if (!sigResult.IsValid)
+            return Fail($"Signature verification failed: {sigResult.Reason}");
+
+        return (true, new VerificationResult
+        {
+            SignerIdentity = null,
+            VerifiedTimestamps = verifiedTimestamps
+        });
+    }
+
+    /// <summary>
+    /// Verifies a tlog entry for managed-key bundles. Same as VerifyTlogEntry but
+    /// cross-verifies the body against a raw public key instead of a certificate.
+    /// </summary>
+    private static bool VerifyTlogEntryForPublicKey(
+        TransparencyLogEntry entry,
+        TrustRoot.TrustedRoot trustRoot,
+        SigstoreBundle bundle,
+        byte[] publicKeySpki)
+    {
+        if (entry.InclusionProof == null)
+            return false;
+
+        var logInfo = trustRoot.TransparencyLogs
+            .FirstOrDefault(l => l.LogId.SequenceEqual(entry.LogId));
+
+        if (logInfo == null)
+            return false;
+
+        // Verify checkpoint signature
+        if (entry.InclusionProof.Checkpoint != null)
+        {
+            CheckpointData? checkpointData = null;
+            foreach (var log in trustRoot.TransparencyLogs)
+            {
+                var keyIds = ComputeAllCheckpointKeyIds(log);
+                foreach (var keyId in keyIds)
+                {
+                    checkpointData = CheckpointVerifier.VerifyCheckpoint(
+                        entry.InclusionProof.Checkpoint,
+                        log.PublicKeyBytes,
+                        keyId);
+                    if (checkpointData != null)
+                        break;
+                }
+                if (checkpointData != null)
+                    break;
+            }
+
+            if (checkpointData == null)
+                return false;
+
+            var body = entry.Body != null ? Convert.FromBase64String(entry.Body) : [];
+            var leafHash = MerkleVerifier.HashLeaf(body);
+
+            if (!MerkleVerifier.VerifyInclusionProof(
+                leafHash,
+                entry.InclusionProof.LogIndex,
+                checkpointData.TreeSize,
+                entry.InclusionProof.Hashes,
+                checkpointData.RootHash))
+            {
+                return false;
+            }
+        }
+        else if (entry.InclusionProof.RootHash.Length > 0)
+        {
+            var body = entry.Body != null ? Convert.FromBase64String(entry.Body) : [];
+            var leafHash = MerkleVerifier.HashLeaf(body);
+
+            if (!MerkleVerifier.VerifyInclusionProof(
+                leafHash,
+                entry.InclusionProof.LogIndex,
+                entry.InclusionProof.TreeSize,
+                entry.InclusionProof.Hashes,
+                entry.InclusionProof.RootHash))
+            {
+                return false;
+            }
+        }
+
+        // Cross-verify tlog entry body against bundle — for managed key, verify
+        // that the hashedrekord publicKey content matches the provided key
+        if (entry.Body != null)
+        {
+            if (!CrossVerifyTlogBodyForPublicKey(entry.Body, bundle, publicKeySpki))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool CrossVerifyTlogBodyForPublicKey(string body, SigstoreBundle bundle, byte[] publicKeySpki)
+    {
+        byte[] bodyBytes;
+        try { bodyBytes = Convert.FromBase64String(body); }
+        catch { return false; }
+
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(bodyBytes); }
+        catch { return false; }
+
+        var root = doc.RootElement;
+        var kind = root.GetProperty("kind").GetString();
+
+        if (kind == "hashedrekord")
+        {
+            var spec = root.GetProperty("spec");
+            // Verify signature matches
+            if (spec.TryGetProperty("signature", out var sigElem))
+            {
+                if (sigElem.TryGetProperty("content", out var sigContent))
+                {
+                    var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
+                    var bundleSig = bundle.MessageSignature?.Signature ?? [];
+                    if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
+                        return false;
+                }
+
+                // Verify public key matches (for managed key, the tlog entry stores the public key PEM)
+                if (sigElem.TryGetProperty("publicKey", out var pubKeyElem) &&
+                    pubKeyElem.TryGetProperty("content", out var keyContent))
+                {
+                    var expectedKeyPem = Encoding.UTF8.GetString(Convert.FromBase64String(keyContent.GetString()!));
+                    var expectedKeyDer = ConvertPemPublicKeyToDer(expectedKeyPem);
+                    if (expectedKeyDer != null && !expectedKeyDer.AsSpan().SequenceEqual(publicKeySpki))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        // For other kinds, allow
+        return true;
+    }
+
+    private static byte[]? ConvertPemPublicKeyToDer(string pem)
+    {
+        var base64 = pem
+            .Replace("-----BEGIN PUBLIC KEY-----", "")
+            .Replace("-----END PUBLIC KEY-----", "")
+            .Replace("\n", "")
+            .Replace("\r", "")
+            .Trim();
+
+        if (string.IsNullOrEmpty(base64))
+            return null;
+
+        try { return Convert.FromBase64String(base64); }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Verifies an artifact signature using a raw SPKI public key.
+    /// </summary>
+    private static (bool IsValid, string? Reason) VerifyArtifactSignatureWithKey(
+        ArtifactInput artifactInput,
+        SigstoreBundle bundle,
+        byte[] publicKeySpki)
+    {
+        if (bundle.MessageSignature != null)
+        {
+            return VerifyMessageSignatureWithKey(artifactInput, bundle.MessageSignature, publicKeySpki);
+        }
+
+        if (bundle.DsseEnvelope != null)
+        {
+            return VerifyDsseSignatureWithKey(bundle.DsseEnvelope, publicKeySpki);
+        }
+
+        return (false, "Bundle contains neither a message signature nor a DSSE envelope.");
+    }
+
+    private static (bool IsValid, string? Reason) VerifyMessageSignatureWithKey(
+        ArtifactInput artifactInput,
+        MessageSignature messageSig,
+        byte[] publicKeySpki)
+    {
+        if (messageSig.Signature.Length == 0)
+            return (false, "Message signature is empty.");
+
+        if (artifactInput.IsDigest)
+        {
+            if (messageSig.MessageDigest is { Digest.Length: > 0 } digest)
+            {
+                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest))
+                    return (false, "Message digest in bundle does not match provided artifact digest.");
+            }
+            return VerifyHashWithKey(artifactInput.Digest.Span, messageSig.Signature, publicKeySpki);
+        }
+
+        // Stream-based
+        byte[] artifactBytes;
+        var stream = artifactInput.Stream!;
+        if (stream is MemoryStream ms && ms.TryGetBuffer(out var buffer))
+        {
+            artifactBytes = buffer.ToArray();
+        }
+        else
+        {
+            using var memStream = new MemoryStream();
+            stream.Position = 0;
+            stream.CopyTo(memStream);
+            artifactBytes = memStream.ToArray();
+        }
+
+        if (messageSig.MessageDigest is { Digest.Length: > 0 } bundleDigest)
+        {
+            byte[] computedHash = bundleDigest.Algorithm switch
+            {
+                HashAlgorithmType.Sha2_256 => SHA256.HashData(artifactBytes),
+                HashAlgorithmType.Sha2_384 => SHA384.HashData(artifactBytes),
+                HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
+                _ => SHA256.HashData(artifactBytes)
+            };
+            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest))
+                return (false, "Message digest in bundle does not match artifact hash.");
+        }
+
+        return VerifyDataWithKey(artifactBytes, messageSig.Signature, publicKeySpki);
+    }
+
+    private static (bool IsValid, string? Reason) VerifyDsseSignatureWithKey(
+        DsseEnvelope envelope,
+        byte[] publicKeySpki)
+    {
+        if (envelope.Signatures.Count == 0)
+            return (false, "DSSE envelope has no signatures.");
+
+        var payloadType = envelope.PayloadType;
+        var payload = envelope.Payload;
+        var pae = Encoding.UTF8.GetBytes(
+            $"DSSEv1 {payloadType.Length} {payloadType} {payload.Length} ");
+        var paeBytes = new byte[pae.Length + payload.Length];
+        pae.CopyTo(paeBytes, 0);
+        payload.CopyTo(paeBytes, pae.Length);
+
+        var sig = envelope.Signatures[0].Sig;
+        return VerifyDataWithKey(paeBytes, sig, publicKeySpki);
+    }
+
+    private static (bool IsValid, string? Reason) VerifyDataWithKey(
+        byte[] data, byte[] signature, byte[] publicKeySpki)
+    {
+        try
+        {
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            bool valid = ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256,
+                DSASignatureFormat.Rfc3279DerSequence);
+            return valid ? (true, null) : (false, "ECDSA signature verification failed.");
+        }
+        catch (CryptographicException) { }
+
+        try
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            bool valid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return valid ? (true, null) : (false, "RSA signature verification failed.");
+        }
+        catch (CryptographicException) { }
+
+        return (false, "Unsupported public key algorithm.");
+    }
+
+    private static (bool IsValid, string? Reason) VerifyHashWithKey(
+        ReadOnlySpan<byte> hash, byte[] signature, byte[] publicKeySpki)
+    {
+        try
+        {
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            bool valid = ecdsa.VerifyHash(hash, signature, DSASignatureFormat.Rfc3279DerSequence);
+            return valid ? (true, null) : (false, "ECDSA signature verification failed.");
+        }
+        catch (CryptographicException) { }
+
+        try
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            bool valid = rsa.VerifyHash(hash, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return valid ? (true, null) : (false, "RSA signature verification failed.");
+        }
+        catch (CryptographicException) { }
+
+        return (false, "Unsupported public key algorithm.");
     }
 
     private static (bool Success, VerificationResult? Result) Fail(string reason)
