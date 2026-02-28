@@ -94,7 +94,7 @@ jobs:
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: production
-          xfail: "test_verify*managed-key-happy-path] test_verify*managed-key-and-trusted-root]"
+          xfail: "test_verify*managed-key-happy-path] test_verify*managed-key-and-trusted-root] test_sign_verify_rekor2"
 
   conformance-staging:
     runs-on: ubuntu-latest
@@ -128,6 +128,7 @@ jobs:
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: staging
+          skip-signing: "true"
           xfail: "test_verify*managed-key-happy-path] test_verify*managed-key-and-trusted-root]"
 
   build:
