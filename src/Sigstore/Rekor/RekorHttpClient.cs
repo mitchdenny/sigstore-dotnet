@@ -62,14 +62,31 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         var sigContent = Convert.ToBase64String(entry.Signature.ToArray());
         var pubKeyContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(entry.VerificationMaterial));
 
-        var body = $@"{{""kind"":""hashedrekord"",""apiVersion"":""0.0.1"",""spec"":{{""data"":{{""hash"":{{""algorithm"":""{hashAlg}"",""value"":""{hashValue}""}}}},""signature"":{{""content"":""{sigContent}"",""publicKey"":{{""content"":""{pubKeyContent}""}}}}}}}}";
+        var body = WriteJson(w =>
+        {
+            w.WriteString("kind", "hashedrekord");
+            w.WriteString("apiVersion", "0.0.1");
+            w.WriteStartObject("spec");
+            w.WriteStartObject("data");
+            w.WriteStartObject("hash");
+            w.WriteString("algorithm", hashAlg);
+            w.WriteString("value", hashValue);
+            w.WriteEndObject(); // hash
+            w.WriteEndObject(); // data
+            w.WriteStartObject("signature");
+            w.WriteString("content", sigContent);
+            w.WriteStartObject("publicKey");
+            w.WriteString("content", pubKeyContent);
+            w.WriteEndObject(); // publicKey
+            w.WriteEndObject(); // signature
+            w.WriteEndObject(); // spec
+        });
 
         var responseBody = await PostJsonAsync(url, body, cancellationToken);
 
         using var doc = JsonDocument.Parse(responseBody);
         var root = doc.RootElement;
 
-        // v1 response is { "uuid": { ... entry data ... } }
         foreach (var prop in root.EnumerateObject())
         {
             return ParseV1LogEntry(prop.Value);
@@ -86,16 +103,26 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
 
         var digestBase64 = Convert.ToBase64String(entry.ArtifactDigest.ToArray());
         var sigBase64 = Convert.ToBase64String(entry.Signature.ToArray());
-
-        // The verification material is PEM-encoded cert — extract DER bytes
         var certDerBase64 = ExtractDerFromPem(entry.VerificationMaterial);
 
-        // Build protobuf-JSON CreateEntryRequest
-        var body = $@"{{""hashedRekordRequestV002"":{{""digest"":""{digestBase64}"",""signature"":{{""content"":""{sigBase64}"",""verifier"":{{""x509Certificate"":{{""rawBytes"":""{certDerBase64}""}},""keyDetails"":""PKIX_ECDSA_P256_SHA_256""}}}}}}}}";
+        var body = WriteJson(w =>
+        {
+            w.WriteStartObject("hashedRekordRequestV002");
+            w.WriteString("digest", digestBase64);
+            w.WriteStartObject("signature");
+            w.WriteString("content", sigBase64);
+            w.WriteStartObject("verifier");
+            w.WriteStartObject("x509Certificate");
+            w.WriteString("rawBytes", certDerBase64);
+            w.WriteEndObject(); // x509Certificate
+            w.WriteString("keyDetails", "PKIX_ECDSA_P256_SHA_256");
+            w.WriteEndObject(); // verifier
+            w.WriteEndObject(); // signature
+            w.WriteEndObject(); // hashedRekordRequestV002
+        });
 
         var responseBody = await PostJsonAsync(url, body, cancellationToken);
 
-        // v2 response is a protobuf-JSON TransparencyLogEntry
         try
         {
             return ParseV2LogEntry(responseBody);
@@ -123,14 +150,36 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
     {
         var url = new Uri(_baseUrl, "api/v1/log/entries");
 
-        // Build the DSSE envelope JSON to embed in the request
+        // Build the DSSE envelope as a JSON string
         var payloadBase64 = Convert.ToBase64String(entry.Payload);
         var sigBase64 = Convert.ToBase64String(entry.Signature);
-        var envelopeJson = $@"{{""payloadType"":""{entry.PayloadType}"",""payload"":""{payloadBase64}"",""signatures"":[{{""sig"":""{sigBase64}""}}]}}";
-        var envelopeContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(envelopeJson));
+        var envelopeJson = WriteJson(w =>
+        {
+            w.WriteString("payloadType", entry.PayloadType);
+            w.WriteString("payload", payloadBase64);
+            w.WriteStartArray("signatures");
+            w.WriteStartObject();
+            w.WriteString("sig", sigBase64);
+            w.WriteEndObject();
+            w.WriteEndArray();
+        });
+
         var pubKeyContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(entry.VerificationMaterial));
 
-        var body = $@"{{""kind"":""dsse"",""apiVersion"":""0.0.1"",""spec"":{{""proposedContent"":{{""envelope"":""{envelopeContent}"",""verifiers"":[""{pubKeyContent}""]}}}}}}";
+        // The envelope is embedded as a JSON string value inside proposedContent
+        var body = WriteJson(w =>
+        {
+            w.WriteString("kind", "dsse");
+            w.WriteString("apiVersion", "0.0.1");
+            w.WriteStartObject("spec");
+            w.WriteStartObject("proposedContent");
+            w.WriteString("envelope", envelopeJson);
+            w.WriteStartArray("verifiers");
+            w.WriteStringValue(pubKeyContent);
+            w.WriteEndArray();
+            w.WriteEndObject(); // proposedContent
+            w.WriteEndObject(); // spec
+        });
 
         var responseBody = await PostJsonAsync(url, body, cancellationToken);
 
@@ -155,8 +204,28 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         var sigBase64 = Convert.ToBase64String(entry.Signature);
         var certDerBase64 = ExtractDerFromPem(entry.VerificationMaterial);
 
-        // Build protobuf-JSON DSSERequestV002
-        var body = $@"{{""dsseRequestV002"":{{""envelope"":{{""payload"":""{payloadBase64}"",""payloadType"":""{entry.PayloadType}"",""signatures"":[{{""sig"":""{sigBase64}""}}]}},""verifiers"":[{{""x509Certificate"":{{""rawBytes"":""{certDerBase64}""}},""keyDetails"":""PKIX_ECDSA_P256_SHA_256""}}]}}}}";
+        var body = WriteJson(w =>
+        {
+            w.WriteStartObject("dsseRequestV002");
+            w.WriteStartObject("envelope");
+            w.WriteString("payload", payloadBase64);
+            w.WriteString("payloadType", entry.PayloadType);
+            w.WriteStartArray("signatures");
+            w.WriteStartObject();
+            w.WriteString("sig", sigBase64);
+            w.WriteEndObject();
+            w.WriteEndArray();
+            w.WriteEndObject(); // envelope
+            w.WriteStartArray("verifiers");
+            w.WriteStartObject();
+            w.WriteStartObject("x509Certificate");
+            w.WriteString("rawBytes", certDerBase64);
+            w.WriteEndObject(); // x509Certificate
+            w.WriteString("keyDetails", "PKIX_ECDSA_P256_SHA_256");
+            w.WriteEndObject();
+            w.WriteEndArray(); // verifiers
+            w.WriteEndObject(); // dsseRequestV002
+        });
 
         var responseBody = await PostJsonAsync(url, body, cancellationToken);
 
@@ -169,6 +238,18 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             throw new InvalidOperationException(
                 $"Failed to parse Rekor v2 DSSE response: {ex.Message}. Response: {responseBody[..Math.Min(responseBody.Length, 500)]}", ex);
         }
+    }
+
+    private static string WriteJson(Action<Utf8JsonWriter> write)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            write(writer);
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     private async Task<string> PostJsonAsync(Uri url, string body, CancellationToken cancellationToken)
