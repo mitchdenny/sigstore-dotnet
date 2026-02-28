@@ -192,15 +192,14 @@ public class SigstoreSigner
         // 6. Get timestamp
         var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
 
-        // 7. Submit to Rekor — hash the PAE for the artifact digest
-        var paeHash = SHA256.HashData(pae);
+        // 7. Submit to Rekor as a DSSE entry (not hashedrekord)
         var leafCertPem = ExportCertificatePem(certResponse.CertificateChain[0]);
-        var tlogEntry = await _rekorClient.SubmitEntryAsync(
-            new RekorEntry
+        var tlogEntry = await _rekorClient.SubmitDsseEntryAsync(
+            new RekorDsseEntry
             {
+                Payload = payloadBytes,
+                PayloadType = payloadType,
                 Signature = signature,
-                ArtifactDigest = paeHash,
-                DigestAlgorithm = HashAlgorithmType.Sha2_256,
                 VerificationMaterial = leafCertPem
             },
             cancellationToken);

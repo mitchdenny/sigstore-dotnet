@@ -213,6 +213,12 @@ public class SigstoreSignerTests
             if (_entry == null) throw new NotImplementedException();
             return Task.FromResult(_entry);
         }
+
+        public Task<TransparencyLogEntry> SubmitDsseEntryAsync(RekorDsseEntry entry, CancellationToken ct = default)
+        {
+            if (_entry == null) throw new NotImplementedException();
+            return Task.FromResult(_entry);
+        }
     }
 
     private class FakeTsa : ITimestampAuthority

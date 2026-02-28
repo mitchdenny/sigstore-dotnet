@@ -9,13 +9,17 @@ namespace Sigstore.Rekor;
 public interface IRekorClient
 {
     /// <summary>
-    /// Submits signing metadata to the transparency log.
+    /// Submits signing metadata to the transparency log as a hashedrekord entry.
     /// </summary>
-    /// <param name="entry">The entry to submit.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The log entry with inclusion proof and signed checkpoint.</returns>
     Task<TransparencyLogEntry> SubmitEntryAsync(
         RekorEntry entry,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Submits a DSSE envelope to the transparency log as a dsse entry.
+    /// </summary>
+    Task<TransparencyLogEntry> SubmitDsseEntryAsync(
+        RekorDsseEntry entry,
         CancellationToken cancellationToken = default);
 }
 
@@ -42,5 +46,23 @@ public class RekorEntry
     /// <summary>
     /// The signing certificate (PEM-encoded) or public key.
     /// </summary>
+    public required string VerificationMaterial { get; init; }
+}
+
+/// <summary>
+/// A DSSE entry to submit to the Rekor transparency log.
+/// </summary>
+public class RekorDsseEntry
+{
+    /// <summary>The DSSE envelope payload bytes.</summary>
+    public required byte[] Payload { get; init; }
+
+    /// <summary>The DSSE envelope payload type.</summary>
+    public required string PayloadType { get; init; }
+
+    /// <summary>The signature over the PAE.</summary>
+    public required byte[] Signature { get; init; }
+
+    /// <summary>The signing certificate (PEM-encoded).</summary>
     public required string VerificationMaterial { get; init; }
 }

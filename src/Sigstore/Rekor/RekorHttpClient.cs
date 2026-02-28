@@ -107,6 +107,70 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<TransparencyLogEntry> SubmitDsseEntryAsync(
+        RekorDsseEntry entry,
+        CancellationToken cancellationToken = default)
+    {
+        if (_majorApiVersion >= 2)
+            return await SubmitDsseEntryV2Async(entry, cancellationToken);
+        return await SubmitDsseEntryV1Async(entry, cancellationToken);
+    }
+
+    private async Task<TransparencyLogEntry> SubmitDsseEntryV1Async(
+        RekorDsseEntry entry,
+        CancellationToken cancellationToken)
+    {
+        var url = new Uri(_baseUrl, "api/v1/log/entries");
+
+        // Build the DSSE envelope JSON to embed in the request
+        var payloadBase64 = Convert.ToBase64String(entry.Payload);
+        var sigBase64 = Convert.ToBase64String(entry.Signature);
+        var envelopeJson = $@"{{""payloadType"":""{entry.PayloadType}"",""payload"":""{payloadBase64}"",""signatures"":[{{""sig"":""{sigBase64}""}}]}}";
+        var envelopeContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(envelopeJson));
+        var pubKeyContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(entry.VerificationMaterial));
+
+        var body = $@"{{""kind"":""dsse"",""apiVersion"":""0.0.1"",""spec"":{{""proposedContent"":{{""envelope"":""{envelopeContent}"",""verifiers"":[""{pubKeyContent}""]}}}}}}";
+
+        var responseBody = await PostJsonAsync(url, body, cancellationToken);
+
+        using var doc = JsonDocument.Parse(responseBody);
+        var root = doc.RootElement;
+
+        foreach (var prop in root.EnumerateObject())
+        {
+            return ParseV1LogEntry(prop.Value);
+        }
+
+        throw new InvalidOperationException("Rekor response is empty.");
+    }
+
+    private async Task<TransparencyLogEntry> SubmitDsseEntryV2Async(
+        RekorDsseEntry entry,
+        CancellationToken cancellationToken)
+    {
+        var url = new Uri(_baseUrl, "api/v2/log/entries");
+
+        var payloadBase64 = Convert.ToBase64String(entry.Payload);
+        var sigBase64 = Convert.ToBase64String(entry.Signature);
+        var certDerBase64 = ExtractDerFromPem(entry.VerificationMaterial);
+
+        // Build protobuf-JSON DSSERequestV002
+        var body = $@"{{""dsseRequestV002"":{{""envelope"":{{""payload"":""{payloadBase64}"",""payloadType"":""{entry.PayloadType}"",""signatures"":[{{""sig"":""{sigBase64}""}}]}},""verifiers"":[{{""x509Certificate"":{{""rawBytes"":""{certDerBase64}""}},""keyDetails"":""PKIX_ECDSA_P256_SHA_256""}}]}}}}";
+
+        var responseBody = await PostJsonAsync(url, body, cancellationToken);
+
+        try
+        {
+            return ParseV2LogEntry(responseBody);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to parse Rekor v2 DSSE response: {ex.Message}. Response: {responseBody[..Math.Min(responseBody.Length, 500)]}", ex);
+        }
+    }
+
     private async Task<string> PostJsonAsync(Uri url, string body, CancellationToken cancellationToken)
     {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
@@ -185,12 +249,18 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             }
         }
 
+        // Parse kind and version from the base64-encoded body
+        var bodyJson = Encoding.UTF8.GetString(Convert.FromBase64String(body));
+        using var bodyDoc = JsonDocument.Parse(bodyJson);
+        var kind = bodyDoc.RootElement.TryGetProperty("kind", out var kindElem) ? kindElem.GetString() ?? "hashedrekord" : "hashedrekord";
+        var kindVersion = bodyDoc.RootElement.TryGetProperty("apiVersion", out var avElem) ? avElem.GetString() ?? "0.0.1" : "0.0.1";
+
         return new TransparencyLogEntry
         {
             LogIndex = logIndex,
             LogId = logId,
-            Kind = "hashedrekord",
-            KindVersion = "0.0.1",
+            Kind = kind,
+            KindVersion = kindVersion,
             Body = body,
             IntegratedTime = integratedTime,
             InclusionProof = inclusionProof,
