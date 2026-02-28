@@ -10,22 +10,21 @@ namespace Sigstore.TrustRoot;
 /// This is the recommended trust root provider for production use.
 /// </summary>
 /// <remarks>
-/// The provider embeds a bootstrap root.json from the Sigstore TUF
-/// repository and uses TUF's secure update protocol to fetch the latest
-/// trusted_root.json target. Custom root overrides are supported for
-/// root key compromise recovery scenarios.
+/// The provider embeds bootstrap root.json files for both production and staging
+/// Sigstore TUF repositories. The TUF client uses secure update protocols to
+/// walk from the bootstrap root to the latest trusted_root.json target.
 /// </remarks>
 public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
 {
     /// <summary>
-    /// The default Sigstore TUF repository metadata URL.
+    /// The Sigstore production TUF repository URL.
     /// </summary>
-    public static readonly Uri DefaultMetadataUrl = new("https://tuf-repo-cdn.sigstore.dev/");
+    public static readonly Uri ProductionUrl = new("https://tuf-repo-cdn.sigstore.dev/");
 
     /// <summary>
-    /// The default Sigstore TUF repository targets URL.
+    /// The Sigstore staging TUF repository URL.
     /// </summary>
-    public static readonly Uri DefaultTargetsUrl = new("https://tuf-repo-cdn.sigstore.dev/targets/");
+    public static readonly Uri StagingUrl = new("https://tuf-repo-cdn.sigstage.dev/");
 
     /// <summary>
     /// The TUF target path for the Sigstore trusted root.
@@ -36,26 +35,28 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     private TrustedRoot? _cached;
 
     /// <summary>
-    /// Creates a TUF-based trust root provider using the default Sigstore TUF repository
-    /// and the embedded bootstrap root.json.
+    /// Creates a TUF-based trust root provider for the given repository URL.
+    /// For well-known Sigstore URLs (<see cref="ProductionUrl"/> and <see cref="StagingUrl"/>),
+    /// the embedded bootstrap root is selected automatically.
+    /// For custom URLs, provide a bootstrap root via <see cref="TufTrustRootProviderOptions.CustomTrustedRoot"/>.
     /// </summary>
-    public TufTrustRootProvider()
-        : this(new TufTrustRootProviderOptions())
+    /// <param name="repositoryUrl">The TUF repository base URL.</param>
+    /// <param name="options">Optional configuration overrides.</param>
+    /// <exception cref="ArgumentException">
+    /// Thrown when a custom URL is provided without <see cref="TufTrustRootProviderOptions.CustomTrustedRoot"/>.
+    /// </exception>
+    public TufTrustRootProvider(Uri repositoryUrl, TufTrustRootProviderOptions? options = null)
     {
-    }
+        options ??= new TufTrustRootProviderOptions();
+        var trustedRoot = options.CustomTrustedRoot ?? SelectEmbeddedRoot(repositoryUrl);
+        var cache = options.Cache ?? CreateDefaultCache(repositoryUrl);
 
-    /// <summary>
-    /// Creates a TUF-based trust root provider with the specified options.
-    /// </summary>
-    public TufTrustRootProvider(TufTrustRootProviderOptions options)
-    {
-        var trustedRoot = options.CustomTrustedRoot ?? LoadEmbeddedRoot();
-        var cache = options.Cache ?? new InMemoryTufCache();
+        var targetsUrl = new Uri(repositoryUrl, "targets/");
 
         _tufClient = new TufClient(new TufClientOptions
         {
-            MetadataBaseUrl = options.MetadataBaseUrl ?? DefaultMetadataUrl,
-            TargetsBaseUrl = options.TargetsBaseUrl ?? DefaultTargetsUrl,
+            MetadataBaseUrl = repositoryUrl,
+            TargetsBaseUrl = targetsUrl,
             TrustedRoot = trustedRoot,
             Cache = cache,
             Repository = options.Repository
@@ -75,16 +76,48 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     }
 
     /// <summary>
-    /// Loads the embedded bootstrap root.json from the assembly resources.
+    /// Selects the embedded bootstrap root.json for a well-known repository URL.
     /// </summary>
-    private static byte[] LoadEmbeddedRoot()
+    private static byte[] SelectEmbeddedRoot(Uri repositoryUrl)
+    {
+        if (repositoryUrl == ProductionUrl || repositoryUrl.Host == ProductionUrl.Host)
+            return LoadEmbeddedRoot("Sigstore.TrustRoot.TufData.root.json");
+
+        if (repositoryUrl == StagingUrl || repositoryUrl.Host == StagingUrl.Host)
+            return LoadEmbeddedRoot("Sigstore.TrustRoot.TufData.root-staging.json");
+
+        throw new ArgumentException(
+            $"No embedded bootstrap root for '{repositoryUrl}'. " +
+            $"Provide a CustomTrustedRoot in TufTrustRootProviderOptions, " +
+            $"or use TufTrustRootProvider.ProductionUrl or TufTrustRootProvider.StagingUrl.",
+            nameof(repositoryUrl));
+    }
+
+    /// <summary>
+    /// Loads an embedded bootstrap root.json from the assembly resources.
+    /// </summary>
+    private static byte[] LoadEmbeddedRoot(string resourceName)
     {
         var assembly = typeof(TufTrustRootProvider).Assembly;
-        using var stream = assembly.GetManifestResourceStream("Sigstore.TrustRoot.TufData.root.json")
-            ?? throw new InvalidOperationException("Embedded TUF root.json not found in assembly.");
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException($"Embedded TUF root '{resourceName}' not found in assembly.");
         using var ms = new MemoryStream();
         stream.CopyTo(ms);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Creates a default disk-based cache at <c>$HOME/.sigstore/dotnet/tuf/{url-slug}/</c>.
+    /// </summary>
+    private static ITufCache CreateDefaultCache(Uri repositoryUrl)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+            return new InMemoryTufCache();
+
+        var urlSlug = repositoryUrl.Host.Replace(".", "-");
+        var cachePath = Path.Combine(home, ".sigstore", "dotnet", "tuf", urlSlug);
+        return new FileSystemTufCache(cachePath);
     }
 
     /// <inheritdoc />
@@ -100,23 +133,14 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
 public sealed class TufTrustRootProviderOptions
 {
     /// <summary>
-    /// Override the TUF repository metadata URL. Defaults to the Sigstore public-good CDN.
-    /// </summary>
-    public Uri? MetadataBaseUrl { get; init; }
-
-    /// <summary>
-    /// Override the TUF repository targets URL. Defaults to the Sigstore public-good CDN.
-    /// </summary>
-    public Uri? TargetsBaseUrl { get; init; }
-
-    /// <summary>
     /// A custom TUF root.json to use instead of the embedded bootstrap root.
-    /// Use this for root key compromise recovery by providing a new trusted root.
+    /// Required when using a custom (non-Sigstore) TUF repository URL.
     /// </summary>
     public byte[]? CustomTrustedRoot { get; init; }
 
     /// <summary>
-    /// Custom TUF cache implementation. Defaults to <see cref="InMemoryTufCache"/>.
+    /// Custom TUF cache implementation. Defaults to a file-system cache
+    /// at <c>$HOME/.sigstore/dotnet/tuf/{url-slug}/</c>.
     /// </summary>
     public ITufCache? Cache { get; init; }
 

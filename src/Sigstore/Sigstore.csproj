@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="TrustRoot\TufData\root.json" LogicalName="Sigstore.TrustRoot.TufData.root.json" />
+    <EmbeddedResource Include="TrustRoot\TufData\root-staging.json" LogicalName="Sigstore.TrustRoot.TufData.root-staging.json" />
   </ItemGroup>
 
   <ItemGroup>

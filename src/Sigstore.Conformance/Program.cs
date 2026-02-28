@@ -18,8 +18,8 @@ namespace Sigstore.Conformance;
 /// </summary>
 public static class Program
 {
-    private static readonly Uri StagingTufMetadataUrl = new("https://tuf-repo-cdn.sigstage.dev/");
-    private static readonly Uri StagingTufTargetsUrl = new("https://tuf-repo-cdn.sigstage.dev/targets/");
+    private static readonly Uri StagingTufUrl = TufTrustRootProvider.StagingUrl;
+    private static readonly Uri ProductionTufUrl = TufTrustRootProvider.ProductionUrl;
 
     public static async Task<int> Main(string[] args)
     {
@@ -223,15 +223,9 @@ public static class Program
         {
             return new DisposableTrustRootProvider(new FileTrustRootProvider(trustedRootPath));
         }
-        if (staging)
-        {
-            return new DisposableTrustRootProvider(new TufTrustRootProvider(new TufTrustRootProviderOptions
-            {
-                MetadataBaseUrl = StagingTufMetadataUrl,
-                TargetsBaseUrl = StagingTufTargetsUrl
-            }));
-        }
-        return new DisposableTrustRootProvider(new TufTrustRootProvider());
+
+        var url = staging ? StagingTufUrl : ProductionTufUrl;
+        return new DisposableTrustRootProvider(new TufTrustRootProvider(url));
     }
 
     private static bool IsDigestInput(string input)
