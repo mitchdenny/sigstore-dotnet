@@ -35,14 +35,14 @@ jobs:
           dotnet-version: 10.x
 
       - name: Restore
-        run: dotnet restore sigstore-dotnet.slnx
+        run: dotnet restore Sigstore.slnx
 
       - name: Build
-        run: dotnet build sigstore-dotnet.slnx --no-restore
+        run: dotnet build Sigstore.slnx --no-restore
 
       - name: Test
         run: |
-          dotnet test sigstore-dotnet.slnx \
+          dotnet test Sigstore.slnx \
             --no-build \
             --logger "trx;LogFileName=test-results.trx" \
             --results-directory ./TestResults
