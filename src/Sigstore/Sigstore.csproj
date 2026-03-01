@@ -16,11 +16,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Sigstore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="TrustRoot\TufData\root.json" LogicalName="Sigstore.TrustRoot.TufData.root.json" />
+    <EmbeddedResource Include="TrustRoot\TufData\root-staging.json" LogicalName="Sigstore.TrustRoot.TufData.root-staging.json" />
   </ItemGroup>
 
   <ItemGroup>

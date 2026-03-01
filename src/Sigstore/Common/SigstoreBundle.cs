@@ -146,6 +146,16 @@ public class TransparencyLogEntry
     public byte[] LogId { get; set; } = [];
 
     /// <summary>
+    /// The kind (type) and version of the log entry.
+    /// </summary>
+    public string? Kind { get; set; }
+
+    /// <summary>
+    /// The API version of the log entry type.
+    /// </summary>
+    public string? KindVersion { get; set; }
+
+    /// <summary>
     /// The body of the log entry (base64-encoded JSON with kind/apiVersion).
     /// </summary>
     public string? Body { get; set; }

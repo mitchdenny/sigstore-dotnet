@@ -42,6 +42,13 @@ public class VerificationPolicy
     /// When true, all verification material must be present in the bundle.
     /// </summary>
     public bool OfflineVerification { get; set; }
+
+    /// <summary>
+    /// A DER-encoded SubjectPublicKeyInfo (SPKI) public key for managed-key verification.
+    /// When set, verification uses this key directly instead of certificate-based identity.
+    /// Certificate chain validation, SCT checks, and identity checks are skipped.
+    /// </summary>
+    public byte[]? PublicKey { get; set; }
 }
 
 /// <summary>

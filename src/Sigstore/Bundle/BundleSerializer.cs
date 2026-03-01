@@ -227,6 +227,12 @@ internal static class BundleSerializer
         if (dto.LogId?.KeyId != null)
             entry.LogId = Convert.FromBase64String(dto.LogId.KeyId);
 
+        if (dto.KindVersion != null)
+        {
+            entry.Kind = dto.KindVersion.Kind;
+            entry.KindVersion = dto.KindVersion.Version;
+        }
+
         if (dto.CanonicalizedBody != null)
             entry.Body = dto.CanonicalizedBody;
 
@@ -393,6 +399,9 @@ internal static class BundleSerializer
 
         if (entry.LogId.Length > 0)
             dto.LogId = new LogIdJson { KeyId = Convert.ToBase64String(entry.LogId) };
+
+        if (entry.Kind != null && entry.KindVersion != null)
+            dto.KindVersion = new KindVersionJson { Kind = entry.Kind, Version = entry.KindVersion };
 
         if (entry.Body != null)
             dto.CanonicalizedBody = entry.Body;
