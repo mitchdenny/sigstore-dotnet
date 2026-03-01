@@ -90,7 +90,7 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (production)
-        uses: sigstore/sigstore-conformance@v0.0.26
+        uses: sigstore/sigstore-conformance@9611941d54398f2e3f6383b6f744442a56d2fb2a # v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: production
@@ -123,10 +123,42 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (staging)
-        uses: sigstore/sigstore-conformance@v0.0.26
+        uses: sigstore/sigstore-conformance@9611941d54398f2e3f6383b6f744442a56d2fb2a # v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: staging
+
+  tuf-conformance:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Publish TUF conformance CLI (native AOT)
+        run: dotnet publish src/Tuf.Conformance/Tuf.Conformance.csproj -c Release -r linux-x64
+
+      - name: Create entrypoint wrapper
+        run: |
+          cat > tuf-conformance-client <<'EOF'
+          #!/bin/bash
+          "$GITHUB_WORKSPACE/src/Tuf.Conformance/bin/Release/net10.0/linux-x64/publish/Tuf.Conformance" "$@"
+          EOF
+          chmod +x tuf-conformance-client
+          cp src/Tuf.Conformance/Tuf.Conformance.xfails tuf-conformance-client.xfails
+
+      - name: Run TUF conformance tests
+        uses: theupdateframework/tuf-conformance@500c525c9ce287a472fd334fe8d885cace667d32 # v2.4.0
+        with:
+          entrypoint: ${{ github.workspace }}/tuf-conformance-client
 
   build:
     runs-on: ubuntu-latest
