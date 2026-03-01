@@ -78,14 +78,14 @@ jobs:
         with:
           dotnet-version: 10.x
 
-      - name: Build conformance CLI
-        run: dotnet build src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release
+      - name: Publish conformance CLI (native AOT)
+        run: dotnet publish src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release -r linux-x64
 
       - name: Create entrypoint wrapper
         run: |
           cat > sigstore-conformance-client <<'EOF'
           #!/bin/bash
-          dotnet run --project "$GITHUB_WORKSPACE/src/Sigstore.Conformance/Sigstore.Conformance.csproj" -c Release --no-build -- "$@"
+          "$GITHUB_WORKSPACE/src/Sigstore.Conformance/bin/Release/net10.0/linux-x64/publish/Sigstore.Conformance" "$@"
           EOF
           chmod +x sigstore-conformance-client
 
@@ -111,14 +111,14 @@ jobs:
         with:
           dotnet-version: 10.x
 
-      - name: Build conformance CLI
-        run: dotnet build src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release
+      - name: Publish conformance CLI (native AOT)
+        run: dotnet publish src/Sigstore.Conformance/Sigstore.Conformance.csproj -c Release -r linux-x64
 
       - name: Create entrypoint wrapper
         run: |
           cat > sigstore-conformance-client <<'EOF'
           #!/bin/bash
-          dotnet run --project "$GITHUB_WORKSPACE/src/Sigstore.Conformance/Sigstore.Conformance.csproj" -c Release --no-build -- "$@"
+          "$GITHUB_WORKSPACE/src/Sigstore.Conformance/bin/Release/net10.0/linux-x64/publish/Sigstore.Conformance" "$@"
           EOF
           chmod +x sigstore-conformance-client
 
