@@ -22,9 +22,6 @@ public class ConformanceTests
         foreach (var testDir in Directory.GetDirectories(AssetsDir).OrderBy(d => d))
         {
             var name = Path.GetFileName(testDir);
-            // Key-based verification not yet implemented — skip test cases with key.pub
-            if (File.Exists(Path.Combine(testDir, "key.pub")))
-                continue;
             yield return new object[] { name };
         }
     }
@@ -64,6 +61,18 @@ public class ConformanceTests
 
         var verifier = new SigstoreVerifier(trustRootProvider);
         var policy = new VerificationPolicy();
+
+        // Load public key for managed-key verification
+        var keyPubPath = Path.Combine(testDir, "key.pub");
+        if (File.Exists(keyPubPath))
+        {
+            var pem = await File.ReadAllTextAsync(keyPubPath);
+            var base64 = pem
+                .Replace("-----BEGIN PUBLIC KEY-----", "")
+                .Replace("-----END PUBLIC KEY-----", "")
+                .Replace("\n", "").Replace("\r", "").Trim();
+            policy.PublicKey = Convert.FromBase64String(base64);
+        }
 
         using var artifactStream = File.OpenRead(artifactPath);
         var (success, result) = await verifier.TryVerifyAsync(artifactStream, bundle, policy);
