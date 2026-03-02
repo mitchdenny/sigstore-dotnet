@@ -6,20 +6,20 @@ namespace Sigstore;
 /// </summary>
 public sealed class FileTrustRootProvider : ITrustRootProvider
 {
-    private readonly string _path;
+    private readonly FileInfo _file;
 
     /// <summary>
-    /// Creates a provider that reads the trusted root from the given file path.
+    /// Creates a provider that reads the trusted root from the given file.
     /// </summary>
-    public FileTrustRootProvider(string path)
+    public FileTrustRootProvider(FileInfo file)
     {
-        _path = path ?? throw new ArgumentNullException(nameof(path));
+        _file = file ?? throw new ArgumentNullException(nameof(file));
     }
 
     /// <inheritdoc />
     public async Task<TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
     {
-        string json = await File.ReadAllTextAsync(_path, cancellationToken);
+        string json = await File.ReadAllTextAsync(_file.FullName, cancellationToken);
         return TrustedRoot.Deserialize(json);
     }
 }

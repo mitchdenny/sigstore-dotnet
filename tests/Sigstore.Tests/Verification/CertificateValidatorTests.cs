@@ -56,7 +56,7 @@ public class CertificateValidatorTests
             [
                 new CertificateAuthorityInfo
                 {
-                    Uri = "https://test.example.com",
+                    Uri = new Uri("https://test.example.com"),
                     CertChain = [rootCert.Export(X509ContentType.Cert)]
                 }
             ]

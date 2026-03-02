@@ -55,7 +55,7 @@ public sealed record VerifiedTimestamp
     /// <summary>
     /// The URI of the timestamp authority or transparency log.
     /// </summary>
-    public string? AuthorityUri { get; init; }
+    public Uri? AuthorityUri { get; init; }
 }
 
 /// <summary>

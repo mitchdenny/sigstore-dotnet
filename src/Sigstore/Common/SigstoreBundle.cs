@@ -62,19 +62,19 @@ public sealed class SigstoreBundle
     /// <summary>
     /// Loads a Sigstore bundle from a JSON file.
     /// </summary>
-    public static async Task<SigstoreBundle> LoadAsync(string path, CancellationToken cancellationToken = default)
+    public static async Task<SigstoreBundle> LoadAsync(FileInfo file, CancellationToken cancellationToken = default)
     {
-        await using var stream = File.OpenRead(path);
+        await using var stream = file.OpenRead();
         return Deserialize(stream);
     }
 
     /// <summary>
     /// Saves this bundle to a JSON file.
     /// </summary>
-    public async Task SaveAsync(string path, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(FileInfo file, CancellationToken cancellationToken = default)
     {
         var json = Serialize();
-        await File.WriteAllTextAsync(path, json, cancellationToken);
+        await File.WriteAllTextAsync(file.FullName, json, cancellationToken);
     }
 }
 

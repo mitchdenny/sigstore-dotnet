@@ -60,9 +60,9 @@ public class SigningConfigTests
     {
         var config = SigningConfig.Deserialize(SampleConfig);
 
-        Assert.Equal("https://fulcio.sigstage.dev", config.CaUrls[0].Url);
-        Assert.Equal("https://rekor.sigstage.dev", config.RekorTlogUrls[0].Url);
-        Assert.Equal("https://rekor-new.sigstage.dev", config.RekorTlogUrls[1].Url);
+        Assert.Equal(new Uri("https://fulcio.sigstage.dev"), config.CaUrls[0].Url);
+        Assert.Equal(new Uri("https://rekor.sigstage.dev"), config.RekorTlogUrls[0].Url);
+        Assert.Equal(new Uri("https://rekor-new.sigstage.dev"), config.RekorTlogUrls[1].Url);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class SigningConfigTests
         var best = SigningConfig.SelectBest(config.RekorTlogUrls);
 
         Assert.NotNull(best);
-        Assert.Equal("https://rekor-new.sigstage.dev", best.Url);
+        Assert.Equal(new Uri("https://rekor-new.sigstage.dev"), best.Url);
         Assert.Equal(2, best.MajorApiVersion);
     }
 
@@ -104,14 +104,14 @@ public class SigningConfigTests
         {
             new()
             {
-                Url = "https://old.example.com",
+                Url = new Uri("https://old.example.com"),
                 MajorApiVersion = 2,
                 ValidFrom = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
                 ValidTo = new DateTimeOffset(2021, 1, 1, 0, 0, 0, TimeSpan.Zero)
             },
             new()
             {
-                Url = "https://current.example.com",
+                Url = new Uri("https://current.example.com"),
                 MajorApiVersion = 1,
                 ValidFrom = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
                 ValidTo = null
@@ -121,7 +121,7 @@ public class SigningConfigTests
         var best = SigningConfig.SelectBest(endpoints);
 
         Assert.NotNull(best);
-        Assert.Equal("https://current.example.com", best.Url);
+        Assert.Equal(new Uri("https://current.example.com"), best.Url);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class SigningConfigTests
         {
             new()
             {
-                Url = "https://expired.example.com",
+                Url = new Uri("https://expired.example.com"),
                 MajorApiVersion = 1,
                 ValidFrom = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
                 ValidTo = new DateTimeOffset(2021, 1, 1, 0, 0, 0, TimeSpan.Zero)

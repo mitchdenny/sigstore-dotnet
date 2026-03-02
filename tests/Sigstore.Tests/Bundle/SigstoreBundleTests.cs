@@ -487,7 +487,7 @@ public class SigstoreBundleTests
         {
             await File.WriteAllTextAsync(path, original.Serialize());
 
-            var loaded = await SigstoreBundle.LoadAsync(path);
+            var loaded = await SigstoreBundle.LoadAsync(new FileInfo(path));
 
             Assert.Equal(original.MediaType, loaded.MediaType);
             Assert.NotNull(loaded.MessageSignature);
@@ -514,7 +514,7 @@ public class SigstoreBundleTests
         var path = Path.GetTempFileName();
         try
         {
-            await bundle.SaveAsync(path);
+            await bundle.SaveAsync(new FileInfo(path));
 
             var json = await File.ReadAllTextAsync(path);
             var loaded = SigstoreBundle.Deserialize(json);

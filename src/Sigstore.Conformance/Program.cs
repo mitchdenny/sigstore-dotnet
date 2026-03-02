@@ -121,7 +121,7 @@ public static class Program
         {
             var caEndpoint = SigningConfig.SelectBest(signingConfig.CaUrls)
                 ?? throw new InvalidOperationException("No valid CA URL in signing config");
-            fulcioUrl = new Uri(caEndpoint.Url);
+            fulcioUrl = caEndpoint.Url;
         }
         else
         {
@@ -129,7 +129,7 @@ public static class Program
                 .Where(ca => ca.ValidTo == null || ca.ValidTo > DateTimeOffset.UtcNow)
                 .Select(ca => ca.Uri)
                 .FirstOrDefault() ?? throw new InvalidOperationException("No Fulcio CA found in trust root");
-            fulcioUrl = new Uri(caUri);
+            fulcioUrl = caUri;
         }
 
         // Find Rekor URL and API version — use signing config if available
@@ -139,7 +139,7 @@ public static class Program
         {
             var rekorEndpoint = SigningConfig.SelectBest(signingConfig.RekorTlogUrls)
                 ?? throw new InvalidOperationException("No valid Rekor URL in signing config");
-            rekorUrl = new Uri(rekorEndpoint.Url);
+            rekorUrl = rekorEndpoint.Url;
             rekorApiVersion = rekorEndpoint.MajorApiVersion;
         }
         else
@@ -148,7 +148,7 @@ public static class Program
                 .Where(l => l.ValidTo == null || l.ValidTo > DateTimeOffset.UtcNow)
                 .Select(l => l.BaseUrl)
                 .FirstOrDefault() ?? throw new InvalidOperationException("No Rekor log found in trust root");
-            rekorUrl = new Uri(rekorUri);
+            rekorUrl = rekorUri;
         }
 
         // Find TSA URL — use signing config if available
@@ -157,7 +157,7 @@ public static class Program
         {
             var tsaEndpoint = SigningConfig.SelectBest(signingConfig.TsaUrls);
             if (tsaEndpoint != null)
-                tsaUrl = new Uri(tsaEndpoint.Url);
+                tsaUrl = tsaEndpoint.Url;
         }
         else
         {
@@ -166,7 +166,7 @@ public static class Program
                 .Select(t => t.Uri)
                 .FirstOrDefault();
             if (tsaUri != null)
-                tsaUrl = new Uri(tsaUri);
+                tsaUrl = tsaUri;
         }
 
         // Create HTTP clients
@@ -189,7 +189,7 @@ public static class Program
         }
         else
         {
-            bundle = await signer.SignAsync(file, cancellationToken);
+            bundle = await signer.SignAsync(new FileInfo(file), cancellationToken);
         }
 
         await File.WriteAllTextAsync(bundlePath, bundle.Serialize(), cancellationToken);
@@ -259,7 +259,7 @@ public static class Program
     {
         if (trustedRootPath != null)
         {
-            return new DisposableTrustRootProvider(new FileTrustRootProvider(trustedRootPath));
+            return new DisposableTrustRootProvider(new FileTrustRootProvider(new FileInfo(trustedRootPath)));
         }
 
         var url = staging ? StagingTufUrl : ProductionTufUrl;

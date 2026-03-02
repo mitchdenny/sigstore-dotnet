@@ -20,7 +20,7 @@ public class VerificationResultTests
                 {
                     Source = TimestampSource.TransparencyLog,
                     Timestamp = DateTimeOffset.UtcNow,
-                    AuthorityUri = "https://rekor.sigstore.dev"
+                    AuthorityUri = new Uri("https://rekor.sigstore.dev")
                 }
             ]
         };

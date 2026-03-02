@@ -29,14 +29,14 @@ public class TrustedRootTests
     {
         var logInfo = new TransparencyLogInfo
         {
-            BaseUrl = "https://rekor.sigstore.dev",
+            BaseUrl = new Uri("https://rekor.sigstore.dev"),
             HashAlgorithm = HashAlgorithmType.Sha2_256,
             PublicKeyBytes = new byte[] { 1, 2, 3 },
             LogId = new byte[] { 4, 5, 6 },
             Operator = "sigstore.dev"
         };
 
-        Assert.Equal("https://rekor.sigstore.dev", logInfo.BaseUrl);
+        Assert.Equal(new Uri("https://rekor.sigstore.dev"), logInfo.BaseUrl);
         Assert.Equal(HashAlgorithmType.Sha2_256, logInfo.HashAlgorithm);
         Assert.Equal("sigstore.dev", logInfo.Operator);
     }
@@ -46,14 +46,14 @@ public class TrustedRootTests
     {
         var caInfo = new CertificateAuthorityInfo
         {
-            Uri = "https://fulcio.sigstore.dev",
+            Uri = new Uri("https://fulcio.sigstore.dev"),
             CertChain = [new byte[] { 1, 2, 3 }],
             Operator = "sigstore.dev",
             ValidFrom = DateTimeOffset.Parse("2022-01-01T00:00:00Z"),
             ValidTo = DateTimeOffset.Parse("2030-01-01T00:00:00Z")
         };
 
-        Assert.Equal("https://fulcio.sigstore.dev", caInfo.Uri);
+        Assert.Equal(new Uri("https://fulcio.sigstore.dev"), caInfo.Uri);
         Assert.Single(caInfo.CertChain);
         Assert.NotNull(caInfo.ValidFrom);
         Assert.NotNull(caInfo.ValidTo);
@@ -122,7 +122,7 @@ public class TrustedRootTests
 
         Assert.Single(root.TransparencyLogs);
         var tlog = root.TransparencyLogs[0];
-        Assert.Equal("https://rekor.sigstore.dev", tlog.BaseUrl);
+        Assert.Equal(new Uri("https://rekor.sigstore.dev"), tlog.BaseUrl);
         Assert.Equal(HashAlgorithmType.Sha2_256, tlog.HashAlgorithm);
         Assert.Equal(new byte[] { 1, 2, 3 }, tlog.PublicKeyBytes);
         Assert.Equal(PublicKeyDetails.PkixEcdsaP256Sha256, tlog.KeyDetails);
@@ -138,7 +138,7 @@ public class TrustedRootTests
 
         Assert.Single(root.CertificateAuthorities);
         var ca = root.CertificateAuthorities[0];
-        Assert.Equal("https://fulcio.sigstore.dev", ca.Uri);
+        Assert.Equal(new Uri("https://fulcio.sigstore.dev"), ca.Uri);
         Assert.Single(ca.CertChain);
         Assert.Equal(new byte[] { 7, 8, 9 }, ca.CertChain[0]);
         Assert.NotNull(ca.ValidFrom);
@@ -151,7 +151,7 @@ public class TrustedRootTests
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Single(root.CtLogs);
-        Assert.Equal("https://ctfe.sigstore.dev/test", root.CtLogs[0].BaseUrl);
+        Assert.Equal(new Uri("https://ctfe.sigstore.dev/test"), root.CtLogs[0].BaseUrl);
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class TrustedRootTests
 
         Assert.Single(root.TimestampAuthorities);
         var tsa = root.TimestampAuthorities[0];
-        Assert.Equal("https://timestamp.sigstore.dev", tsa.Uri);
+        Assert.Equal(new Uri("https://timestamp.sigstore.dev"), tsa.Uri);
         Assert.Single(tsa.CertChain);
         Assert.NotNull(tsa.ValidFrom);
         Assert.Null(tsa.ValidTo);

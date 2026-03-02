@@ -136,14 +136,14 @@ public sealed class SigstoreSigner
     /// <summary>
     /// Signs an artifact file and returns a Sigstore bundle.
     /// </summary>
-    /// <param name="filePath">Path to the artifact file.</param>
+    /// <param name="file">The artifact file to sign.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A Sigstore bundle containing the signature and verification material.</returns>
     public async Task<SigstoreBundle> SignAsync(
-        string filePath,
+        FileInfo file,
         CancellationToken cancellationToken = default)
     {
-        await using var stream = File.OpenRead(filePath);
+        await using var stream = file.OpenRead();
         return await SignAsync(stream, cancellationToken);
     }
 

@@ -78,7 +78,7 @@ public sealed class SigningConfig
 
             result.Add(new ServiceEndpoint
             {
-                Url = url,
+                Url = new Uri(url),
                 MajorApiVersion = apiVersion,
                 ValidFrom = validFrom,
                 ValidTo = validTo
@@ -95,7 +95,7 @@ public sealed class SigningConfig
 public sealed class ServiceEndpoint
 {
     /// <summary>The service URL.</summary>
-    public required string Url { get; init; }
+    public required Uri Url { get; init; }
 
     /// <summary>The major API version supported by this service.</summary>
     public int MajorApiVersion { get; init; } = 1;

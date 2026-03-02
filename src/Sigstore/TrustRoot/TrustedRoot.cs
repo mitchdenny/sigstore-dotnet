@@ -48,7 +48,7 @@ public sealed class TrustedRoot
 public sealed class TransparencyLogInfo
 {
     /// <summary>The base URL of the transparency log.</summary>
-    public string BaseUrl { get; init; } = "";
+    public required Uri BaseUrl { get; init; }
     /// <summary>The hash algorithm used by the log.</summary>
     public HashAlgorithmType HashAlgorithm { get; init; }
     /// <summary>The DER-encoded public key bytes of the log.</summary>
@@ -73,7 +73,7 @@ public sealed class TransparencyLogInfo
 public sealed class CertificateAuthorityInfo
 {
     /// <summary>The URI of the certificate authority.</summary>
-    public string Uri { get; init; } = "";
+    public required Uri Uri { get; init; }
     /// <summary>The certificate chain (DER-encoded, leaf to root).</summary>
     public IReadOnlyList<ReadOnlyMemory<byte>> CertChain { get; init; } = [];
     /// <summary>The operator of the certificate authority.</summary>

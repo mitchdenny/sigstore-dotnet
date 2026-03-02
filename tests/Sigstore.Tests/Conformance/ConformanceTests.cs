@@ -59,7 +59,7 @@ public class ConformanceTests
         // Determine trust root provider
         var trustedRootPath = Path.Combine(testDir, "trusted_root.json");
         ITrustRootProvider trustRootProvider = File.Exists(trustedRootPath)
-            ? new FileTrustRootProvider(trustedRootPath)
+            ? new FileTrustRootProvider(new FileInfo(trustedRootPath))
             : new TufTrustRootProvider(TufTrustRootProvider.ProductionUrl);
 
         var verifier = new SigstoreVerifier(trustRootProvider);

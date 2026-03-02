@@ -139,37 +139,37 @@ public sealed class SigstoreVerifier
     /// Verifies an artifact file against a Sigstore bundle file.
     /// Throws <see cref="VerificationException"/> on failure with detailed reason.
     /// </summary>
-    /// <param name="artifactPath">Path to the artifact file.</param>
-    /// <param name="bundlePath">Path to the Sigstore bundle JSON file.</param>
+    /// <param name="artifact">The artifact file.</param>
+    /// <param name="bundle">The Sigstore bundle file.</param>
     /// <param name="policy">The verification policy to enforce.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<VerificationResult> VerifyAsync(
-        string artifactPath,
-        string bundlePath,
+        FileInfo artifact,
+        FileInfo bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var bundle = await SigstoreBundle.LoadAsync(bundlePath, cancellationToken);
-        await using var artifact = File.OpenRead(artifactPath);
-        return await VerifyAsync(artifact, bundle, policy, cancellationToken);
+        var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
+        await using var stream = artifact.OpenRead();
+        return await VerifyAsync(stream, sigstoreBundle, policy, cancellationToken);
     }
 
     /// <summary>
     /// Attempts to verify an artifact file against a Sigstore bundle file without throwing on failure.
     /// </summary>
-    /// <param name="artifactPath">Path to the artifact file.</param>
-    /// <param name="bundlePath">Path to the Sigstore bundle JSON file.</param>
+    /// <param name="artifact">The artifact file.</param>
+    /// <param name="bundle">The Sigstore bundle file.</param>
     /// <param name="policy">The verification policy to enforce.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
-        string artifactPath,
-        string bundlePath,
+        FileInfo artifact,
+        FileInfo bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var bundle = await SigstoreBundle.LoadAsync(bundlePath, cancellationToken);
-        await using var artifact = File.OpenRead(artifactPath);
-        return await TryVerifyAsync(artifact, bundle, policy, cancellationToken);
+        var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
+        await using var stream = artifact.OpenRead();
+        return await TryVerifyAsync(stream, sigstoreBundle, policy, cancellationToken);
     }
 
     private async Task<(bool Success, VerificationResult? Result)> TryVerifyCoreAsync(
@@ -1228,11 +1228,9 @@ public sealed class SigstoreVerifier
             }
 
             // Try with the hostname from baseUrl
-            if (!string.IsNullOrEmpty(log.BaseUrl))
+            if (log.BaseUrl is not null)
             {
-                string origin;
-                try { origin = new Uri(log.BaseUrl).Host; }
-                catch { origin = log.BaseUrl; }
+                string origin = log.BaseUrl.Host;
 
                 // Note format key ID: SHA256(origin + "\n" + algByte + rawKey)[:4]
                 // algByte = 0x01 for Ed25519

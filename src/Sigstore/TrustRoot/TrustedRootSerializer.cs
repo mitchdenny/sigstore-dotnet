@@ -90,7 +90,7 @@ internal static class TrustedRootSerializer
     {
         return new TransparencyLogInfo
         {
-            BaseUrl = dto.BaseUrl ?? "",
+            BaseUrl = new Uri(dto.BaseUrl ?? "https://localhost"),
             HashAlgorithm = BundleSerializer.ParseHashAlgorithm(dto.HashAlgorithm),
             PublicKeyBytes = dto.PublicKey?.RawBytes != null
                 ? Convert.FromBase64String(dto.PublicKey.RawBytes)
@@ -115,7 +115,7 @@ internal static class TrustedRootSerializer
     {
         return new CertificateAuthorityInfo
         {
-            Uri = dto.Uri ?? "",
+            Uri = new Uri(dto.Uri ?? "https://localhost"),
             CertChain = dto.CertChain?.Certificates != null
                 ? dto.CertChain.Certificates
                     .Where(c => c.RawBytes != null)

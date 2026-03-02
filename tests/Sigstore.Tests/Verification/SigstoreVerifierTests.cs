@@ -455,12 +455,12 @@ public class SigstoreVerifierTests
         var artifactPath = Path.GetTempFileName();
         try
         {
-            await bundle.SaveAsync(bundlePath);
+            await bundle.SaveAsync(new FileInfo(bundlePath));
             await File.WriteAllTextAsync(artifactPath, "test artifact");
 
             // Expect verification to fail (no verification material), proving delegation works
             await Assert.ThrowsAsync<VerificationException>(
-                () => verifier.VerifyAsync(artifactPath, bundlePath, new VerificationPolicy()));
+                () => verifier.VerifyAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy()));
         }
         finally
         {
@@ -479,10 +479,10 @@ public class SigstoreVerifierTests
         var artifactPath = Path.GetTempFileName();
         try
         {
-            await bundle.SaveAsync(bundlePath);
+            await bundle.SaveAsync(new FileInfo(bundlePath));
             await File.WriteAllTextAsync(artifactPath, "test artifact");
 
-            var (success, result) = await verifier.TryVerifyAsync(artifactPath, bundlePath, new VerificationPolicy());
+            var (success, result) = await verifier.TryVerifyAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy());
 
             Assert.False(success);
             Assert.Contains("no verification material", result!.FailureReason!);
