@@ -1,7 +1,6 @@
 test_invalid_initial_root
 test_unsigned_initial_root
 test_timestamp_content_changes
-test_metadata_bytes_match
 test_deprecated_keyid_hash_algorithms
 test_multiple_changes_to_target
 test_download_with_hash_algorithms[hashes1]
