@@ -16,4 +16,7 @@
     <Project Path="tests/Sigstore.Tests/Sigstore.Tests.csproj" />
     <Project Path="tests/Tuf.Tests/Tuf.Tests.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Sigstore.Benchmarks/Sigstore.Benchmarks.csproj" />
+  </Folder>
 </Solution>

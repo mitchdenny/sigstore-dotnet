@@ -234,24 +234,28 @@ public sealed class SigstoreVerifier
 
             using var leafCert = X509CertificateLoader.LoadCertificate(leafCertBytes.Value.Span);
 
-            // Reject bundles where the chain contains a root (self-signed) certificate
+            // Load chain certs once — check for root certs and build intermediates in a single pass
+            X509Certificate2Collection? intermediates = null;
             if (verificationMaterial.CertificateChain is { Count: > 0 })
             {
-                foreach (var certBytes in verificationMaterial.CertificateChain)
+                for (int i = 0; i < verificationMaterial.CertificateChain.Count; i++)
                 {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
+                    var cert = X509CertificateLoader.LoadCertificate(verificationMaterial.CertificateChain[i].Span);
                     if (cert.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData))
+                    {
+                        cert.Dispose();
                         return Fail("Bundle certificate chain contains a root certificate. Root certificates must come from the trusted root, not the bundle.");
+                    }
+                    if (i > 0)
+                    {
+                        intermediates ??= new X509Certificate2Collection();
+                        intermediates.Add(cert);
+                    }
+                    else
+                    {
+                        cert.Dispose();
+                    }
                 }
-            }
-
-            // Build intermediate chain
-            X509Certificate2Collection? intermediates = null;
-            if (verificationMaterial.CertificateChain is { Count: > 1 })
-            {
-                intermediates = new X509Certificate2Collection();
-                for (int i = 1; i < verificationMaterial.CertificateChain.Count; i++)
-                    intermediates.Add(X509CertificateLoader.LoadCertificate(verificationMaterial.CertificateChain[i].Span));
             }
 
             // Step 2b: Verify SCTs if CT logs are configured
