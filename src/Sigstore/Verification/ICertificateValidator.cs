@@ -40,36 +40,29 @@ public sealed class SigningCertificateValidationResult
 
 /// <summary>
 /// Default certificate validator using .NET X509Chain with hybrid time model.
+/// Caches parsed CA certificates from the trusted root to avoid repeated deserialization.
 /// </summary>
 internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
 {
+    private TrustedRoot? _cachedTrustRoot;
+    private X509Certificate2Collection? _cachedRoots;
+    private X509Certificate2Collection? _cachedIntermediates;
+
     public SigningCertificateValidationResult ValidateChain(
         X509Certificate2 leafCertificate,
         X509Certificate2Collection? chain,
         TrustedRoot trustRoot,
         DateTimeOffset signatureTime)
     {
+        EnsureTrustStoreBuilt(trustRoot);
+
         using var x509Chain = new X509Chain();
         x509Chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
         x509Chain.ChainPolicy.VerificationTime = signatureTime.UtcDateTime;
         x509Chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
 
-        // Add CA certificates from the trusted root
-        foreach (var ca in trustRoot.CertificateAuthorities)
-        {
-            foreach (var certBytes in ca.CertificateChain)
-            {
-                var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
-                if (cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData))
-                {
-                    x509Chain.ChainPolicy.CustomTrustStore.Add(cert);
-                }
-                else
-                {
-                    x509Chain.ChainPolicy.ExtraStore.Add(cert);
-                }
-            }
-        }
+        x509Chain.ChainPolicy.CustomTrustStore.AddRange(_cachedRoots!);
+        x509Chain.ChainPolicy.ExtraStore.AddRange(_cachedIntermediates!);
 
         // Add any provided intermediate certificates
         if (chain != null)
@@ -152,5 +145,28 @@ internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
             IsValid = true,
             SubjectAlternativeName = san
         };
+    }
+
+    private void EnsureTrustStoreBuilt(TrustedRoot trustRoot)
+    {
+        if (ReferenceEquals(_cachedTrustRoot, trustRoot))
+            return;
+
+        _cachedRoots = new X509Certificate2Collection();
+        _cachedIntermediates = new X509Certificate2Collection();
+
+        foreach (var ca in trustRoot.CertificateAuthorities)
+        {
+            foreach (var certBytes in ca.CertificateChain)
+            {
+                var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
+                if (cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData))
+                    _cachedRoots.Add(cert);
+                else
+                    _cachedIntermediates.Add(cert);
+            }
+        }
+
+        _cachedTrustRoot = trustRoot;
     }
 }
