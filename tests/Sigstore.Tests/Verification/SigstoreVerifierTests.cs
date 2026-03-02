@@ -445,6 +445,55 @@ public class SigstoreVerifierTests
         return writer.Encode();
     }
 
+    [Fact]
+    public async Task VerifyAsync_FilePaths_DelegatesToStreamOverload()
+    {
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
+        var bundle = new SigstoreBundle { VerificationMaterial = null };
+
+        var bundlePath = Path.GetTempFileName();
+        var artifactPath = Path.GetTempFileName();
+        try
+        {
+            await bundle.SaveAsync(bundlePath);
+            await File.WriteAllTextAsync(artifactPath, "test artifact");
+
+            // Expect verification to fail (no verification material), proving delegation works
+            await Assert.ThrowsAsync<VerificationException>(
+                () => verifier.VerifyAsync(artifactPath, bundlePath, new VerificationPolicy()));
+        }
+        finally
+        {
+            File.Delete(bundlePath);
+            File.Delete(artifactPath);
+        }
+    }
+
+    [Fact]
+    public async Task TryVerifyAsync_FilePaths_DelegatesToStreamOverload()
+    {
+        var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
+        var bundle = new SigstoreBundle { VerificationMaterial = null };
+
+        var bundlePath = Path.GetTempFileName();
+        var artifactPath = Path.GetTempFileName();
+        try
+        {
+            await bundle.SaveAsync(bundlePath);
+            await File.WriteAllTextAsync(artifactPath, "test artifact");
+
+            var (success, result) = await verifier.TryVerifyAsync(artifactPath, bundlePath, new VerificationPolicy());
+
+            Assert.False(success);
+            Assert.Contains("no verification material", result!.FailureReason!);
+        }
+        finally
+        {
+            File.Delete(bundlePath);
+            File.Delete(artifactPath);
+        }
+    }
+
     private class FakeTrustRootProvider : ITrustRootProvider
     {
         public Task<Sigstore.TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)

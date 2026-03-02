@@ -151,6 +151,12 @@ internal static class BundleSerializer
         return JsonSerializer.Serialize(dto, BundleJsonContext.Default.BundleJson);
     }
 
+    public static void Serialize(SigstoreBundle bundle, Stream stream)
+    {
+        var dto = ToDto(bundle);
+        JsonSerializer.Serialize(stream, dto, BundleJsonContext.Default.BundleJson);
+    }
+
     private static SigstoreBundle FromDto(BundleJson dto)
     {
         return new SigstoreBundle

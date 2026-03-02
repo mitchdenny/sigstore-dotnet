@@ -50,6 +50,32 @@ public sealed class SigstoreBundle
     {
         return BundleSerializer.Serialize(this);
     }
+
+    /// <summary>
+    /// Serializes this bundle to canonical JSON written directly to a stream.
+    /// </summary>
+    public void Serialize(Stream stream)
+    {
+        BundleSerializer.Serialize(this, stream);
+    }
+
+    /// <summary>
+    /// Loads a Sigstore bundle from a JSON file.
+    /// </summary>
+    public static async Task<SigstoreBundle> LoadAsync(string path, CancellationToken cancellationToken = default)
+    {
+        await using var stream = File.OpenRead(path);
+        return Deserialize(stream);
+    }
+
+    /// <summary>
+    /// Saves this bundle to a JSON file.
+    /// </summary>
+    public async Task SaveAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var json = Serialize();
+        await File.WriteAllTextAsync(path, json, cancellationToken);
+    }
 }
 
 /// <summary>

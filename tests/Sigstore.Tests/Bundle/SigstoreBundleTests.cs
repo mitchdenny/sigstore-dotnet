@@ -464,4 +464,91 @@ public class SigstoreBundleTests
 
         Assert.Contains("SHA2_384", json);
     }
+
+    [Fact]
+    public async Task LoadAsync_DeserializesFromFile()
+    {
+        var original = new SigstoreBundle
+        {
+            MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json",
+            MessageSignature = new MessageSignature
+            {
+                Signature = new byte[] { 1, 2, 3 },
+                MessageDigest = new HashOutput
+                {
+                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Digest = new byte[] { 4, 5, 6 }
+                }
+            }
+        };
+
+        var path = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(path, original.Serialize());
+
+            var loaded = await SigstoreBundle.LoadAsync(path);
+
+            Assert.Equal(original.MediaType, loaded.MediaType);
+            Assert.NotNull(loaded.MessageSignature);
+            Assert.Equal(original.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_WritesToFile()
+    {
+        var bundle = new SigstoreBundle
+        {
+            MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json",
+            MessageSignature = new MessageSignature
+            {
+                Signature = new byte[] { 10, 20, 30 }
+            }
+        };
+
+        var path = Path.GetTempFileName();
+        try
+        {
+            await bundle.SaveAsync(path);
+
+            var json = await File.ReadAllTextAsync(path);
+            var loaded = SigstoreBundle.Deserialize(json);
+
+            Assert.Equal(bundle.MediaType, loaded.MediaType);
+            Assert.NotNull(loaded.MessageSignature);
+            Assert.Equal(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Serialize_Stream_WritesJson()
+    {
+        var bundle = new SigstoreBundle
+        {
+            MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json",
+            MessageSignature = new MessageSignature
+            {
+                Signature = new byte[] { 7, 8, 9 }
+            }
+        };
+
+        using var stream = new MemoryStream();
+        bundle.Serialize(stream);
+
+        stream.Position = 0;
+        var loaded = SigstoreBundle.Deserialize(stream);
+
+        Assert.Equal(bundle.MediaType, loaded.MediaType);
+        Assert.NotNull(loaded.MessageSignature);
+        Assert.Equal(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+    }
 }
