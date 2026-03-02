@@ -244,6 +244,11 @@ public sealed class SigstoreVerifier
                     if (cert.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData))
                     {
                         cert.Dispose();
+                        if (intermediates != null)
+                        {
+                            foreach (var intermediate in intermediates)
+                                intermediate.Dispose();
+                        }
                         return Fail("Bundle certificate chain contains a root certificate. Root certificates must come from the trusted root, not the bundle.");
                     }
                     if (i > 0)
