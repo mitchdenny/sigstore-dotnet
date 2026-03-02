@@ -180,21 +180,22 @@ public static class TimestampParser
 
     /// <summary>
     /// Verifies an RFC 3161 timestamp with full trust root context including validity periods.
+    /// Returns whether verification succeeded and the URI of the matched TSA authority.
     /// </summary>
-    public static bool Verify(
+    public static (bool Verified, Uri? AuthorityUri) Verify(
         TimestampInfo info,
         ReadOnlyMemory<byte> signature,
         IReadOnlyList<CertificateAuthorityInfo> timestampAuthorities)
     {
         if (info.Timestamp == default || timestampAuthorities.Count == 0)
-            return false;
+            return (false, null);
 
         // Verify message imprint
         if (info.MessageImprint.Length > 0)
         {
             var expectedHash = SHA256.HashData(signature.Span);
             if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint.Span))
-                return false;
+                return (false, null);
         }
 
         // Check each TSA authority
@@ -228,46 +229,51 @@ public static class TimestampParser
             if (!certsValidAtTimestamp)
                 continue;
 
-            // Build trusted cert set for this TSA
-            var trustedCerts = new HashSet<string>();
-            foreach (var certBytes in tsa.CertificateChain)
-            {
-                try
-                {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
-                    trustedCerts.Add(cert.Thumbprint);
-                }
-                catch { }
-            }
-
-            if (trustedCerts.Count == 0)
+            if (tsa.CertificateChain.Count == 0)
                 continue;
 
-            // Check if embedded certs chain to this TSA
+            // Check if embedded certs chain to this TSA using X509Chain
             if (info.EmbeddedCertificates.Count > 0)
             {
                 foreach (var certBytes in info.EmbeddedCertificates)
                 {
                     try
                     {
-                        using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
-                        if (trustedCerts.Contains(cert.Thumbprint))
-                            return true;
+                        using var signerCert = X509CertificateLoader.LoadCertificate(certBytes.Span);
+                        using var chain = new X509Chain();
+                        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                        chain.ChainPolicy.VerificationTime = info.Timestamp.LocalDateTime;
 
-                        // Check if issued by a trusted cert
-                        foreach (var trustedCertBytes in tsa.CertificateChain)
+                        // Add TSA certs as trust anchors (roots) and intermediates
+                        foreach (var tsaCertBytes in tsa.CertificateChain)
                         {
-                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
-                            if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
-                                return true;
+                            var tsaCert = X509CertificateLoader.LoadCertificate(tsaCertBytes.Span);
+                            if (tsaCert.SubjectName.RawData.AsSpan().SequenceEqual(tsaCert.IssuerName.RawData))
+                                chain.ChainPolicy.CustomTrustStore.Add(tsaCert);
+                            else
+                                chain.ChainPolicy.ExtraStore.Add(tsaCert);
                         }
+
+                        // Add other embedded certs as intermediates
+                        foreach (var otherCertBytes in info.EmbeddedCertificates)
+                        {
+                            if (!otherCertBytes.Span.SequenceEqual(certBytes.Span))
+                            {
+                                var otherCert = X509CertificateLoader.LoadCertificate(otherCertBytes.Span);
+                                chain.ChainPolicy.ExtraStore.Add(otherCert);
+                            }
+                        }
+
+                        if (chain.Build(signerCert))
+                            return (true, tsa.Uri);
                     }
                     catch { }
                 }
             }
             else
             {
-                // No embedded certs — match signer issuer against trusted TSA cert chain
+                // No embedded certs — match signer issuer against trusted TSA cert chain (weaker fallback)
                 if (info.SignerIssuerDer != null)
                 {
                     foreach (var trustedCertBytes in tsa.CertificateChain)
@@ -276,16 +282,15 @@ public static class TimestampParser
                         {
                             using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
                             if (info.SignerIssuerDer.Value.Span.SequenceEqual(trustedCert.SubjectName.RawData))
-                                return true;
+                                return (true, tsa.Uri);
                         }
                         catch { }
                     }
                 }
-                // Can't identify signer without embedded certs or signer info
             }
         }
 
-        return false;
+        return (false, null);
     }
 
     private static HashAlgorithmType MapHashAlgorithm(string oid)

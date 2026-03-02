@@ -203,12 +203,34 @@ internal static class SctVerifier
                     RSASignaturePadding.Pkcs1);
             }
 
+            // Try Ed25519
+            try
+            {
+                return VerifyEd25519Sct(signedData, sct.Signature, ctLog.PublicKeyBytes);
+            }
+            catch { }
+
             return false;
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool VerifyEd25519Sct(byte[] data, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeyBytes)
+    {
+        ReadOnlySpan<byte> rawKey;
+        if (publicKeyBytes.Length == 44)
+            rawKey = publicKeyBytes.Span.Slice(12);
+        else if (publicKeyBytes.Length == 32)
+            rawKey = publicKeyBytes.Span;
+        else
+            return false;
+
+        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
+        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
+        return algorithm.Verify(pk, data, signature);
     }
 
     /// <summary>
