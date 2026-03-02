@@ -29,7 +29,7 @@ var policy = new VerificationPolicy
     }
 };
 
-var result = await verifier.VerifyAsync(
+var result = await verifier.VerifyFileAsync(
     new FileInfo("artifact.tar.gz"),
     new FileInfo("artifact.sigstore.json"),
     policy);

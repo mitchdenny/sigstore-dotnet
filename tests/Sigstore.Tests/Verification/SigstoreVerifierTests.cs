@@ -7,57 +7,57 @@ namespace Sigstore.Tests.Verification;
 public class SigstoreVerifierTests
 {
     [Fact]
-    public async Task VerifyAsync_ThrowsOnNullArtifact()
+    public async Task VerifyStreamAsync_ThrowsOnNullArtifact()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.VerifyAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
+            () => verifier.VerifyStreamAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
     }
 
     [Fact]
-    public async Task VerifyAsync_ThrowsOnNullBundle()
+    public async Task VerifyStreamAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.VerifyAsync(Stream.Null, null!, new VerificationPolicy()));
+            () => verifier.VerifyStreamAsync(Stream.Null, null!, new VerificationPolicy()));
     }
 
     [Fact]
-    public async Task VerifyAsync_ThrowsOnNullPolicy()
+    public async Task VerifyStreamAsync_ThrowsOnNullPolicy()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.VerifyAsync(Stream.Null, new SigstoreBundle(), null!));
+            () => verifier.VerifyStreamAsync(Stream.Null, new SigstoreBundle(), null!));
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ThrowsOnNullArtifact()
+    public async Task TryVerifyStreamAsync_ThrowsOnNullArtifact()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.TryVerifyAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
+            () => verifier.TryVerifyStreamAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ThrowsOnNullBundle()
+    public async Task TryVerifyStreamAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.TryVerifyAsync(Stream.Null, null!, new VerificationPolicy()));
+            () => verifier.TryVerifyStreamAsync(Stream.Null, null!, new VerificationPolicy()));
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ThrowsOnNullPolicy()
+    public async Task TryVerifyStreamAsync_ThrowsOnNullPolicy()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.TryVerifyAsync(Stream.Null, new SigstoreBundle(), null!));
+            () => verifier.TryVerifyStreamAsync(Stream.Null, new SigstoreBundle(), null!));
     }
 
     [Fact]
@@ -68,12 +68,12 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenNoVerificationMaterial()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoVerificationMaterial()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
 
-        var (success, result) = await verifier.TryVerifyAsync(Stream.Null, bundle, new VerificationPolicy());
+        var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
         Assert.False(success);
         Assert.NotNull(result);
@@ -81,7 +81,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenNoCertificate()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoCertificate()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle
@@ -89,14 +89,14 @@ public class SigstoreVerifierTests
             VerificationMaterial = new VerificationMaterial { Certificate = null }
         };
 
-        var (success, result) = await verifier.TryVerifyAsync(Stream.Null, bundle, new VerificationPolicy());
+        var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
         Assert.False(success);
         Assert.Contains("no signing certificate", result!.FailureReason!);
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenNoTimestamps()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoTimestamps()
     {
         var (cert, _) = CreateSelfSignedCert();
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider(), new AlwaysValidCertificateValidator());
@@ -109,14 +109,14 @@ public class SigstoreVerifierTests
             }
         };
 
-        var (success, result) = await verifier.TryVerifyAsync(Stream.Null, bundle, new VerificationPolicy());
+        var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
         Assert.False(success);
         Assert.Contains("No verified timestamps", result!.FailureReason!);
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenIdentityMismatch()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenIdentityMismatch()
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -144,7 +144,7 @@ public class SigstoreVerifierTests
             RequireTransparencyLog = false
         };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
         Assert.False(success);
@@ -152,19 +152,19 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task VerifyAsync_ThrowsVerificationException_OnFailure()
+    public async Task VerifyStreamAsync_ThrowsVerificationException_OnFailure()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
 
         var ex = await Assert.ThrowsAsync<VerificationException>(
-            () => verifier.VerifyAsync(Stream.Null, bundle, new VerificationPolicy()));
+            () => verifier.VerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy()));
 
         Assert.Contains("no verification material", ex.Message);
     }
 
     [Fact]
-    public async Task TryVerifyAsync_Succeeds_WithValidSignatureAndNoIdentityPolicy()
+    public async Task TryVerifyStreamAsync_Succeeds_WithValidSignatureAndNoIdentityPolicy()
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -187,7 +187,7 @@ public class SigstoreVerifierTests
             RequireTransparencyLog = false
         };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
         Assert.True(success);
@@ -196,7 +196,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenSignatureInvalid()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenSignatureInvalid()
     {
         var (cert, _) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -216,7 +216,7 @@ public class SigstoreVerifierTests
 
         var policy = new VerificationPolicy { RequireTransparencyLog = false };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
         Assert.False(success);
@@ -224,7 +224,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_ReturnsFalse_WhenTlogThresholdNotMet()
+    public async Task TryVerifyStreamAsync_ReturnsFalse_WhenTlogThresholdNotMet()
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -256,7 +256,7 @@ public class SigstoreVerifierTests
             TransparencyLogThreshold = 1
         };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
         Assert.False(success);
@@ -264,7 +264,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_DigestBased_Succeeds_WithValidSignature()
+    public async Task TryVerifyDigestAsync_Succeeds_WithValidSignature()
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -284,7 +284,7 @@ public class SigstoreVerifierTests
             {
                 MessageDigest = new HashOutput
                 {
-                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Algorithm = HashAlgorithmType.Sha256,
                     Digest = hash
                 },
                 Signature = signature
@@ -293,9 +293,9 @@ public class SigstoreVerifierTests
 
         var policy = new VerificationPolicy { RequireTransparencyLog = false };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyDigestAsync(
             new ReadOnlyMemory<byte>(hash),
-            HashAlgorithmType.Sha2_256,
+            HashAlgorithmType.Sha256,
             bundle, policy);
 
         Assert.True(success);
@@ -303,7 +303,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_DigestBased_Fails_WhenDigestMismatch()
+    public async Task TryVerifyDigestAsync_Fails_WhenDigestMismatch()
     {
         var (cert, key) = CreateSelfSignedCert();
         var artifact = new byte[] { 1, 2, 3 };
@@ -324,7 +324,7 @@ public class SigstoreVerifierTests
             {
                 MessageDigest = new HashOutput
                 {
-                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Algorithm = HashAlgorithmType.Sha256,
                     Digest = hash
                 },
                 Signature = signature
@@ -333,9 +333,9 @@ public class SigstoreVerifierTests
 
         var policy = new VerificationPolicy { RequireTransparencyLog = false };
 
-        var (success, result) = await verifier.TryVerifyAsync(
+        var (success, result) = await verifier.TryVerifyDigestAsync(
             new ReadOnlyMemory<byte>(wrongHash),
-            HashAlgorithmType.Sha2_256,
+            HashAlgorithmType.Sha256,
             bundle, policy);
 
         Assert.False(success);
@@ -343,27 +343,27 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task VerifyAsync_DigestBased_ThrowsOnFailure()
+    public async Task VerifyDigestAsync_ThrowsOnFailure()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
         var digest = new ReadOnlyMemory<byte>(new byte[32]);
 
         var ex = await Assert.ThrowsAsync<VerificationException>(
-            () => verifier.VerifyAsync(digest, HashAlgorithmType.Sha2_256, bundle, new VerificationPolicy()));
+            () => verifier.VerifyDigestAsync(digest, HashAlgorithmType.Sha256, bundle, new VerificationPolicy()));
 
         Assert.Contains("no verification material", ex.Message);
     }
 
     [Fact]
-    public async Task TryVerifyAsync_DigestBased_ThrowsOnNullBundle()
+    public async Task TryVerifyDigestAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => verifier.TryVerifyAsync(
+            () => verifier.TryVerifyDigestAsync(
                 new ReadOnlyMemory<byte>(new byte[32]),
-                HashAlgorithmType.Sha2_256,
+                HashAlgorithmType.Sha256,
                 null!, new VerificationPolicy()));
     }
 
@@ -445,7 +445,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task VerifyAsync_FilePaths_DelegatesToStreamOverload()
+    public async Task VerifyFileAsync_DelegatesToStreamOverload()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
@@ -459,7 +459,7 @@ public class SigstoreVerifierTests
 
             // Expect verification to fail (no verification material), proving delegation works
             await Assert.ThrowsAsync<VerificationException>(
-                () => verifier.VerifyAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy()));
+                () => verifier.VerifyFileAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy()));
         }
         finally
         {
@@ -469,7 +469,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public async Task TryVerifyAsync_FilePaths_DelegatesToStreamOverload()
+    public async Task TryVerifyFileAsync_DelegatesToStreamOverload()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
@@ -481,7 +481,7 @@ public class SigstoreVerifierTests
             await bundle.SaveAsync(new FileInfo(bundlePath));
             await File.WriteAllTextAsync(artifactPath, "test artifact");
 
-            var (success, result) = await verifier.TryVerifyAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy());
+            var (success, result) = await verifier.TryVerifyFileAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy());
 
             Assert.False(success);
             Assert.Contains("no verification material", result!.FailureReason!);

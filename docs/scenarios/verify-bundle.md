@@ -25,7 +25,7 @@ var policy = new VerificationPolicy
 
 // Verify
 await using var artifact = File.OpenRead("artifact.tar.gz");
-var result = await verifier.VerifyAsync(artifact, bundle, policy);
+var result = await verifier.VerifyStreamAsync(artifact, bundle, policy);
 
 Console.WriteLine($"Signed by: {result.SignerIdentity!.SubjectAlternativeName}");
 Console.WriteLine($"Timestamps: {result.VerifiedTimestamps.Count}");
@@ -51,7 +51,7 @@ var policy = new VerificationPolicy
 For the common case of verifying files on disk:
 
 ```csharp
-var result = await verifier.VerifyAsync(
+var result = await verifier.VerifyFileAsync(
     artifact: new FileInfo("artifact.tar.gz"),
     bundle: new FileInfo("artifact.sigstore.json"),
     policy);
@@ -60,7 +60,7 @@ var result = await verifier.VerifyAsync(
 ## Non-Throwing Verification (Try Pattern)
 
 ```csharp
-var (success, result) = await verifier.TryVerifyAsync(artifact, bundle, policy);
+var (success, result) = await verifier.TryVerifyStreamAsync(artifact, bundle, policy);
 if (!success)
 {
     Console.Error.WriteLine($"Verification failed: {result?.FailureReason}");
@@ -74,27 +74,11 @@ If you've already hashed the artifact (e.g., for large files or streaming scenar
 
 ```csharp
 var digest = SHA256.HashData(artifactBytes);
-var (success, result) = await verifier.TryVerifyAsync(
+var (success, result) = await verifier.TryVerifyDigestAsync(
     new ReadOnlyMemory<byte>(digest),
-    HashAlgorithmType.Sha2_256,
+    HashAlgorithmType.Sha256,
     bundle,
     policy);
-```
-
-## Offline Verification
-
-Verify without any network calls (all material must be in the bundle):
-
-```csharp
-var policy = new VerificationPolicy
-{
-    CertificateIdentity = new CertificateIdentity
-    {
-        SubjectAlternativeName = "user@example.com",
-        Issuer = "https://accounts.google.com"
-    },
-    IsOffline = true
-};
 ```
 
 ## Require Signed Timestamps
@@ -120,7 +104,6 @@ var policy = new VerificationPolicy
 | `RequireSignedTimestamps` | `false` | Require RFC 3161 TSA timestamps |
 | `SignedTimestampThreshold` | `1` | Minimum signed timestamps when required |
 | `RequireSignedCertificateTimestamps` | `true` | Require SCT verification |
-| `IsOffline` | `false` | Skip network calls |
 | `PublicKey` | `null` | SPKI public key for managed-key verification |
 
 ## See Also

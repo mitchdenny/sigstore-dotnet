@@ -4,7 +4,7 @@ namespace Sigstore;
 /// Pure computation for verifying Merkle tree inclusion proofs.
 /// No I/O — operates entirely on in-memory data.
 /// </summary>
-public static class MerkleVerifier
+internal static class MerkleVerifier
 {
     /// <summary>
     /// Verifies a Merkle tree inclusion proof.

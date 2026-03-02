@@ -11,8 +11,8 @@ Common issues and how to resolve them.
 **Fix:** Check exactly what identity was used to sign:
 
 ```csharp
-// Use TryVerifyAsync with a permissive policy first to inspect the bundle
-var (success, result) = await verifier.TryVerifyAsync(artifact, bundle,
+// Use TryVerifyStreamAsync with a permissive policy first to inspect the bundle
+var (success, result) = await verifier.TryVerifyStreamAsync(artifact, bundle,
     new VerificationPolicy());
 
 if (result?.SignerIdentity != null)
@@ -104,20 +104,6 @@ if (bundle.VerificationMaterial != null)
 var verifier = new SigstoreVerifier(
     new FileTrustRootProvider(new FileInfo("trusted_root.json")));
 ```
-
-### Offline verification
-
-If you can't make network calls during verification:
-
-```csharp
-var policy = new VerificationPolicy
-{
-    CertificateIdentity = identity,
-    IsOffline = true
-};
-```
-
-Note: The trust root itself must still be available (pre-loaded or cached).
 
 ## See Also
 

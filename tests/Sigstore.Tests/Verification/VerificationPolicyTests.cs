@@ -30,14 +30,6 @@ public class VerificationPolicyTests
     }
 
     [Fact]
-    public void DefaultPolicy_IsNotOffline()
-    {
-        var policy = new VerificationPolicy();
-
-        Assert.False(policy.IsOffline);
-    }
-
-    [Fact]
     public void Policy_CanSetCertificateIdentity()
     {
         var policy = new VerificationPolicy

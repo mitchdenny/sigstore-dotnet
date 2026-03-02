@@ -116,7 +116,7 @@ internal static class TrustedRootSerializer
         return new CertificateAuthorityInfo
         {
             Uri = new Uri(dto.Uri ?? "https://localhost"),
-            CertChain = dto.CertChain?.Certificates != null
+            CertificateChain = dto.CertChain?.Certificates != null
                 ? dto.CertChain.Certificates
                     .Where(c => c.RawBytes != null)
                     .Select(c => (ReadOnlyMemory<byte>)Convert.FromBase64String(c.RawBytes!))

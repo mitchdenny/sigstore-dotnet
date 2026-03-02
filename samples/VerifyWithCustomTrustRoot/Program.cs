@@ -65,7 +65,7 @@ var policy = new VerificationPolicy
 };
 
 await using var artifactStream = File.OpenRead(artifactPath);
-var (success, result) = await verifier.TryVerifyAsync(artifactStream, bundle, policy);
+var (success, result) = await verifier.TryVerifyStreamAsync(artifactStream, bundle, policy);
 
 if (success)
 {

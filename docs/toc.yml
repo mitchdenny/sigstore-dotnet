@@ -14,7 +14,5 @@
       href: scenarios/sign-interactive.md
     - name: Custom Trust Root
       href: scenarios/custom-trust-root.md
-    - name: ASP.NET Core Integration
-      href: scenarios/aspnet-integration.md
     - name: Troubleshooting
       href: scenarios/troubleshooting.md

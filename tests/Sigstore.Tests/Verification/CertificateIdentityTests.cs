@@ -7,7 +7,7 @@ public class CertificateIdentityTests
     [Fact]
     public void ForGitHubActions_SetsDefaultIssuer()
     {
-        var identity = CertificateIdentity.ForGitHubActions("owner/repo");
+        var identity = CertificateIdentity.ForGitHubActions("owner", "repo");
 
         Assert.Equal("https://token.actions.githubusercontent.com", identity.Issuer);
     }
@@ -15,7 +15,7 @@ public class CertificateIdentityTests
     [Fact]
     public void ForGitHubActions_SetsRepositoryPattern()
     {
-        var identity = CertificateIdentity.ForGitHubActions("sigstore/sigstore-dotnet");
+        var identity = CertificateIdentity.ForGitHubActions("sigstore", "sigstore-dotnet");
 
         Assert.NotNull(identity.SubjectAlternativeNamePattern);
         Assert.Contains("sigstore/sigstore-dotnet", identity.SubjectAlternativeNamePattern);
@@ -25,7 +25,7 @@ public class CertificateIdentityTests
     public void ForGitHubActions_WithCustomIssuer()
     {
         var identity = CertificateIdentity.ForGitHubActions(
-            "owner/repo",
+            "owner", "repo",
             issuer: "https://custom-issuer.example.com");
 
         Assert.Equal("https://custom-issuer.example.com", identity.Issuer);
@@ -35,7 +35,7 @@ public class CertificateIdentityTests
     public void ForGitHubActions_WithWorkflowRef_IncludesRefInPattern()
     {
         var identity = CertificateIdentity.ForGitHubActions(
-            "owner/repo",
+            "owner", "repo",
             workflowRef: "refs/heads/main");
 
         Assert.NotNull(identity.SubjectAlternativeNamePattern);
@@ -45,7 +45,7 @@ public class CertificateIdentityTests
     [Fact]
     public void ForGitHubActions_WithoutWorkflowRef_UsesWildcardPattern()
     {
-        var identity = CertificateIdentity.ForGitHubActions("owner/repo");
+        var identity = CertificateIdentity.ForGitHubActions("owner", "repo");
 
         Assert.NotNull(identity.SubjectAlternativeNamePattern);
         Assert.Null(identity.SubjectAlternativeName);

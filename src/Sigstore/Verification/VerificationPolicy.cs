@@ -38,12 +38,6 @@ public sealed class VerificationPolicy
     public bool RequireSignedCertificateTimestamps { get; set; } = true;
 
     /// <summary>
-    /// Whether to perform offline verification (no network calls). Default: <see langword="false"/>.
-    /// When <see langword="true"/>, all verification material must be present in the bundle.
-    /// </summary>
-    public bool IsOffline { get; set; }
-
-    /// <summary>
     /// A DER-encoded SubjectPublicKeyInfo (SPKI) public key for managed-key verification.
     /// When set, verification uses this key directly instead of certificate-based identity.
     /// Certificate chain validation, SCT checks, and identity checks are skipped.
@@ -75,17 +69,19 @@ public sealed class CertificateIdentity
     /// <summary>
     /// Creates a CertificateIdentity for verifying artifacts signed by GitHub Actions.
     /// </summary>
-    /// <param name="repository">The GitHub repository (e.g., "owner/repo").</param>
+    /// <param name="owner">The GitHub organization or user (e.g., "myorg").</param>
+    /// <param name="repository">The GitHub repository name (e.g., "myapp").</param>
     /// <param name="issuer">The OIDC issuer. Defaults to GitHub Actions token issuer.</param>
     /// <param name="workflowRef">Optional workflow ref to match (e.g., "refs/heads/main").</param>
     public static CertificateIdentity ForGitHubActions(
+        string owner,
         string repository,
         string issuer = "https://token.actions.githubusercontent.com",
         string? workflowRef = null)
     {
         var sanPattern = workflowRef is not null
-            ? $"https://github.com/{repository}/.github/workflows/.*@{workflowRef}"
-            : $"https://github.com/{repository}/.*";
+            ? $"https://github.com/{owner}/{repository}/.github/workflows/.*@{workflowRef}"
+            : $"https://github.com/{owner}/{repository}/.*";
 
         return new CertificateIdentity
         {

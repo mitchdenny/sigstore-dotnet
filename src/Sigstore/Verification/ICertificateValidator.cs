@@ -57,7 +57,7 @@ internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
         // Add CA certificates from the trusted root
         foreach (var ca in trustRoot.CertificateAuthorities)
         {
-            foreach (var certBytes in ca.CertChain)
+            foreach (var certBytes in ca.CertificateChain)
             {
                 var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                 if (cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData))

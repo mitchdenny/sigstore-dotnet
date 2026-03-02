@@ -75,7 +75,7 @@ public sealed class CertificateAuthorityInfo
     /// <summary>The URI of the certificate authority.</summary>
     public required Uri Uri { get; init; }
     /// <summary>The certificate chain (DER-encoded, leaf to root).</summary>
-    public IReadOnlyList<ReadOnlyMemory<byte>> CertChain { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> CertificateChain { get; init; } = [];
     /// <summary>The operator of the certificate authority.</summary>
     public string? Operator { get; init; }
     /// <summary>The start of the CA's validity period.</summary>
