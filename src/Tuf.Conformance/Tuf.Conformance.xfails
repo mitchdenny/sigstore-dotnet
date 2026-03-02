@@ -1,4 +1,18 @@
+test_invalid_initial_root
+test_unsigned_initial_root
+test_timestamp_content_changes
 test_metadata_bytes_match
+test_deprecated_keyid_hash_algorithms
+test_multiple_changes_to_target
+test_download_with_hash_algorithms[hashes1]
+test_duplicate_sig_keyids
+test_keytype_and_scheme[ed25519/ed25519]
+test_snapshot_rollback[basic]
+test_snapshot_rollback[with hashes]
+test_targets_role_removal
+test_targets_fast_forward_recovery
+test_new_timestamp_fast_forward_recovery
+test_delegation_not_in_snapshot
 test_unusual_role_name[?]
 test_unusual_role_name[#]
 test_unusual_role_name[/delegatedrole]
