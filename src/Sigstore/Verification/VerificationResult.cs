@@ -3,7 +3,7 @@ namespace Sigstore;
 /// <summary>
 /// The result of a successful Sigstore bundle verification.
 /// </summary>
-public class VerificationResult
+public sealed record VerificationResult
 {
     /// <summary>
     /// The verified signer identity from the certificate.
@@ -24,7 +24,7 @@ public class VerificationResult
 /// <summary>
 /// The verified identity extracted from a Sigstore signing certificate.
 /// </summary>
-public class VerifiedIdentity
+public sealed record VerifiedIdentity
 {
     /// <summary>
     /// The Subject Alternative Name from the certificate.
@@ -40,7 +40,7 @@ public class VerifiedIdentity
 /// <summary>
 /// A verified timestamp from a trusted source.
 /// </summary>
-public class VerifiedTimestamp
+public sealed record VerifiedTimestamp
 {
     /// <summary>
     /// The source of the timestamp.

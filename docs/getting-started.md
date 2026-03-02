@@ -92,7 +92,7 @@ else
 | `RequireSignedTimestamps` | `false` | Require RFC 3161 TSA timestamps |
 | `SignedTimestampThreshold` | `1` | Minimum signed timestamps (when required) |
 | `RequireSignedCertificateTimestamps` | `true` | Require SCT verification |
-| `OfflineVerification` | `false` | Skip network calls (all material must be in bundle) |
+| `IsOffline` | `false` | Skip network calls (all material must be in bundle) |
 
 ## Next Steps
 

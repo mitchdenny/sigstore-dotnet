@@ -188,7 +188,7 @@ public static class CheckpointVerifier
 /// <summary>
 /// Parsed data from a verified transparency log checkpoint.
 /// </summary>
-public class CheckpointData
+public sealed class CheckpointData
 {
     /// <summary>
     /// The log origin (base URL).

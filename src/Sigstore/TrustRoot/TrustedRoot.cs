@@ -6,7 +6,7 @@ namespace Sigstore;
 /// Represents the complete set of trusted entities for Sigstore verification.
 /// Includes certificate authorities, transparency logs, CT logs, and timestamp authorities.
 /// </summary>
-public class TrustedRoot
+public sealed class TrustedRoot
 {
     /// <summary>
     /// The media type of the trusted root.
@@ -45,7 +45,7 @@ public class TrustedRoot
 /// <summary>
 /// Describes an instance of a transparency log.
 /// </summary>
-public class TransparencyLogInfo
+public sealed class TransparencyLogInfo
 {
     /// <summary>The base URL of the transparency log.</summary>
     public string BaseUrl { get; init; } = "";
@@ -70,7 +70,7 @@ public class TransparencyLogInfo
 /// <summary>
 /// Describes a trusted certificate authority.
 /// </summary>
-public class CertificateAuthorityInfo
+public sealed class CertificateAuthorityInfo
 {
     /// <summary>The URI of the certificate authority.</summary>
     public string Uri { get; init; } = "";

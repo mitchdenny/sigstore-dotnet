@@ -19,7 +19,7 @@ public interface ITimestampAuthority
 /// <summary>
 /// Response from an RFC 3161 Timestamp Authority.
 /// </summary>
-public class TimestampResponse
+public sealed class TimestampResponse
 {
     /// <summary>
     /// The DER-encoded TimeStampResponse.

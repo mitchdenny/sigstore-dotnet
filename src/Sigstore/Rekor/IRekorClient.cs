@@ -25,7 +25,7 @@ public interface IRekorClient
 /// <summary>
 /// An entry to submit to the Rekor transparency log.
 /// </summary>
-public class RekorEntry
+public sealed class RekorEntry
 {
     /// <summary>
     /// The signature bytes.
@@ -51,7 +51,7 @@ public class RekorEntry
 /// <summary>
 /// A DSSE entry to submit to the Rekor transparency log.
 /// </summary>
-public class RekorDsseEntry
+public sealed class RekorDsseEntry
 {
     /// <summary>The DSSE envelope payload bytes.</summary>
     public required ReadOnlyMemory<byte> Payload { get; init; }

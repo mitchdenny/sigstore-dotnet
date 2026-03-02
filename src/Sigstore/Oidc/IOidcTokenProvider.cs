@@ -16,7 +16,7 @@ public interface IOidcTokenProvider
 /// <summary>
 /// An OIDC identity token with extracted metadata.
 /// </summary>
-public class OidcToken
+public sealed class OidcToken
 {
     /// <summary>
     /// The raw JWT token string.

@@ -28,7 +28,7 @@ public interface ICertificateValidator
 /// <summary>
 /// Result of certificate chain validation.
 /// </summary>
-public class CertificateValidationResult
+public sealed class CertificateValidationResult
 {
     /// <summary>Whether the certificate chain is valid.</summary>
     public bool IsValid { get; init; }

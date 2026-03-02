@@ -21,7 +21,7 @@ public interface IFulcioClient
 /// <summary>
 /// A request to Fulcio for a signing certificate.
 /// </summary>
-public class CertificateRequest
+public sealed class CertificateRequest
 {
     /// <summary>
     /// The PEM-encoded PKCS#10 certificate signing request.
@@ -37,7 +37,7 @@ public class CertificateRequest
 /// <summary>
 /// Response from Fulcio containing the issued certificate.
 /// </summary>
-public class CertificateResponse
+public sealed class CertificateResponse
 {
     /// <summary>
     /// The certificate chain, ordered leaf-to-root. Each element is DER-encoded.

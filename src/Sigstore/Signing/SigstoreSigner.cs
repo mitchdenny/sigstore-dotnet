@@ -22,7 +22,7 @@ namespace Sigstore;
 /// </code>
 /// </example>
 /// </summary>
-public class SigstoreSigner
+public sealed class SigstoreSigner
 {
     private readonly IFulcioClient _fulcioClient;
     private readonly IRekorClient _rekorClient;

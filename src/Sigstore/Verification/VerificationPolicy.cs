@@ -4,7 +4,7 @@ namespace Sigstore;
 /// Specifies the policy for verifying a Sigstore bundle.
 /// Defines what identity the signer must have and trust requirements.
 /// </summary>
-public class VerificationPolicy
+public sealed class VerificationPolicy
 {
     /// <summary>
     /// The expected certificate identity of the signer.
@@ -38,10 +38,10 @@ public class VerificationPolicy
     public bool RequireSignedCertificateTimestamps { get; set; } = true;
 
     /// <summary>
-    /// Whether to perform offline verification (no network calls). Default: false.
-    /// When true, all verification material must be present in the bundle.
+    /// Whether to perform offline verification (no network calls). Default: <see langword="false"/>.
+    /// When <see langword="true"/>, all verification material must be present in the bundle.
     /// </summary>
-    public bool OfflineVerification { get; set; }
+    public bool IsOffline { get; set; }
 
     /// <summary>
     /// A DER-encoded SubjectPublicKeyInfo (SPKI) public key for managed-key verification.
@@ -54,7 +54,7 @@ public class VerificationPolicy
 /// <summary>
 /// Describes the expected identity in a Sigstore signing certificate.
 /// </summary>
-public class CertificateIdentity
+public sealed class CertificateIdentity
 {
     /// <summary>
     /// The expected Subject Alternative Name value (e.g., email address or URI).

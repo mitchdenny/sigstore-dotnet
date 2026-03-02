@@ -324,7 +324,7 @@ public static class TimestampParser
 /// <summary>
 /// Parsed information from an RFC 3161 timestamp.
 /// </summary>
-public class TimestampInfo
+public sealed class TimestampInfo
 {
     /// <summary>The timestamp value (genTime) from the TSTInfo.</summary>
     public required DateTimeOffset Timestamp { get; init; }

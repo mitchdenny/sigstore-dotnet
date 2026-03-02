@@ -5,7 +5,7 @@ namespace Sigstore;
 /// Represents a Sigstore bundle containing signature and verification material.
 /// This is the primary unit of exchange for signed artifacts.
 /// </summary>
-public class SigstoreBundle
+public sealed class SigstoreBundle
 {
     /// <summary>
     /// The media type of the bundle (e.g., "application/vnd.dev.sigstore.bundle.v0.3+json").
@@ -55,7 +55,7 @@ public class SigstoreBundle
 /// <summary>
 /// Verification material embedded in a Sigstore bundle.
 /// </summary>
-public class VerificationMaterial
+public sealed class VerificationMaterial
 {
     /// <summary>
     /// The signing certificate (leaf certificate, DER-encoded).
@@ -86,7 +86,7 @@ public class VerificationMaterial
 /// <summary>
 /// A message signature over an artifact.
 /// </summary>
-public class MessageSignature
+public sealed class MessageSignature
 {
     /// <summary>
     /// The digest of the signed message.
@@ -102,7 +102,7 @@ public class MessageSignature
 /// <summary>
 /// A hash output (algorithm + digest bytes).
 /// </summary>
-public class HashOutput
+public sealed class HashOutput
 {
     /// <summary>The hash algorithm used.</summary>
     public HashAlgorithmType Algorithm { get; init; }
@@ -132,7 +132,7 @@ public enum HashAlgorithmType
 /// <summary>
 /// A transparency log entry with inclusion proof and checkpoint.
 /// </summary>
-public class TransparencyLogEntry
+public sealed class TransparencyLogEntry
 {
     /// <summary>
     /// The index of the entry in the log.
@@ -182,7 +182,7 @@ public class TransparencyLogEntry
 /// <summary>
 /// A Merkle tree inclusion proof.
 /// </summary>
-public class InclusionProof
+public sealed class InclusionProof
 {
     /// <summary>The index of the entry in the log.</summary>
     public long LogIndex { get; init; }
@@ -202,7 +202,7 @@ public class InclusionProof
 /// <summary>
 /// A DSSE (Dead Simple Signing Envelope) for in-toto attestations.
 /// </summary>
-public class DsseEnvelope
+public sealed class DsseEnvelope
 {
     /// <summary>The payload content type (e.g., "application/vnd.in-toto+json").</summary>
     public string PayloadType { get; init; } = "";
@@ -215,7 +215,7 @@ public class DsseEnvelope
 /// <summary>
 /// A signature within a DSSE envelope.
 /// </summary>
-public class DsseSignature
+public sealed class DsseSignature
 {
     /// <summary>The key identifier for the signer.</summary>
     public string KeyId { get; init; } = "";

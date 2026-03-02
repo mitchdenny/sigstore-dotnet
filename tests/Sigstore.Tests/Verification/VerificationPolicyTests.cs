@@ -34,7 +34,7 @@ public class VerificationPolicyTests
     {
         var policy = new VerificationPolicy();
 
-        Assert.False(policy.OfflineVerification);
+        Assert.False(policy.IsOffline);
     }
 
     [Fact]

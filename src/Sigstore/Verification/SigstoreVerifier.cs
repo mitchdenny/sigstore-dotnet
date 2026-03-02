@@ -33,7 +33,7 @@ namespace Sigstore;
 /// </code>
 /// </example>
 /// </summary>
-public class SigstoreVerifier
+public sealed class SigstoreVerifier
 {
     // Fulcio OIDC issuer (V2) extension OID
     private const string OidcIssuerV2Oid = "1.3.6.1.4.1.57264.1.8";
