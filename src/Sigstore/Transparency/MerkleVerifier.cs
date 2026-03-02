@@ -19,7 +19,7 @@ public static class MerkleVerifier
         ReadOnlySpan<byte> leafHash,
         long leafIndex,
         long treeSize,
-        IReadOnlyList<byte[]> proofHashes,
+        IReadOnlyList<ReadOnlyMemory<byte>> proofHashes,
         ReadOnlySpan<byte> expectedRootHash)
     {
         if (leafIndex < 0 || leafIndex >= treeSize)
@@ -35,7 +35,7 @@ public static class MerkleVerifier
 
         for (int i = 0; i < proofHashes.Count; i++)
         {
-            var proof = proofHashes[i].AsSpan();
+            var proof = proofHashes[i].Span;
             if (index % 2 == 1 || index == size - 1)
             {
                 // proof goes on the left

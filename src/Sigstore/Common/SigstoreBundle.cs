@@ -60,12 +60,12 @@ public class VerificationMaterial
     /// <summary>
     /// The signing certificate (leaf certificate, DER-encoded).
     /// </summary>
-    public byte[]? Certificate { get; init; }
+    public ReadOnlyMemory<byte>? Certificate { get; init; }
 
     /// <summary>
     /// The certificate chain (for v0.1/v0.2 bundles).
     /// </summary>
-    public IReadOnlyList<byte[]>? CertificateChain { get; init; }
+    public IReadOnlyList<ReadOnlyMemory<byte>>? CertificateChain { get; init; }
 
     /// <summary>
     /// Public key identifier hint (for key-based verification).
@@ -80,7 +80,7 @@ public class VerificationMaterial
     /// <summary>
     /// RFC 3161 signed timestamps.
     /// </summary>
-    public IReadOnlyList<byte[]> Rfc3161Timestamps { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> Rfc3161Timestamps { get; init; } = [];
 }
 
 /// <summary>
@@ -96,7 +96,7 @@ public class MessageSignature
     /// <summary>
     /// The raw signature bytes.
     /// </summary>
-    public byte[] Signature { get; init; } = [];
+    public ReadOnlyMemory<byte> Signature { get; init; }
 }
 
 /// <summary>
@@ -107,7 +107,7 @@ public class HashOutput
     /// <summary>The hash algorithm used.</summary>
     public HashAlgorithmType Algorithm { get; init; }
     /// <summary>The digest bytes.</summary>
-    public byte[] Digest { get; init; } = [];
+    public ReadOnlyMemory<byte> Digest { get; init; }
 }
 
 /// <summary>
@@ -142,7 +142,7 @@ public class TransparencyLogEntry
     /// <summary>
     /// The log ID (SHA-256 of the log's public key).
     /// </summary>
-    public byte[] LogId { get; init; } = [];
+    public ReadOnlyMemory<byte> LogId { get; init; }
 
     /// <summary>
     /// The kind (type) and version of the log entry.
@@ -172,13 +172,12 @@ public class TransparencyLogEntry
     /// <summary>
     /// The inclusion promise (deprecated, for v0.1 bundles).
     /// </summary>
-    public byte[]? InclusionPromise { get; init; }
+    public ReadOnlyMemory<byte>? InclusionPromise { get; init; }
 
     /// <summary>
     /// Checkpoint key ID for Rekor v2 verification.
     /// </summary>
-    public byte[]? CheckpointKeyId { get; init; }
-}
+    public ReadOnlyMemory<byte>? CheckpointKeyId { get; init; }}
 
 /// <summary>
 /// A Merkle tree inclusion proof.
@@ -190,9 +189,9 @@ public class InclusionProof
     /// <summary>The size of the Merkle tree at the time of the proof.</summary>
     public long TreeSize { get; init; }
     /// <summary>The root hash of the Merkle tree.</summary>
-    public byte[] RootHash { get; init; } = [];
+    public ReadOnlyMemory<byte> RootHash { get; init; }
     /// <summary>The intermediate hashes forming the inclusion proof path.</summary>
-    public IReadOnlyList<byte[]> Hashes { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> Hashes { get; init; } = [];
 
     /// <summary>
     /// The signed checkpoint from the transparency log.
@@ -208,7 +207,7 @@ public class DsseEnvelope
     /// <summary>The payload content type (e.g., "application/vnd.in-toto+json").</summary>
     public string PayloadType { get; init; } = "";
     /// <summary>The raw payload bytes.</summary>
-    public byte[] Payload { get; init; } = [];
+    public ReadOnlyMemory<byte> Payload { get; init; }
     /// <summary>The signatures over the PAE-encoded payload.</summary>
     public IReadOnlyList<DsseSignature> Signatures { get; init; } = [];
 }
@@ -221,5 +220,5 @@ public class DsseSignature
     /// <summary>The key identifier for the signer.</summary>
     public string KeyId { get; init; } = "";
     /// <summary>The raw signature bytes.</summary>
-    public byte[] Sig { get; init; } = [];
+    public ReadOnlyMemory<byte> Sig { get; init; }
 }

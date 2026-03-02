@@ -48,7 +48,7 @@ public class VerificationPolicy
     /// When set, verification uses this key directly instead of certificate-based identity.
     /// Certificate chain validation, SCT checks, and identity checks are skipped.
     /// </summary>
-    public byte[]? PublicKey { get; set; }
+    public ReadOnlyMemory<byte>? PublicKey { get; set; }
 }
 
 /// <summary>

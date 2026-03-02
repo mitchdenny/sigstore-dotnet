@@ -59,9 +59,9 @@ internal static class SctVerifier
     /// <summary>
     /// Computes the CT log ID as SHA-256 of the log's public key DER.
     /// </summary>
-    private static byte[] ComputeCtLogId(byte[] publicKeyBytes)
+    private static byte[] ComputeCtLogId(ReadOnlyMemory<byte> publicKeyBytes)
     {
-        return SHA256.HashData(publicKeyBytes);
+        return SHA256.HashData(publicKeyBytes.Span);
     }
 
     /// <summary>
@@ -344,12 +344,12 @@ internal static class SctVerifier
         return writer.Encode();
     }
 
-    private static ECDsa? LoadEcdsaFromSpki(byte[] spkiBytes)
+    private static ECDsa? LoadEcdsaFromSpki(ReadOnlyMemory<byte> spkiBytes)
     {
         try
         {
             var ecdsa = ECDsa.Create();
-            ecdsa.ImportSubjectPublicKeyInfo(spkiBytes, out _);
+            ecdsa.ImportSubjectPublicKeyInfo(spkiBytes.Span, out _);
             return ecdsa;
         }
         catch
@@ -358,12 +358,12 @@ internal static class SctVerifier
         }
     }
 
-    private static RSA? LoadRsaFromSpki(byte[] spkiBytes)
+    private static RSA? LoadRsaFromSpki(ReadOnlyMemory<byte> spkiBytes)
     {
         try
         {
             var rsa = RSA.Create();
-            rsa.ImportSubjectPublicKeyInfo(spkiBytes, out _);
+            rsa.ImportSubjectPublicKeyInfo(spkiBytes.Span, out _);
             return rsa;
         }
         catch

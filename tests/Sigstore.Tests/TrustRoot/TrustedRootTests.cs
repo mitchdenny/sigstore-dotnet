@@ -31,8 +31,8 @@ public class TrustedRootTests
         {
             BaseUrl = "https://rekor.sigstore.dev",
             HashAlgorithm = HashAlgorithmType.Sha2_256,
-            PublicKeyBytes = [1, 2, 3],
-            LogId = [4, 5, 6],
+            PublicKeyBytes = new byte[] { 1, 2, 3 },
+            LogId = new byte[] { 4, 5, 6 },
             Operator = "sigstore.dev"
         };
 
@@ -47,7 +47,7 @@ public class TrustedRootTests
         var caInfo = new CertificateAuthorityInfo
         {
             Uri = "https://fulcio.sigstore.dev",
-            CertChain = [[1, 2, 3]],
+            CertChain = [new byte[] { 1, 2, 3 }],
             Operator = "sigstore.dev",
             ValidFrom = DateTimeOffset.Parse("2022-01-01T00:00:00Z"),
             ValidTo = DateTimeOffset.Parse("2030-01-01T00:00:00Z")

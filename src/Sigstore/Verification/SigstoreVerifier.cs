@@ -160,7 +160,7 @@ public class SigstoreVerifier
             if (verificationMaterial == null)
                 return Fail("Bundle has no verification material.");
 
-            byte[]? leafCertBytes = verificationMaterial.Certificate;
+            ReadOnlyMemory<byte>? leafCertBytes = verificationMaterial.Certificate;
             // Fallback to first cert in chain for v0.1/v0.2 bundles
             if (leafCertBytes == null && verificationMaterial.CertificateChain is { Count: > 0 })
                 leafCertBytes = verificationMaterial.CertificateChain[0];
@@ -168,14 +168,14 @@ public class SigstoreVerifier
             if (leafCertBytes == null)
                 return Fail("Bundle has no signing certificate.");
 
-            using var leafCert = X509CertificateLoader.LoadCertificate(leafCertBytes);
+            using var leafCert = X509CertificateLoader.LoadCertificate(leafCertBytes.Value.Span);
 
             // Reject bundles where the chain contains a root (self-signed) certificate
             if (verificationMaterial.CertificateChain is { Count: > 0 })
             {
                 foreach (var certBytes in verificationMaterial.CertificateChain)
                 {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                     if (cert.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData))
                         return Fail("Bundle certificate chain contains a root certificate. Root certificates must come from the trusted root, not the bundle.");
                 }
@@ -187,7 +187,7 @@ public class SigstoreVerifier
             {
                 intermediates = new X509Certificate2Collection();
                 for (int i = 1; i < verificationMaterial.CertificateChain.Count; i++)
-                    intermediates.Add(X509CertificateLoader.LoadCertificate(verificationMaterial.CertificateChain[i]));
+                    intermediates.Add(X509CertificateLoader.LoadCertificate(verificationMaterial.CertificateChain[i].Span));
             }
 
             // Step 2b: Verify SCTs if CT logs are configured
@@ -208,10 +208,10 @@ public class SigstoreVerifier
                         {
                             try
                             {
-                                using var caCert = X509CertificateLoader.LoadCertificate(caCertBytes);
+                                using var caCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
                                 if (leafCert.IssuerName.RawData.AsSpan().SequenceEqual(caCert.SubjectName.RawData))
                                 {
-                                    issuerCert = X509CertificateLoader.LoadCertificate(caCertBytes);
+                                    issuerCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
                                     break;
                                 }
                             }
@@ -235,7 +235,7 @@ public class SigstoreVerifier
                 {
                     var tsInfo = TimestampParser.Parse(tsBytes);
 
-                    byte[] signatureToTimestamp = GetSignatureBytes(bundle);
+                    ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
                     if (trustRoot.TimestampAuthorities.Count > 0)
                     {
                         if (TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities))
@@ -332,7 +332,7 @@ public class SigstoreVerifier
                     int verifiedEntries = 0;
                     foreach (var entry in verificationMaterial.TlogEntries)
                     {
-                        if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes))
+                        if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
                             verifiedEntries++;
                     }
 
@@ -362,7 +362,7 @@ public class SigstoreVerifier
                 int verifiedEntries = 0;
                 foreach (var entry in verificationMaterial.TlogEntries)
                 {
-                    if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes))
+                    if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
                         verifiedEntries++;
                 }
 
@@ -412,7 +412,7 @@ public class SigstoreVerifier
             try
             {
                 var tsInfo = TimestampParser.Parse(tsBytes);
-                byte[] signatureToTimestamp = GetSignatureBytes(bundle);
+                ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
                 if (trustRoot.TimestampAuthorities.Count > 0)
                 {
                     if (TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities))
@@ -460,7 +460,7 @@ public class SigstoreVerifier
             int verifiedEntries = 0;
             foreach (var entry in verificationMaterial.TlogEntries)
             {
-                if (VerifyTlogEntryForPublicKey(entry, trustRoot, bundle, policy.PublicKey!))
+                if (VerifyTlogEntryForPublicKey(entry, trustRoot, bundle, policy.PublicKey!.Value))
                     verifiedEntries++;
             }
 
@@ -469,7 +469,7 @@ public class SigstoreVerifier
         }
 
         // Verify the artifact signature with the public key
-        var sigResult = VerifyArtifactSignatureWithKey(artifactInput, bundle, policy.PublicKey!);
+        var sigResult = VerifyArtifactSignatureWithKey(artifactInput, bundle, policy.PublicKey!.Value);
         if (!sigResult.IsValid)
             return Fail($"Signature verification failed: {sigResult.Reason}");
 
@@ -488,13 +488,13 @@ public class SigstoreVerifier
         TransparencyLogEntry entry,
         TrustedRoot trustRoot,
         SigstoreBundle bundle,
-        byte[] publicKeySpki)
+        ReadOnlyMemory<byte> publicKeySpki)
     {
         if (entry.InclusionProof == null)
             return false;
 
         var logInfo = trustRoot.TransparencyLogs
-            .FirstOrDefault(l => l.LogId.SequenceEqual(entry.LogId));
+            .FirstOrDefault(l => l.LogId.Span.SequenceEqual(entry.LogId.Span));
 
         if (logInfo == null)
             return false;
@@ -510,7 +510,7 @@ public class SigstoreVerifier
                 {
                     checkpointData = CheckpointVerifier.VerifyCheckpoint(
                         entry.InclusionProof.Checkpoint,
-                        log.PublicKeyBytes,
+                        log.PublicKeyBytes.Span,
                         keyId);
                     if (checkpointData != null)
                         break;
@@ -545,7 +545,7 @@ public class SigstoreVerifier
                 entry.InclusionProof.LogIndex,
                 entry.InclusionProof.TreeSize,
                 entry.InclusionProof.Hashes,
-                entry.InclusionProof.RootHash))
+                entry.InclusionProof.RootHash.Span))
             {
                 return false;
             }
@@ -562,7 +562,7 @@ public class SigstoreVerifier
         return true;
     }
 
-    private static bool CrossVerifyTlogBodyForPublicKey(string body, SigstoreBundle bundle, byte[] publicKeySpki)
+    private static bool CrossVerifyTlogBodyForPublicKey(string body, SigstoreBundle bundle, ReadOnlyMemory<byte> publicKeySpki)
     {
         byte[] bodyBytes;
         try { bodyBytes = Convert.FromBase64String(body); }
@@ -584,8 +584,8 @@ public class SigstoreVerifier
                 if (sigElem.TryGetProperty("content", out var sigContent))
                 {
                     var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-                    var bundleSig = bundle.MessageSignature?.Signature ?? [];
-                    if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
+                    var bundleSig = bundle.MessageSignature?.Signature ?? default(ReadOnlyMemory<byte>);
+                    if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
                         return false;
                 }
 
@@ -595,7 +595,7 @@ public class SigstoreVerifier
                 {
                     var expectedKeyPem = Encoding.UTF8.GetString(Convert.FromBase64String(keyContent.GetString()!));
                     var expectedKeyDer = ConvertPemPublicKeyToDer(expectedKeyPem);
-                    if (expectedKeyDer != null && !expectedKeyDer.AsSpan().SequenceEqual(publicKeySpki))
+                    if (expectedKeyDer != null && !expectedKeyDer.AsSpan().SequenceEqual(publicKeySpki.Span))
                         return false;
                 }
             }
@@ -629,7 +629,7 @@ public class SigstoreVerifier
     private static (bool IsValid, string? Reason) VerifyArtifactSignatureWithKey(
         ArtifactInput artifactInput,
         SigstoreBundle bundle,
-        byte[] publicKeySpki)
+        ReadOnlyMemory<byte> publicKeySpki)
     {
         if (bundle.MessageSignature != null)
         {
@@ -647,7 +647,7 @@ public class SigstoreVerifier
     private static (bool IsValid, string? Reason) VerifyMessageSignatureWithKey(
         ArtifactInput artifactInput,
         MessageSignature messageSig,
-        byte[] publicKeySpki)
+        ReadOnlyMemory<byte> publicKeySpki)
     {
         if (messageSig.Signature.Length == 0)
             return (false, "Message signature is empty.");
@@ -656,10 +656,10 @@ public class SigstoreVerifier
         {
             if (messageSig.MessageDigest is { Digest.Length: > 0 } digest)
             {
-                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest))
+                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest.Span))
                     return (false, "Message digest in bundle does not match provided artifact digest.");
             }
-            return VerifyHashWithKey(artifactInput.Digest.Span, messageSig.Signature, publicKeySpki);
+            return VerifyHashWithKey(artifactInput.Digest.Span, messageSig.Signature.Span, publicKeySpki);
         }
 
         // Stream-based
@@ -686,16 +686,16 @@ public class SigstoreVerifier
                 HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
                 _ => SHA256.HashData(artifactBytes)
             };
-            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest))
+            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest.Span))
                 return (false, "Message digest in bundle does not match artifact hash.");
         }
 
-        return VerifyDataWithKey(artifactBytes, messageSig.Signature, publicKeySpki);
+        return VerifyDataWithKey(artifactBytes, messageSig.Signature.Span, publicKeySpki);
     }
 
     private static (bool IsValid, string? Reason) VerifyDsseSignatureWithKey(
         DsseEnvelope envelope,
-        byte[] publicKeySpki)
+        ReadOnlyMemory<byte> publicKeySpki)
     {
         if (envelope.Signatures.Count == 0)
             return (false, "DSSE envelope has no signatures.");
@@ -706,19 +706,19 @@ public class SigstoreVerifier
             $"DSSEv1 {payloadType.Length} {payloadType} {payload.Length} ");
         var paeBytes = new byte[pae.Length + payload.Length];
         pae.CopyTo(paeBytes, 0);
-        payload.CopyTo(paeBytes, pae.Length);
+        payload.Span.CopyTo(paeBytes.AsSpan(pae.Length));
 
         var sig = envelope.Signatures[0].Sig;
-        return VerifyDataWithKey(paeBytes, sig, publicKeySpki);
+        return VerifyDataWithKey(paeBytes, sig.Span, publicKeySpki);
     }
 
     private static (bool IsValid, string? Reason) VerifyDataWithKey(
-        byte[] data, byte[] signature, byte[] publicKeySpki)
+        byte[] data, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeySpki)
     {
         try
         {
             using var ecdsa = ECDsa.Create();
-            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki.Span, out _);
             bool valid = ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256,
                 DSASignatureFormat.Rfc3279DerSequence);
             return valid ? (true, null) : (false, "ECDSA signature verification failed.");
@@ -728,7 +728,7 @@ public class SigstoreVerifier
         try
         {
             using var rsa = RSA.Create();
-            rsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            rsa.ImportSubjectPublicKeyInfo(publicKeySpki.Span, out _);
             bool valid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             return valid ? (true, null) : (false, "RSA signature verification failed.");
         }
@@ -738,12 +738,12 @@ public class SigstoreVerifier
     }
 
     private static (bool IsValid, string? Reason) VerifyHashWithKey(
-        ReadOnlySpan<byte> hash, byte[] signature, byte[] publicKeySpki)
+        ReadOnlySpan<byte> hash, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeySpki)
     {
         try
         {
             using var ecdsa = ECDsa.Create();
-            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            ecdsa.ImportSubjectPublicKeyInfo(publicKeySpki.Span, out _);
             bool valid = ecdsa.VerifyHash(hash, signature, DSASignatureFormat.Rfc3279DerSequence);
             return valid ? (true, null) : (false, "ECDSA signature verification failed.");
         }
@@ -752,7 +752,7 @@ public class SigstoreVerifier
         try
         {
             using var rsa = RSA.Create();
-            rsa.ImportSubjectPublicKeyInfo(publicKeySpki, out _);
+            rsa.ImportSubjectPublicKeyInfo(publicKeySpki.Span, out _);
             bool valid = rsa.VerifyHash(hash, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             return valid ? (true, null) : (false, "RSA signature verification failed.");
         }
@@ -766,13 +766,13 @@ public class SigstoreVerifier
         return (false, new VerificationResult { FailureReason = reason });
     }
 
-    private static byte[] GetSignatureBytes(SigstoreBundle bundle)
+    private static ReadOnlyMemory<byte> GetSignatureBytes(SigstoreBundle bundle)
     {
         if (bundle.MessageSignature?.Signature is { Length: > 0 } sig)
             return sig;
         if (bundle.DsseEnvelope?.Signatures is { Count: > 0 } sigs)
             return sigs[0].Sig;
-        return [];
+        return default;
     }
 
     private static string? ExtractSan(X509Certificate2 cert)
@@ -834,14 +834,14 @@ public class SigstoreVerifier
         TransparencyLogEntry entry,
         TrustedRoot trustRoot,
         SigstoreBundle bundle,
-        byte[] leafCertBytes)
+        ReadOnlyMemory<byte> leafCertBytes)
     {
         if (entry.InclusionProof == null)
             return false;
 
         // Find matching log by logId
         var logInfo = trustRoot.TransparencyLogs
-            .FirstOrDefault(l => l.LogId.SequenceEqual(entry.LogId));
+            .FirstOrDefault(l => l.LogId.Span.SequenceEqual(entry.LogId.Span));
 
         if (logInfo == null)
             return false;
@@ -860,7 +860,7 @@ public class SigstoreVerifier
                 {
                     checkpointData = CheckpointVerifier.VerifyCheckpoint(
                         entry.InclusionProof.Checkpoint,
-                        log.PublicKeyBytes,
+                        log.PublicKeyBytes.Span,
                         keyId);
                     if (checkpointData != null)
                         break;
@@ -900,7 +900,7 @@ public class SigstoreVerifier
                 entry.InclusionProof.LogIndex,
                 entry.InclusionProof.TreeSize,
                 entry.InclusionProof.Hashes,
-                entry.InclusionProof.RootHash))
+                entry.InclusionProof.RootHash.Span))
             {
                 return false;
             }
@@ -916,7 +916,7 @@ public class SigstoreVerifier
         return true;
     }
 
-    private static bool CrossVerifyTlogBody(string body, SigstoreBundle bundle, byte[] leafCertBytes)
+    private static bool CrossVerifyTlogBody(string body, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         byte[] bodyBytes;
         try
@@ -954,7 +954,7 @@ public class SigstoreVerifier
         return true;
     }
 
-    private static bool CrossVerifyHashedrekord(JsonElement spec, SigstoreBundle bundle, byte[] leafCertBytes)
+    private static bool CrossVerifyHashedrekord(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         // Verify signature matches
         if (spec.TryGetProperty("signature", out var sigElem))
@@ -965,8 +965,8 @@ public class SigstoreVerifier
                 // DSSE bundles store signature in the envelope, not MessageSignature
                 var bundleSig = bundle.MessageSignature?.Signature
                     ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
-                    ?? [];
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
+                    ?? default(ReadOnlyMemory<byte>);
+                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
                     return false;
             }
 
@@ -976,7 +976,7 @@ public class SigstoreVerifier
             {
                 var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(certContent.GetString()!));
                 var expectedCertDer = ConvertPemToDer(expectedCertPem);
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes))
+                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
                     return false;
             }
         }
@@ -984,7 +984,7 @@ public class SigstoreVerifier
         return true;
     }
 
-    private static bool CrossVerifyDsse(JsonElement spec, SigstoreBundle bundle, byte[] leafCertBytes)
+    private static bool CrossVerifyDsse(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         if (bundle.DsseEnvelope == null)
             return false;
@@ -1042,17 +1042,17 @@ public class SigstoreVerifier
 
                 var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
                     ? bundle.DsseEnvelope.Signatures[0].Sig
-                    : [];
+                    : default(ReadOnlyMemory<byte>);
 
                 // Direct comparison first
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
+                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
                 {
                     // Try one more level of base64 decode (intoto v0.0.2 double-encodes)
                     try
                     {
                         var innerStr = Encoding.UTF8.GetString(expectedSig);
                         var innerSig = Convert.FromBase64String(innerStr);
-                        if (!innerSig.AsSpan().SequenceEqual(bundleSig))
+                        if (!innerSig.AsSpan().SequenceEqual(bundleSig.Span))
                             return false;
                     }
                     catch
@@ -1067,7 +1067,7 @@ public class SigstoreVerifier
             {
                 var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(verifierContent.GetString()!));
                 var expectedCertDer = ConvertPemToDer(expectedCertPem);
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes))
+                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
                     return false;
             }
         }
@@ -1078,7 +1078,7 @@ public class SigstoreVerifier
         {
             var expectedHash = hashValue.GetString()!;
             var payloadBytes = bundle.DsseEnvelope.Payload;
-            var computedHash = Convert.ToHexString(SHA256.HashData(payloadBytes)).ToLowerInvariant();
+            var computedHash = Convert.ToHexString(SHA256.HashData(payloadBytes.Span)).ToLowerInvariant();
             if (computedHash != expectedHash)
                 return false;
         }
@@ -1086,7 +1086,7 @@ public class SigstoreVerifier
         return true;
     }
 
-    private static bool CrossVerifyDsseV002(JsonElement dsseV002, SigstoreBundle bundle, byte[] leafCertBytes)
+    private static bool CrossVerifyDsseV002(JsonElement dsseV002, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         if (bundle.DsseEnvelope == null)
             return false;
@@ -1100,8 +1100,8 @@ public class SigstoreVerifier
                 var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
                 var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
                     ? bundle.DsseEnvelope.Signatures[0].Sig
-                    : [];
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig))
+                    : default(ReadOnlyMemory<byte>);
+                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
                     return false;
             }
 
@@ -1114,7 +1114,7 @@ public class SigstoreVerifier
                 {
                     expectedCertDer = Convert.FromBase64String(rawBytes.GetString()!);
                 }
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes))
+                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
                     return false;
             }
         }
@@ -1125,7 +1125,7 @@ public class SigstoreVerifier
         {
             var expectedHash = Convert.FromBase64String(digest.GetString()!);
             var payloadBytes = bundle.DsseEnvelope.Payload;
-            var computedHash = SHA256.HashData(payloadBytes);
+            var computedHash = SHA256.HashData(payloadBytes.Span);
             if (!computedHash.AsSpan().SequenceEqual(expectedHash))
                 return false;
         }
@@ -1148,9 +1148,9 @@ public class SigstoreVerifier
         }
     }
 
-    private static byte[] ComputeCheckpointKeyId(byte[] publicKeyBytes)
+    private static byte[] ComputeCheckpointKeyId(ReadOnlyMemory<byte> publicKeyBytes)
     {
-        var hash = SHA256.HashData(publicKeyBytes);
+        var hash = SHA256.HashData(publicKeyBytes.Span);
         return hash.AsSpan(0, 4).ToArray();
     }
 
@@ -1165,9 +1165,9 @@ public class SigstoreVerifier
         var result = new List<byte[]>();
 
         // Explicit checkpoint key ID takes priority
-        if (log.CheckpointKeyId != null && log.CheckpointKeyId.Length > 0)
+        if (log.CheckpointKeyId.HasValue && log.CheckpointKeyId.Value.Length > 0)
         {
-            result.Add(log.CheckpointKeyId);
+            result.Add(log.CheckpointKeyId.Value.ToArray());
             return result;
         }
 
@@ -1183,11 +1183,11 @@ public class SigstoreVerifier
             byte[] rawKey;
             if (log.PublicKeyBytes.Length == 44)
             {
-                rawKey = log.PublicKeyBytes.AsSpan(12).ToArray(); // SPKI overhead is 12 bytes for Ed25519
+                rawKey = log.PublicKeyBytes.Span.Slice(12).ToArray(); // SPKI overhead is 12 bytes for Ed25519
             }
             else
             {
-                rawKey = log.PublicKeyBytes; // Assume raw 32-byte key
+                rawKey = log.PublicKeyBytes.ToArray(); // Assume raw 32-byte key
             }
 
             // Try with the hostname from baseUrl
@@ -1210,7 +1210,7 @@ public class SigstoreVerifier
             // Also try logId[:4] directly
             if (log.LogId.Length >= 4)
             {
-                result.Add(log.LogId.AsSpan(0, 4).ToArray());
+                result.Add(log.LogId.Span[..4].ToArray());
             }
         }
 
@@ -1229,7 +1229,7 @@ public class SigstoreVerifier
 
         // Find matching log by logId
         var logInfo = trustRoot.TransparencyLogs
-            .FirstOrDefault(l => l.LogId.SequenceEqual(entry.LogId));
+            .FirstOrDefault(l => l.LogId.Span.SequenceEqual(entry.LogId.Span));
         if (logInfo == null)
             return false;
 
@@ -1241,7 +1241,7 @@ public class SigstoreVerifier
             return false;
 
         // Construct the SET payload (same format as Rekor API response)
-        var logIdHex = Convert.ToHexString(entry.LogId).ToLowerInvariant();
+        var logIdHex = Convert.ToHexString(entry.LogId.Span).ToLowerInvariant();
         var payloadJson = $"{{\"body\":\"{entry.Body}\",\"integratedTime\":{entry.IntegratedTime},\"logID\":\"{logIdHex}\",\"logIndex\":{entry.LogIndex}}}";
 
         // Canonicalize — the payload is already in canonical form (sorted keys, no whitespace)
@@ -1251,11 +1251,11 @@ public class SigstoreVerifier
 
         try
         {
-            using var ecdsa = LoadEcdsaPublicKey(logInfo.PublicKeyBytes);
+            using var ecdsa = LoadEcdsaPublicKey(logInfo.PublicKeyBytes.Span);
             if (ecdsa == null)
                 return false;
 
-            return ecdsa.VerifyHash(hash, entry.InclusionPromise, DSASignatureFormat.Rfc3279DerSequence);
+            return ecdsa.VerifyHash(hash, entry.InclusionPromise.Value.Span, DSASignatureFormat.Rfc3279DerSequence);
         }
         catch
         {
@@ -1263,7 +1263,7 @@ public class SigstoreVerifier
         }
     }
 
-    private static ECDsa? LoadEcdsaPublicKey(byte[] publicKeyBytes)
+    private static ECDsa? LoadEcdsaPublicKey(ReadOnlySpan<byte> publicKeyBytes)
     {
         try
         {
@@ -1320,13 +1320,13 @@ public class SigstoreVerifier
             // Digest-based verification: compare provided digest with bundle's digest
             if (messageSig.MessageDigest is { Digest.Length: > 0 } digest)
             {
-                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest))
+                if (!artifactInput.Digest.Span.SequenceEqual(digest.Digest.Span))
                     return (false, "Message digest in bundle does not match provided artifact digest.");
             }
 
             // The signer signed the hash of the artifact. We have the hash (the digest).
             // Use VerifyHash to verify the signature directly against the digest.
-            return VerifyHashWithCert(artifactInput.Digest.Span, messageSig.Signature, leafCert);
+            return VerifyHashWithCert(artifactInput.Digest.Span, messageSig.Signature.Span, leafCert);
         }
 
         // Stream-based verification
@@ -1354,11 +1354,11 @@ public class SigstoreVerifier
                 HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
                 _ => SHA256.HashData(artifactBytes)
             };
-            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest))
+            if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest.Span))
                 return (false, "Message digest in bundle does not match artifact hash.");
         }
 
-        return VerifySignatureWithCert(artifactBytes, messageSig.Signature, leafCert);
+        return VerifySignatureWithCert(artifactBytes, messageSig.Signature.Span, leafCert);
     }
 
     private static (bool IsValid, string? Reason) VerifyDsseSignature(
@@ -1376,15 +1376,15 @@ public class SigstoreVerifier
             $"DSSEv1 {payloadType.Length} {payloadType} {payload.Length} ");
         var paeBytes = new byte[pae.Length + payload.Length];
         pae.CopyTo(paeBytes, 0);
-        payload.CopyTo(paeBytes, pae.Length);
+        payload.Span.CopyTo(paeBytes.AsSpan(pae.Length));
 
         var sig = envelope.Signatures[0].Sig;
-        return VerifySignatureWithCert(paeBytes, sig, leafCert);
+        return VerifySignatureWithCert(paeBytes, sig.Span, leafCert);
     }
 
     private static (bool IsValid, string? Reason) VerifySignatureWithCert(
         byte[] data,
-        byte[] signature,
+        ReadOnlySpan<byte> signature,
         X509Certificate2 leafCert)
     {
         // Try ECDSA
@@ -1413,7 +1413,7 @@ public class SigstoreVerifier
 
     private static (bool IsValid, string? Reason) VerifyHashWithCert(
         ReadOnlySpan<byte> hash,
-        byte[] signature,
+        ReadOnlySpan<byte> signature,
         X509Certificate2 leafCert)
     {
         // Try ECDSA

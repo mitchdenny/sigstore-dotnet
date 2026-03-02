@@ -119,7 +119,7 @@ internal static class TrustedRootSerializer
             CertChain = dto.CertChain?.Certificates != null
                 ? dto.CertChain.Certificates
                     .Where(c => c.RawBytes != null)
-                    .Select(c => Convert.FromBase64String(c.RawBytes!))
+                    .Select(c => (ReadOnlyMemory<byte>)Convert.FromBase64String(c.RawBytes!))
                     .ToList()
                 : [],
             ValidFrom = dto.ValidFor?.Start != null

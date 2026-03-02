@@ -86,7 +86,7 @@ public class SigstoreSignerTests
         var bundle = await signer.SignAsync(artifact);
 
         Assert.NotNull(bundle.MessageSignature);
-        Assert.NotEmpty(bundle.MessageSignature.Signature);
+        Assert.True(bundle.MessageSignature.Signature.Length > 0);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class SigstoreSignerTests
         Assert.Equal("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
         Assert.Equal(Encoding.UTF8.GetBytes(statement), bundle.DsseEnvelope.Payload);
         Assert.Single(bundle.DsseEnvelope.Signatures);
-        Assert.NotEmpty(bundle.DsseEnvelope.Signatures[0].Sig);
+        Assert.True(bundle.DsseEnvelope.Signatures[0].Sig.Length > 0);
         Assert.NotNull(bundle.VerificationMaterial);
         Assert.Equal(certBytes, bundle.VerificationMaterial.Certificate);
         Assert.Single(bundle.VerificationMaterial.TlogEntries);

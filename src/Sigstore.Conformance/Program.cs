@@ -284,7 +284,7 @@ public static class Program
 
     private static void VerifyInTotoSubjectDigest(DsseEnvelope envelope, string fileOrDigest)
     {
-        var payloadJson = Encoding.UTF8.GetString(envelope.Payload);
+        var payloadJson = Encoding.UTF8.GetString(envelope.Payload.Span);
         using var doc = JsonDocument.Parse(payloadJson);
         var root = doc.RootElement;
 
@@ -390,6 +390,6 @@ internal sealed class NoOpTimestampAuthority : ITimestampAuthority
         ReadOnlyMemory<byte> signature,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new TimestampResponse { RawBytes = [] });
+        return Task.FromResult(new TimestampResponse { RawBytes = Array.Empty<byte>() });
     }
 }

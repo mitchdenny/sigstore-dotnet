@@ -54,13 +54,13 @@ public class RekorEntry
 public class RekorDsseEntry
 {
     /// <summary>The DSSE envelope payload bytes.</summary>
-    public required byte[] Payload { get; init; }
+    public required ReadOnlyMemory<byte> Payload { get; init; }
 
     /// <summary>The DSSE envelope payload type.</summary>
     public required string PayloadType { get; init; }
 
     /// <summary>The signature over the PAE.</summary>
-    public required byte[] Signature { get; init; }
+    public required ReadOnlyMemory<byte> Signature { get; init; }
 
     /// <summary>The signing certificate (PEM-encoded).</summary>
     public required string VerificationMaterial { get; init; }

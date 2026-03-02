@@ -167,12 +167,12 @@ internal static class BundleSerializer
         return new VerificationMaterial
         {
             Certificate = dto.Certificate?.RawBytes != null
-                ? Convert.FromBase64String(dto.Certificate.RawBytes)
+                ? (ReadOnlyMemory<byte>?)Convert.FromBase64String(dto.Certificate.RawBytes)
                 : null,
             CertificateChain = dto.X509CertificateChain?.Certificates != null
                 ? dto.X509CertificateChain.Certificates
                     .Where(c => c.RawBytes != null)
-                    .Select(c => Convert.FromBase64String(c.RawBytes!))
+                    .Select(c => (ReadOnlyMemory<byte>)Convert.FromBase64String(c.RawBytes!))
                     .ToList()
                 : null,
             PublicKeyHint = dto.PublicKey?.Hint,
@@ -180,7 +180,7 @@ internal static class BundleSerializer
             Rfc3161Timestamps = dto.TimestampVerificationData?.Rfc3161Timestamps != null
                 ? dto.TimestampVerificationData.Rfc3161Timestamps
                     .Where(t => t.SignedTimestamp != null)
-                    .Select(t => Convert.FromBase64String(t.SignedTimestamp!))
+                    .Select(t => (ReadOnlyMemory<byte>)Convert.FromBase64String(t.SignedTimestamp!))
                     .ToList()
                 : []
         };
@@ -198,7 +198,7 @@ internal static class BundleSerializer
             IntegratedTime = dto.IntegratedTime != null ? long.Parse(dto.IntegratedTime) : 0,
             InclusionProof = dto.InclusionProof != null ? FromDto(dto.InclusionProof) : null,
             InclusionPromise = dto.InclusionPromise?.SignedEntryTimestamp != null
-                ? Convert.FromBase64String(dto.InclusionPromise.SignedEntryTimestamp)
+                ? (ReadOnlyMemory<byte>?)Convert.FromBase64String(dto.InclusionPromise.SignedEntryTimestamp)
                 : null
         };
     }
@@ -210,7 +210,7 @@ internal static class BundleSerializer
             LogIndex = dto.LogIndex != null ? long.Parse(dto.LogIndex) : 0,
             TreeSize = dto.TreeSize != null ? long.Parse(dto.TreeSize) : 0,
             RootHash = dto.RootHash != null ? Convert.FromBase64String(dto.RootHash) : [],
-            Hashes = dto.Hashes?.Select(Convert.FromBase64String).ToList() ?? [],
+            Hashes = dto.Hashes?.Select(x => (ReadOnlyMemory<byte>)Convert.FromBase64String(x)).ToList() ?? [],
             Checkpoint = dto.Checkpoint?.Envelope
         };
     }
@@ -279,14 +279,14 @@ internal static class BundleSerializer
             {
                 dto.X509CertificateChain = new CertificateChainJson
                 {
-                    Certificates = [new CertificateJson { RawBytes = Convert.ToBase64String(material.Certificate) }]
+                    Certificates = [new CertificateJson { RawBytes = Convert.ToBase64String(material.Certificate.Value.Span) }]
                 };
             }
             else
             {
                 dto.Certificate = new CertificateJson
                 {
-                    RawBytes = Convert.ToBase64String(material.Certificate)
+                    RawBytes = Convert.ToBase64String(material.Certificate.Value.Span)
                 };
             }
         }
@@ -296,7 +296,7 @@ internal static class BundleSerializer
             dto.X509CertificateChain = new CertificateChainJson
             {
                 Certificates = material.CertificateChain
-                    .Select(c => new CertificateJson { RawBytes = Convert.ToBase64String(c) })
+                    .Select(c => new CertificateJson { RawBytes = Convert.ToBase64String(c.Span) })
                     .ToList()
             };
         }
@@ -316,7 +316,7 @@ internal static class BundleSerializer
             dto.TimestampVerificationData = new TimestampVerificationDataJson
             {
                 Rfc3161Timestamps = material.Rfc3161Timestamps
-                    .Select(t => new Rfc3161TimestampJson { SignedTimestamp = Convert.ToBase64String(t) })
+                    .Select(t => new Rfc3161TimestampJson { SignedTimestamp = Convert.ToBase64String(t.Span) })
                     .ToList()
             };
         }
@@ -333,7 +333,7 @@ internal static class BundleSerializer
         };
 
         if (entry.LogId.Length > 0)
-            dto.LogId = new LogIdJson { KeyId = Convert.ToBase64String(entry.LogId) };
+            dto.LogId = new LogIdJson { KeyId = Convert.ToBase64String(entry.LogId.Span) };
 
         if (entry.Kind != null && entry.KindVersion != null)
             dto.KindVersion = new KindVersionJson { Kind = entry.Kind, Version = entry.KindVersion };
@@ -347,7 +347,7 @@ internal static class BundleSerializer
         if (entry.InclusionPromise != null)
             dto.InclusionPromise = new InclusionPromiseJson
             {
-                SignedEntryTimestamp = Convert.ToBase64String(entry.InclusionPromise)
+                SignedEntryTimestamp = Convert.ToBase64String(entry.InclusionPromise.Value.Span)
             };
 
         return dto;
@@ -362,10 +362,10 @@ internal static class BundleSerializer
         };
 
         if (proof.RootHash.Length > 0)
-            dto.RootHash = Convert.ToBase64String(proof.RootHash);
+            dto.RootHash = Convert.ToBase64String(proof.RootHash.Span);
 
         if (proof.Hashes.Count > 0)
-            dto.Hashes = proof.Hashes.Select(Convert.ToBase64String).ToList();
+            dto.Hashes = proof.Hashes.Select(h => Convert.ToBase64String(h.Span)).ToList();
 
         if (proof.Checkpoint != null)
             dto.Checkpoint = new CheckpointJson { Envelope = proof.Checkpoint };
@@ -378,7 +378,7 @@ internal static class BundleSerializer
         var dto = new MessageSignatureJson();
 
         if (sig.Signature.Length > 0)
-            dto.Signature = Convert.ToBase64String(sig.Signature);
+            dto.Signature = Convert.ToBase64String(sig.Signature.Span);
 
         if (sig.MessageDigest != null)
         {
@@ -386,7 +386,7 @@ internal static class BundleSerializer
             {
                 Algorithm = FormatHashAlgorithm(sig.MessageDigest.Algorithm),
                 Digest = sig.MessageDigest.Digest.Length > 0
-                    ? Convert.ToBase64String(sig.MessageDigest.Digest)
+                    ? Convert.ToBase64String(sig.MessageDigest.Digest.Span)
                     : null
             };
         }
@@ -399,7 +399,7 @@ internal static class BundleSerializer
         var dto = new DsseEnvelopeJson
         {
             PayloadType = envelope.PayloadType,
-            Payload = envelope.Payload.Length > 0 ? Convert.ToBase64String(envelope.Payload) : null
+            Payload = envelope.Payload.Length > 0 ? Convert.ToBase64String(envelope.Payload.Span) : null
         };
 
         if (envelope.Signatures.Count > 0)
@@ -407,7 +407,7 @@ internal static class BundleSerializer
             dto.Signatures = envelope.Signatures.Select(s => new DsseSignatureJson
             {
                 Keyid = string.IsNullOrEmpty(s.KeyId) ? null : s.KeyId,
-                Sig = s.Sig.Length > 0 ? Convert.ToBase64String(s.Sig) : null
+                Sig = s.Sig.Length > 0 ? Convert.ToBase64String(s.Sig.Span) : null
             }).ToList();
         }
 

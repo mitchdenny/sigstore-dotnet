@@ -37,12 +37,12 @@ public class RekorV2ParsingTests
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
         Assert.Equal(42, entry.LogIndex);
-        Assert.Equal("testlogid", System.Text.Encoding.UTF8.GetString(entry.LogId));
+        Assert.Equal("testlogid", System.Text.Encoding.UTF8.GetString(entry.LogId.Span));
         Assert.Equal("hashedrekord", entry.Kind);
         Assert.Equal("0.0.2", entry.KindVersion);
         Assert.Equal(1700000000, entry.IntegratedTime);
         Assert.NotNull(entry.InclusionPromise);
-        Assert.Equal("signed", System.Text.Encoding.UTF8.GetString(entry.InclusionPromise));
+        Assert.Equal("signed", System.Text.Encoding.UTF8.GetString(entry.InclusionPromise.Value.Span));
         Assert.NotNull(entry.InclusionProof);
         Assert.Equal(42, entry.InclusionProof.LogIndex);
         Assert.Equal(100, entry.InclusionProof.TreeSize);
@@ -132,7 +132,7 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Empty(entry.LogId);
+        Assert.True(entry.LogId.Length == 0);
     }
 
     [Fact]

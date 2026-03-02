@@ -150,8 +150,8 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         var url = new Uri(_baseUrl, "api/v1/log/entries");
 
         // Build the DSSE envelope as a JSON string
-        var payloadBase64 = Convert.ToBase64String(entry.Payload);
-        var sigBase64 = Convert.ToBase64String(entry.Signature);
+        var payloadBase64 = Convert.ToBase64String(entry.Payload.Span);
+        var sigBase64 = Convert.ToBase64String(entry.Signature.Span);
         var envelopeJson = WriteJson(w =>
         {
             w.WriteString("payloadType", entry.PayloadType);
@@ -199,8 +199,8 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
     {
         var url = new Uri(_baseUrl, "api/v2/log/entries");
 
-        var payloadBase64 = Convert.ToBase64String(entry.Payload);
-        var sigBase64 = Convert.ToBase64String(entry.Signature);
+        var payloadBase64 = Convert.ToBase64String(entry.Payload.Span);
+        var sigBase64 = Convert.ToBase64String(entry.Signature.Span);
         var certDerBase64 = ExtractDerFromPem(entry.VerificationMaterial);
 
         var body = WriteJson(w =>
@@ -302,7 +302,7 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         {
             if (verification.TryGetProperty("inclusionProof", out var proof))
             {
-                var hashes = new List<byte[]>();
+                var hashes = new List<ReadOnlyMemory<byte>>();
                 if (proof.TryGetProperty("hashes", out var hashesElem))
                 {
                     foreach (var h in hashesElem.EnumerateArray())
@@ -344,7 +344,7 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             Body = body,
             IntegratedTime = integratedTime,
             InclusionProof = inclusionProof,
-            InclusionPromise = inclusionPromise
+            InclusionPromise = inclusionPromise is { } ip2 ? (ReadOnlyMemory<byte>?)ip2 : null
         };
     }
 
@@ -396,7 +396,7 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             if (proofElem.TryGetProperty("rootHash", out var rh))
                 rootHash = Convert.FromBase64String(rh.GetString()!);
 
-            var hashes = new List<byte[]>();
+            var hashes = new List<ReadOnlyMemory<byte>>();
             if (proofElem.TryGetProperty("hashes", out var hashesElem))
             {
                 foreach (var h in hashesElem.EnumerateArray())
@@ -433,7 +433,7 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
             Body = body,
             IntegratedTime = integratedTime,
             InclusionProof = inclusionProof,
-            InclusionPromise = inclusionPromise
+            InclusionPromise = inclusionPromise is { } ip3 ? (ReadOnlyMemory<byte>?)ip3 : null
         };
     }
 

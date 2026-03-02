@@ -52,13 +52,13 @@ public class TransparencyLogInfo
     /// <summary>The hash algorithm used by the log.</summary>
     public HashAlgorithmType HashAlgorithm { get; init; }
     /// <summary>The DER-encoded public key bytes of the log.</summary>
-    public byte[] PublicKeyBytes { get; init; } = [];
+    public ReadOnlyMemory<byte> PublicKeyBytes { get; init; }
     /// <summary>The algorithm and encoding details of the public key.</summary>
     public PublicKeyDetails KeyDetails { get; init; }
     /// <summary>The log ID (SHA-256 hash of the public key).</summary>
-    public byte[] LogId { get; init; } = [];
+    public ReadOnlyMemory<byte> LogId { get; init; }
     /// <summary>The checkpoint key ID for Rekor v2 verification.</summary>
-    public byte[]? CheckpointKeyId { get; init; }
+    public ReadOnlyMemory<byte>? CheckpointKeyId { get; init; }
     /// <summary>The operator of the transparency log.</summary>
     public string? Operator { get; init; }
     /// <summary>The start of the log's validity period.</summary>
@@ -75,7 +75,7 @@ public class CertificateAuthorityInfo
     /// <summary>The URI of the certificate authority.</summary>
     public string Uri { get; init; } = "";
     /// <summary>The certificate chain (DER-encoded, leaf to root).</summary>
-    public IReadOnlyList<byte[]> CertChain { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> CertChain { get; init; } = [];
     /// <summary>The operator of the certificate authority.</summary>
     public string? Operator { get; init; }
     /// <summary>The start of the CA's validity period.</summary>

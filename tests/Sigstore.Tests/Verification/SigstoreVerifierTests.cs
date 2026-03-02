@@ -244,7 +244,7 @@ public class SigstoreVerifierTests
                     {
                         IntegratedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                         // No inclusion proof, no matching log => won't verify
-                        LogId = [0x01, 0x02]
+                        LogId = new byte[] { 0x01, 0x02 }
                     }
                 ]
             },

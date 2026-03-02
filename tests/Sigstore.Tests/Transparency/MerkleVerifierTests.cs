@@ -31,7 +31,7 @@ public class MerkleVerifierTests
 
         var result = MerkleVerifier.VerifyInclusionProof(
             leafHash, leafIndex: 0, treeSize: 1,
-            proofHashes: Array.Empty<byte[]>(),
+            proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
         Assert.True(result);
@@ -48,7 +48,7 @@ public class MerkleVerifierTests
         // Prove leaf0 (index 0): proof is [leaf1]
         var result = MerkleVerifier.VerifyInclusionProof(
             leaf0, leafIndex: 0, treeSize: 2,
-            proofHashes: new[] { leaf1 },
+            proofHashes: new ReadOnlyMemory<byte>[] { leaf1 },
             expectedRootHash: root);
 
         Assert.True(result);
@@ -64,7 +64,7 @@ public class MerkleVerifierTests
         // Prove leaf1 (index 1): proof is [leaf0]
         var result = MerkleVerifier.VerifyInclusionProof(
             leaf1, leafIndex: 1, treeSize: 2,
-            proofHashes: new[] { leaf0 },
+            proofHashes: new ReadOnlyMemory<byte>[] { leaf0 },
             expectedRootHash: root);
 
         Assert.True(result);
@@ -91,7 +91,7 @@ public class MerkleVerifierTests
         // Step 2: index=1, size=2 -> odd, proof on left: H(n01 || n23) = root
         var result = MerkleVerifier.VerifyInclusionProof(
             l2, leafIndex: 2, treeSize: 4,
-            proofHashes: new[] { l3, n01 },
+            proofHashes: new ReadOnlyMemory<byte>[] { l3, n01 },
             expectedRootHash: root);
 
         Assert.True(result);
@@ -107,7 +107,7 @@ public class MerkleVerifierTests
 
         var result = MerkleVerifier.VerifyInclusionProof(
             leaf0, leafIndex: 0, treeSize: 2,
-            proofHashes: new[] { leaf1 },
+            proofHashes: new ReadOnlyMemory<byte>[] { leaf1 },
             expectedRootHash: wrongRoot);
 
         Assert.False(result);
@@ -125,7 +125,7 @@ public class MerkleVerifierTests
 
         var result = MerkleVerifier.VerifyInclusionProof(
             leaf0, leafIndex: 0, treeSize: 2,
-            proofHashes: new[] { tamperedProof },
+            proofHashes: new ReadOnlyMemory<byte>[] { tamperedProof },
             expectedRootHash: root);
 
         Assert.False(result);
@@ -138,7 +138,7 @@ public class MerkleVerifierTests
 
         var result = MerkleVerifier.VerifyInclusionProof(
             leafHash, leafIndex: -1, treeSize: 1,
-            proofHashes: Array.Empty<byte[]>(),
+            proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
         Assert.False(result);
@@ -151,7 +151,7 @@ public class MerkleVerifierTests
 
         var result = MerkleVerifier.VerifyInclusionProof(
             leafHash, leafIndex: 5, treeSize: 3,
-            proofHashes: Array.Empty<byte[]>(),
+            proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
         Assert.False(result);
@@ -174,7 +174,7 @@ public class MerkleVerifierTests
         // Prove l0 (index 0, size 3): proof is [l1, l2]
         var result = MerkleVerifier.VerifyInclusionProof(
             l0, leafIndex: 0, treeSize: 3,
-            proofHashes: new[] { l1, l2 },
+            proofHashes: new ReadOnlyMemory<byte>[] { l1, l2 },
             expectedRootHash: root);
 
         Assert.True(result);
@@ -183,7 +183,7 @@ public class MerkleVerifierTests
         // index=2, size=3 -> index == size-1, proof on left: H(n01 || l2) = root
         result = MerkleVerifier.VerifyInclusionProof(
             l2, leafIndex: 2, treeSize: 3,
-            proofHashes: new[] { n01 },
+            proofHashes: new ReadOnlyMemory<byte>[] { n01 },
             expectedRootHash: root);
 
         Assert.True(result);

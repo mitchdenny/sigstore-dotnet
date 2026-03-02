@@ -59,7 +59,7 @@ internal class DefaultCertificateValidator : ICertificateValidator
         {
             foreach (var certBytes in ca.CertChain)
             {
-                var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                 if (cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData))
                 {
                     x509Chain.ChainPolicy.CustomTrustStore.Add(cert);

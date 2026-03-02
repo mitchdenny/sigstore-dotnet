@@ -56,7 +56,7 @@ public static class TimestampParser
         var genTime = tstInfo.ReadGeneralizedTime();
 
         // Extract embedded certificates from SignedData
-        var embeddedCerts = new List<byte[]>();
+        var embeddedCerts = new List<ReadOnlyMemory<byte>>();
         if (signedData.HasData)
         {
             var nextTag = signedData.PeekTag();
@@ -72,7 +72,7 @@ public static class TimestampParser
         }
 
         // Extract signer issuer from SignerInfos for matching against trusted TSAs
-        byte[]? signerIssuerDer = null;
+        byte[]? signerIssuerDerBytes = null;
         if (signedData.HasData)
         {
             try
@@ -84,7 +84,7 @@ public static class TimestampParser
                     signerInfo.ReadInteger(); // version
                     // issuerAndSerialNumber ::= SEQUENCE { issuer, serialNumber }
                     var issuerAndSerial = signerInfo.ReadSequence();
-                    signerIssuerDer = issuerAndSerial.ReadEncodedValue().ToArray();
+                    signerIssuerDerBytes = issuerAndSerial.ReadEncodedValue().ToArray();
                 }
             }
             catch { }
@@ -95,9 +95,9 @@ public static class TimestampParser
             Timestamp = genTime,
             HashAlgorithm = MapHashAlgorithm(hashAlgOid),
             MessageImprint = messageImprint,
-            RawToken = timestampResponse.ToArray(),
+            RawToken = timestampResponse,
             EmbeddedCertificates = embeddedCerts,
-            SignerIssuerDer = signerIssuerDer
+            SignerIssuerDer = signerIssuerDerBytes
         };
     }
 
@@ -108,7 +108,7 @@ public static class TimestampParser
     public static bool Verify(
         TimestampInfo info,
         ReadOnlyMemory<byte> signature,
-        IReadOnlyList<byte[]> tsaCertificates)
+        IReadOnlyList<ReadOnlyMemory<byte>> tsaCertificates)
     {
         if (info.Timestamp == default)
             return false;
@@ -117,7 +117,7 @@ public static class TimestampParser
         if (info.MessageImprint.Length > 0)
         {
             var expectedHash = SHA256.HashData(signature.Span);
-            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint))
+            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint.Span))
                 return false;
         }
 
@@ -131,7 +131,7 @@ public static class TimestampParser
         {
             try
             {
-                using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                 trustedCerts.Add(cert.Thumbprint);
             }
             catch { }
@@ -145,7 +145,7 @@ public static class TimestampParser
             {
                 try
                 {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                     if (trustedCerts.Contains(cert.Thumbprint))
                     {
                         foundTrusted = true;
@@ -157,7 +157,7 @@ public static class TimestampParser
                     {
                         try
                         {
-                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
                             if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
                             {
                                 foundTrusted = true;
@@ -193,7 +193,7 @@ public static class TimestampParser
         if (info.MessageImprint.Length > 0)
         {
             var expectedHash = SHA256.HashData(signature.Span);
-            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint))
+            if (!expectedHash.AsSpan().SequenceEqual(info.MessageImprint.Span))
                 return false;
         }
 
@@ -212,7 +212,7 @@ public static class TimestampParser
             {
                 try
                 {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                     if (info.Timestamp < cert.NotBefore || info.Timestamp > cert.NotAfter)
                     {
                         certsValidAtTimestamp = false;
@@ -234,7 +234,7 @@ public static class TimestampParser
             {
                 try
                 {
-                    using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                    using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                     trustedCerts.Add(cert.Thumbprint);
                 }
                 catch { }
@@ -250,14 +250,14 @@ public static class TimestampParser
                 {
                     try
                     {
-                        using var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                        using var cert = X509CertificateLoader.LoadCertificate(certBytes.Span);
                         if (trustedCerts.Contains(cert.Thumbprint))
                             return true;
 
                         // Check if issued by a trusted cert
                         foreach (var trustedCertBytes in tsa.CertChain)
                         {
-                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
                             if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
                                 return true;
                         }
@@ -274,8 +274,8 @@ public static class TimestampParser
                     {
                         try
                         {
-                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes);
-                            if (info.SignerIssuerDer.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
+                            using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
+                            if (info.SignerIssuerDer.Value.Span.SequenceEqual(trustedCert.SubjectName.RawData))
                                 return true;
                         }
                         catch { }
@@ -331,11 +331,11 @@ public class TimestampInfo
     /// <summary>The hash algorithm used for the message imprint.</summary>
     public required HashAlgorithmType HashAlgorithm { get; init; }
     /// <summary>The message imprint digest from the TSTInfo.</summary>
-    public required byte[] MessageImprint { get; init; }
+    public required ReadOnlyMemory<byte> MessageImprint { get; init; }
     /// <summary>The raw RFC 3161 timestamp token bytes.</summary>
-    public required byte[] RawToken { get; init; }
+    public required ReadOnlyMemory<byte> RawToken { get; init; }
     /// <summary>Certificates embedded in the timestamp response.</summary>
-    public List<byte[]> EmbeddedCertificates { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> EmbeddedCertificates { get; init; } = [];
     /// <summary>The DER-encoded issuer name of the timestamp signer.</summary>
-    public byte[]? SignerIssuerDer { get; init; }
+    public ReadOnlyMemory<byte>? SignerIssuerDer { get; init; }
 }

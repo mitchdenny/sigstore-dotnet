@@ -24,5 +24,5 @@ public class TimestampResponse
     /// <summary>
     /// The DER-encoded TimeStampResponse.
     /// </summary>
-    public required byte[] RawBytes { get; init; }
+    public required ReadOnlyMemory<byte> RawBytes { get; init; }
 }

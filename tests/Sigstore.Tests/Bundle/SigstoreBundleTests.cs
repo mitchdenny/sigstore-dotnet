@@ -40,7 +40,7 @@ public class SigstoreBundleTests
     {
         var sig = new MessageSignature();
 
-        Assert.Empty(sig.Signature);
+        Assert.True(sig.Signature.Length == 0);
         Assert.Null(sig.MessageDigest);
     }
 
@@ -62,7 +62,7 @@ public class SigstoreBundleTests
     {
         var entry = new TransparencyLogEntry();
 
-        Assert.Empty(entry.LogId);
+        Assert.True(entry.LogId.Length == 0);
         Assert.Null(entry.Body);
         Assert.Null(entry.InclusionProof);
         Assert.Null(entry.InclusionPromise);
@@ -73,7 +73,7 @@ public class SigstoreBundleTests
     {
         var proof = new InclusionProof();
 
-        Assert.Empty(proof.RootHash);
+        Assert.True(proof.RootHash.Length == 0);
         Assert.Empty(proof.Hashes);
         Assert.Null(proof.Checkpoint);
     }
@@ -84,7 +84,7 @@ public class SigstoreBundleTests
         var envelope = new DsseEnvelope();
 
         Assert.Equal("", envelope.PayloadType);
-        Assert.Empty(envelope.Payload);
+        Assert.True(envelope.Payload.Length == 0);
         Assert.Empty(envelope.Signatures);
     }
 
@@ -152,31 +152,31 @@ public class SigstoreBundleTests
         // Certificate chain
         Assert.NotNull(bundle.VerificationMaterial.CertificateChain);
         Assert.Single(bundle.VerificationMaterial.CertificateChain);
-        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.CertificateChain[0]);
+        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.CertificateChain[0].ToArray());
 
         // Tlog entry
         Assert.Single(bundle.VerificationMaterial.TlogEntries);
         var entry = bundle.VerificationMaterial.TlogEntries[0];
         Assert.Equal(27246492L, entry.LogIndex);
-        Assert.Equal(new byte[] { 4, 5, 6 }, entry.LogId);
+        Assert.Equal(new byte[] { 4, 5, 6 }, entry.LogId.ToArray());
         Assert.Equal(1689177396L, entry.IntegratedTime);
         Assert.Equal("EBES", entry.Body);
         Assert.NotNull(entry.InclusionPromise);
-        Assert.Equal(new byte[] { 7, 8, 9 }, entry.InclusionPromise);
+        Assert.Equal(new byte[] { 7, 8, 9 }, entry.InclusionPromise.Value.ToArray());
 
         // Inclusion proof
         Assert.NotNull(entry.InclusionProof);
         Assert.Equal(23083061L, entry.InclusionProof.LogIndex);
         Assert.Equal(23083062L, entry.InclusionProof.TreeSize);
-        Assert.Equal(new byte[] { 10, 11, 12 }, entry.InclusionProof.RootHash);
+        Assert.Equal(new byte[] { 10, 11, 12 }, entry.InclusionProof.RootHash.ToArray());
         Assert.Single(entry.InclusionProof.Hashes);
-        Assert.Equal(new byte[] { 13, 14, 15 }, entry.InclusionProof.Hashes[0]);
+        Assert.Equal(new byte[] { 13, 14, 15 }, entry.InclusionProof.Hashes[0].ToArray());
         Assert.Equal("rekor.sigstore.dev - 12345", entry.InclusionProof.Checkpoint);
 
         // Message signature
         Assert.Equal(HashAlgorithmType.Sha2_256, bundle.MessageSignature.MessageDigest!.Algorithm);
-        Assert.Equal(new byte[] { 20, 21, 22, 23, 24, 25 }, bundle.MessageSignature.MessageDigest.Digest);
-        Assert.Equal(new byte[] { 26, 27, 28, 29, 30, 31 }, bundle.MessageSignature.Signature);
+        Assert.Equal(new byte[] { 20, 21, 22, 23, 24, 25 }, bundle.MessageSignature.MessageDigest.Digest.ToArray());
+        Assert.Equal(new byte[] { 26, 27, 28, 29, 30, 31 }, bundle.MessageSignature.Signature.ToArray());
     }
 
     [Fact]
@@ -203,10 +203,10 @@ public class SigstoreBundleTests
 
         Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
         Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.Certificate);
+        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.Certificate!.Value.ToArray());
         Assert.Null(bundle.VerificationMaterial.CertificateChain);
         Assert.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
-        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.VerificationMaterial.Rfc3161Timestamps[0]);
+        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.VerificationMaterial.Rfc3161Timestamps[0].ToArray());
     }
 
     [Fact]
@@ -232,9 +232,9 @@ public class SigstoreBundleTests
         Assert.NotNull(bundle.DsseEnvelope);
         Assert.Null(bundle.MessageSignature);
         Assert.Equal("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
-        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.DsseEnvelope.Payload);
+        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.DsseEnvelope.Payload.ToArray());
         Assert.Single(bundle.DsseEnvelope.Signatures);
-        Assert.Equal(new byte[] { 7, 8, 9 }, bundle.DsseEnvelope.Signatures[0].Sig);
+        Assert.Equal(new byte[] { 7, 8, 9 }, bundle.DsseEnvelope.Signatures[0].Sig.ToArray());
     }
 
     [Fact]
@@ -296,33 +296,33 @@ public class SigstoreBundleTests
         // Verification material
         Assert.NotNull(bundle2.VerificationMaterial);
         Assert.Equal(
-            bundle1.VerificationMaterial!.CertificateChain![0],
-            bundle2.VerificationMaterial.CertificateChain![0]);
+            bundle1.VerificationMaterial!.CertificateChain![0].ToArray(),
+            bundle2.VerificationMaterial.CertificateChain![0].ToArray());
 
         // Tlog entry
         var e1 = bundle1.VerificationMaterial.TlogEntries[0];
         var e2 = bundle2.VerificationMaterial.TlogEntries[0];
         Assert.Equal(e1.LogIndex, e2.LogIndex);
-        Assert.Equal(e1.LogId, e2.LogId);
+        Assert.Equal(e1.LogId.ToArray(), e2.LogId.ToArray());
         Assert.Equal(e1.IntegratedTime, e2.IntegratedTime);
         Assert.Equal(e1.Body, e2.Body);
-        Assert.Equal(e1.InclusionPromise, e2.InclusionPromise);
+        Assert.Equal(e1.InclusionPromise!.Value.ToArray(), e2.InclusionPromise!.Value.ToArray());
 
         // Inclusion proof
         Assert.Equal(e1.InclusionProof!.LogIndex, e2.InclusionProof!.LogIndex);
         Assert.Equal(e1.InclusionProof.TreeSize, e2.InclusionProof.TreeSize);
-        Assert.Equal(e1.InclusionProof.RootHash, e2.InclusionProof.RootHash);
-        Assert.Equal(e1.InclusionProof.Hashes[0], e2.InclusionProof.Hashes[0]);
+        Assert.Equal(e1.InclusionProof.RootHash.ToArray(), e2.InclusionProof.RootHash.ToArray());
+        Assert.Equal(e1.InclusionProof.Hashes[0].ToArray(), e2.InclusionProof.Hashes[0].ToArray());
         Assert.Equal(e1.InclusionProof.Checkpoint, e2.InclusionProof.Checkpoint);
 
         // Message signature
-        Assert.Equal(bundle1.MessageSignature!.Signature, bundle2.MessageSignature!.Signature);
+        Assert.Equal(bundle1.MessageSignature!.Signature.ToArray(), bundle2.MessageSignature!.Signature.ToArray());
         Assert.Equal(
             bundle1.MessageSignature.MessageDigest!.Algorithm,
             bundle2.MessageSignature.MessageDigest!.Algorithm);
         Assert.Equal(
-            bundle1.MessageSignature.MessageDigest.Digest,
-            bundle2.MessageSignature.MessageDigest.Digest);
+            bundle1.MessageSignature.MessageDigest.Digest.ToArray(),
+            bundle2.MessageSignature.MessageDigest.Digest.ToArray());
     }
 
     [Fact]
@@ -349,9 +349,9 @@ public class SigstoreBundleTests
 
         Assert.NotNull(bundle2.DsseEnvelope);
         Assert.Equal(bundle1.DsseEnvelope!.PayloadType, bundle2.DsseEnvelope.PayloadType);
-        Assert.Equal(bundle1.DsseEnvelope.Payload, bundle2.DsseEnvelope.Payload);
+        Assert.Equal(bundle1.DsseEnvelope.Payload.ToArray(), bundle2.DsseEnvelope.Payload.ToArray());
         Assert.Equal(bundle1.DsseEnvelope.Signatures[0].KeyId, bundle2.DsseEnvelope.Signatures[0].KeyId);
-        Assert.Equal(bundle1.DsseEnvelope.Signatures[0].Sig, bundle2.DsseEnvelope.Signatures[0].Sig);
+        Assert.Equal(bundle1.DsseEnvelope.Signatures[0].Sig.ToArray(), bundle2.DsseEnvelope.Signatures[0].Sig.ToArray());
     }
 
     [Fact]
@@ -454,9 +454,9 @@ public class SigstoreBundleTests
                 MessageDigest = new HashOutput
                 {
                     Algorithm = HashAlgorithmType.Sha2_384,
-                    Digest = [1, 2, 3]
+                    Digest = new byte[] { 1, 2, 3 }
                 },
-                Signature = [4, 5, 6]
+                Signature = new byte[] { 4, 5, 6 }
             }
         };
 
