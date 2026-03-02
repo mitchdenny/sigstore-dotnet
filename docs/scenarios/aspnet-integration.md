@@ -73,8 +73,8 @@ public class ArtifactVerificationService : BackgroundService
         };
 
         var result = await _verifier.VerifyAsync(
-            "artifact.tar.gz",
-            "artifact.sigstore.json",
+            new FileInfo("artifact.tar.gz"),
+            new FileInfo("artifact.sigstore.json"),
             policy,
             stoppingToken);
 
@@ -93,7 +93,7 @@ builder.Services.AddSingleton<ITrustRootProvider>(sp =>
     var trustRootPath = config["Sigstore:TrustRootPath"];
 
     return trustRootPath is not null
-        ? new FileTrustRootProvider(trustRootPath)
+        ? new FileTrustRootProvider(new FileInfo(trustRootPath))
         : new TufTrustRootProvider(TufTrustRootProvider.ProductionUrl);
 });
 ```

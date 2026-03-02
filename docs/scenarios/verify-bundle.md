@@ -11,7 +11,7 @@ using Sigstore;
 var verifier = new SigstoreVerifier();
 
 // Load the bundle
-var bundle = await SigstoreBundle.LoadAsync("artifact.sigstore.json");
+var bundle = await SigstoreBundle.LoadAsync(new FileInfo("artifact.sigstore.json"));
 
 // Define who you expect signed it
 var policy = new VerificationPolicy
@@ -52,8 +52,8 @@ For the common case of verifying files on disk:
 
 ```csharp
 var result = await verifier.VerifyAsync(
-    artifactPath: "artifact.tar.gz",
-    bundlePath: "artifact.sigstore.json",
+    artifact: new FileInfo("artifact.tar.gz"),
+    bundle: new FileInfo("artifact.sigstore.json"),
     policy);
 ```
 

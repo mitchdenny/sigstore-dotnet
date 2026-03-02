@@ -20,8 +20,8 @@ var policy = new VerificationPolicy
 };
 
 var result = await verifier.VerifyAsync(
-    artifactPath: "myapp-1.0.0.tar.gz",
-    bundlePath: "myapp-1.0.0.tar.gz.sigstore.json",
+    new FileInfo("myapp-1.0.0.tar.gz"),
+    new FileInfo("myapp-1.0.0.tar.gz.sigstore.json"),
     policy);
 
 Console.WriteLine($"Signed by: {result.SignerIdentity!.SubjectAlternativeName}");
@@ -63,8 +63,8 @@ Use `TryVerifyAsync` for non-throwing verification:
 
 ```csharp
 var (success, result) = await verifier.TryVerifyAsync(
-    artifactPath: "myapp-1.0.0.tar.gz",
-    bundlePath: "myapp-1.0.0.tar.gz.sigstore.json",
+    new FileInfo("myapp-1.0.0.tar.gz"),
+    new FileInfo("myapp-1.0.0.tar.gz.sigstore.json"),
     policy);
 
 if (success)

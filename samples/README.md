@@ -27,5 +27,5 @@ dotnet run -- <artifact> <bundle.sigstore.json> <identity> <issuer>
 Each sample references the `Sigstore` library via `ProjectReference`. Build from the repository root first:
 
 ```bash
-dotnet build sigstore-dotnet.slnx
+dotnet build Sigstore.slnx
 ```

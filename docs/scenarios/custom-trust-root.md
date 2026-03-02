@@ -30,15 +30,15 @@ var policy = new VerificationPolicy
 };
 
 var result = await verifier.VerifyAsync(
-    "artifact.tar.gz",
-    "artifact.sigstore.json",
+    new FileInfo("artifact.tar.gz"),
+    new FileInfo("artifact.sigstore.json"),
     policy);
 ```
 
 ## Loading Trust Root from a File
 
 ```csharp
-var verifier = new SigstoreVerifier(new FileTrustRootProvider("path/to/trusted_root.json"));
+var verifier = new SigstoreVerifier(new FileTrustRootProvider(new FileInfo("path/to/trusted_root.json")));
 ```
 
 ## Using the Sigstore Staging Environment
@@ -71,7 +71,7 @@ Console.WriteLine($"CT Logs: {trustRoot.CtLogs.Count}");
 |----------|----------|
 | `TufTrustRootProvider(ProductionUrl)` | Default — downloads from Sigstore public-good TUF |
 | `TufTrustRootProvider(StagingUrl)` | Sigstore staging environment |
-| `FileTrustRootProvider(path)` | Load from a JSON file |
+| `FileTrustRootProvider(FileInfo)` | Load from a JSON file |
 | `InMemoryTrustRootProvider(root)` | Wrap an already-parsed `TrustedRoot` |
 
 ## See Also

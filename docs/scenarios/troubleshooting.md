@@ -76,7 +76,7 @@ var policy = new VerificationPolicy
 ### Bundle Inspection
 
 ```csharp
-var bundle = await SigstoreBundle.LoadAsync("artifact.sigstore.json");
+var bundle = await SigstoreBundle.LoadAsync(new FileInfo("artifact.sigstore.json"));
 
 Console.WriteLine($"Media Type: {bundle.MediaType}");
 Console.WriteLine($"Has signature: {bundle.MessageSignature != null}");
@@ -102,7 +102,7 @@ if (bundle.VerificationMaterial != null)
 - For air-gapped environments, pre-download the trust root and use `FileTrustRootProvider`:
 ```csharp
 var verifier = new SigstoreVerifier(
-    new FileTrustRootProvider("trusted_root.json"));
+    new FileTrustRootProvider(new FileInfo("trusted_root.json")));
 ```
 
 ### Offline verification

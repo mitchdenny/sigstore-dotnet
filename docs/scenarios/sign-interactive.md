@@ -12,7 +12,7 @@ var signer = new SigstoreSigner(fulcioClient, rekorClient, tsaClient, oidcProvid
 await using var artifact = File.OpenRead("my-release.tar.gz");
 var bundle = await signer.SignAsync(artifact);
 
-await bundle.SaveAsync("my-release.tar.gz.sigstore.json");
+await bundle.SaveAsync(new FileInfo("my-release.tar.gz.sigstore.json"));
 Console.WriteLine("Signed! Bundle saved.");
 ```
 
@@ -27,8 +27,8 @@ When you run this, the library will:
 ## Signing a File by Path
 
 ```csharp
-var bundle = await signer.SignAsync("my-release.tar.gz");
-await bundle.SaveAsync("my-release.tar.gz.sigstore.json");
+var bundle = await signer.SignAsync(new FileInfo("my-release.tar.gz"));
+await bundle.SaveAsync(new FileInfo("my-release.tar.gz.sigstore.json"));
 ```
 
 ## Verifying Your Signature
@@ -48,8 +48,8 @@ var policy = new VerificationPolicy
 };
 
 var result = await verifier.VerifyAsync(
-    "my-release.tar.gz",
-    "my-release.tar.gz.sigstore.json",
+    new FileInfo("my-release.tar.gz"),
+    new FileInfo("my-release.tar.gz.sigstore.json"),
     policy);
 
 Console.WriteLine($"✓ Verified — signed by {result.SignerIdentity!.SubjectAlternativeName}");

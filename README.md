@@ -75,13 +75,13 @@ The library is organized in three layers:
 ## Building
 
 ```bash
-dotnet build sigstore-dotnet.slnx
+dotnet build Sigstore.slnx
 ```
 
 ## Testing
 
 ```bash
-dotnet test sigstore-dotnet.slnx
+dotnet test Sigstore.slnx
 ```
 
 ## License

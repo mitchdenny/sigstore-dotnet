@@ -46,7 +46,7 @@ var signer = new SigstoreSigner(fulcioClient, rekorClient, tsaClient, oidcProvid
 await using var artifact = File.OpenRead(args[0]);
 var bundle = await signer.SignAsync(artifact);
 
-await bundle.SaveAsync($"{args[0]}.sigstore.json");
+await bundle.SaveAsync(new FileInfo($"{args[0]}.sigstore.json"));
 Console.WriteLine($"Signed! Rekor log index: {bundle.VerificationMaterial?.TlogEntries[0].LogIndex}");
 ```
 
@@ -64,8 +64,8 @@ var policy = new VerificationPolicy
 };
 
 var result = await verifier.VerifyAsync(
-    "myapp.tar.gz",
-    "myapp.tar.gz.sigstore.json",
+    new FileInfo("myapp.tar.gz"),
+    new FileInfo("myapp.tar.gz.sigstore.json"),
     policy);
 ```
 
@@ -84,7 +84,7 @@ var statement = """
 """;
 
 var bundle = await signer.AttestAsync(statement);
-await bundle.SaveAsync("myapp.tar.gz.intoto.sigstore.json");
+await bundle.SaveAsync(new FileInfo("myapp.tar.gz.intoto.sigstore.json"));
 ```
 
 ## What Happens During Signing
