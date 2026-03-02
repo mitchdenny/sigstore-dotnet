@@ -152,6 +152,18 @@ internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
         if (ReferenceEquals(_cachedTrustRoot, trustRoot))
             return;
 
+        // Dispose old cached certificates before replacing
+        if (_cachedRoots != null)
+        {
+            foreach (var cert in _cachedRoots)
+                cert.Dispose();
+        }
+        if (_cachedIntermediates != null)
+        {
+            foreach (var cert in _cachedIntermediates)
+                cert.Dispose();
+        }
+
         _cachedRoots = new X509Certificate2Collection();
         _cachedIntermediates = new X509Certificate2Collection();
 
