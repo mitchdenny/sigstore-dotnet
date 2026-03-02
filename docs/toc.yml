@@ -2,3 +2,19 @@
   href: getting-started.md
 - name: Design Overview
   href: design-overview.md
+- name: Scenarios
+  items:
+    - name: Verify a Bundle
+      href: scenarios/verify-bundle.md
+    - name: Verify GitHub Actions Artifacts
+      href: scenarios/verify-github-actions.md
+    - name: Sign in CI/CD
+      href: scenarios/sign-in-ci.md
+    - name: Sign Interactively
+      href: scenarios/sign-interactive.md
+    - name: Custom Trust Root
+      href: scenarios/custom-trust-root.md
+    - name: ASP.NET Core Integration
+      href: scenarios/aspnet-integration.md
+    - name: Troubleshooting
+      href: scenarios/troubleshooting.md
