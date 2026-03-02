@@ -153,161 +153,97 @@ internal static class BundleSerializer
 
     private static SigstoreBundle FromDto(BundleJson dto)
     {
-        var bundle = new SigstoreBundle
+        return new SigstoreBundle
         {
-            MediaType = dto.MediaType ?? "application/vnd.dev.sigstore.bundle.v0.3+json"
+            MediaType = dto.MediaType ?? "application/vnd.dev.sigstore.bundle.v0.3+json",
+            VerificationMaterial = dto.VerificationMaterial != null ? FromDto(dto.VerificationMaterial) : null,
+            MessageSignature = dto.MessageSignature != null ? FromDto(dto.MessageSignature) : null,
+            DsseEnvelope = dto.DsseEnvelope != null ? FromDto(dto.DsseEnvelope) : null
         };
-
-        if (dto.VerificationMaterial != null)
-        {
-            bundle.VerificationMaterial = FromDto(dto.VerificationMaterial);
-        }
-
-        if (dto.MessageSignature != null)
-        {
-            bundle.MessageSignature = FromDto(dto.MessageSignature);
-        }
-
-        if (dto.DsseEnvelope != null)
-        {
-            bundle.DsseEnvelope = FromDto(dto.DsseEnvelope);
-        }
-
-        return bundle;
     }
 
     private static VerificationMaterial FromDto(VerificationMaterialJson dto)
     {
-        var material = new VerificationMaterial();
-
-        // v0.3+: single certificate
-        if (dto.Certificate?.RawBytes != null)
+        return new VerificationMaterial
         {
-            material.Certificate = Convert.FromBase64String(dto.Certificate.RawBytes);
-        }
-
-        // v0.1/v0.2: certificate chain
-        if (dto.X509CertificateChain?.Certificates != null)
-        {
-            material.CertificateChain = dto.X509CertificateChain.Certificates
-                .Where(c => c.RawBytes != null)
-                .Select(c => Convert.FromBase64String(c.RawBytes!))
-                .ToList();
-        }
-
-        if (dto.PublicKey?.Hint != null)
-        {
-            material.PublicKeyHint = dto.PublicKey.Hint;
-        }
-
-        if (dto.TlogEntries != null)
-        {
-            material.TlogEntries = dto.TlogEntries.Select(FromDto).ToList();
-        }
-
-        if (dto.TimestampVerificationData?.Rfc3161Timestamps != null)
-        {
-            material.Rfc3161Timestamps = dto.TimestampVerificationData.Rfc3161Timestamps
-                .Where(t => t.SignedTimestamp != null)
-                .Select(t => Convert.FromBase64String(t.SignedTimestamp!))
-                .ToList();
-        }
-
-        return material;
+            Certificate = dto.Certificate?.RawBytes != null
+                ? Convert.FromBase64String(dto.Certificate.RawBytes)
+                : null,
+            CertificateChain = dto.X509CertificateChain?.Certificates != null
+                ? dto.X509CertificateChain.Certificates
+                    .Where(c => c.RawBytes != null)
+                    .Select(c => Convert.FromBase64String(c.RawBytes!))
+                    .ToList()
+                : null,
+            PublicKeyHint = dto.PublicKey?.Hint,
+            TlogEntries = dto.TlogEntries?.Select(FromDto).ToList() ?? [],
+            Rfc3161Timestamps = dto.TimestampVerificationData?.Rfc3161Timestamps != null
+                ? dto.TimestampVerificationData.Rfc3161Timestamps
+                    .Where(t => t.SignedTimestamp != null)
+                    .Select(t => Convert.FromBase64String(t.SignedTimestamp!))
+                    .ToList()
+                : []
+        };
     }
 
     private static TransparencyLogEntry FromDto(TlogEntryJson dto)
     {
-        var entry = new TransparencyLogEntry();
-
-        if (dto.LogIndex != null)
-            entry.LogIndex = long.Parse(dto.LogIndex);
-
-        if (dto.LogId?.KeyId != null)
-            entry.LogId = Convert.FromBase64String(dto.LogId.KeyId);
-
-        if (dto.KindVersion != null)
+        return new TransparencyLogEntry
         {
-            entry.Kind = dto.KindVersion.Kind;
-            entry.KindVersion = dto.KindVersion.Version;
-        }
-
-        if (dto.CanonicalizedBody != null)
-            entry.Body = dto.CanonicalizedBody;
-
-        if (dto.IntegratedTime != null)
-            entry.IntegratedTime = long.Parse(dto.IntegratedTime);
-
-        if (dto.InclusionProof != null)
-            entry.InclusionProof = FromDto(dto.InclusionProof);
-
-        if (dto.InclusionPromise?.SignedEntryTimestamp != null)
-            entry.InclusionPromise = Convert.FromBase64String(dto.InclusionPromise.SignedEntryTimestamp);
-
-        return entry;
+            LogIndex = dto.LogIndex != null ? long.Parse(dto.LogIndex) : 0,
+            LogId = dto.LogId?.KeyId != null ? Convert.FromBase64String(dto.LogId.KeyId) : [],
+            Kind = dto.KindVersion?.Kind,
+            KindVersion = dto.KindVersion?.Version,
+            Body = dto.CanonicalizedBody,
+            IntegratedTime = dto.IntegratedTime != null ? long.Parse(dto.IntegratedTime) : 0,
+            InclusionProof = dto.InclusionProof != null ? FromDto(dto.InclusionProof) : null,
+            InclusionPromise = dto.InclusionPromise?.SignedEntryTimestamp != null
+                ? Convert.FromBase64String(dto.InclusionPromise.SignedEntryTimestamp)
+                : null
+        };
     }
 
     private static InclusionProof FromDto(InclusionProofJson dto)
     {
-        var proof = new InclusionProof();
-
-        if (dto.LogIndex != null)
-            proof.LogIndex = long.Parse(dto.LogIndex);
-
-        if (dto.TreeSize != null)
-            proof.TreeSize = long.Parse(dto.TreeSize);
-
-        if (dto.RootHash != null)
-            proof.RootHash = Convert.FromBase64String(dto.RootHash);
-
-        if (dto.Hashes != null)
-            proof.Hashes = dto.Hashes.Select(Convert.FromBase64String).ToList();
-
-        if (dto.Checkpoint?.Envelope != null)
-            proof.Checkpoint = dto.Checkpoint.Envelope;
-
-        return proof;
+        return new InclusionProof
+        {
+            LogIndex = dto.LogIndex != null ? long.Parse(dto.LogIndex) : 0,
+            TreeSize = dto.TreeSize != null ? long.Parse(dto.TreeSize) : 0,
+            RootHash = dto.RootHash != null ? Convert.FromBase64String(dto.RootHash) : [],
+            Hashes = dto.Hashes?.Select(Convert.FromBase64String).ToList() ?? [],
+            Checkpoint = dto.Checkpoint?.Envelope
+        };
     }
 
     private static MessageSignature FromDto(MessageSignatureJson dto)
     {
-        var sig = new MessageSignature();
-
-        if (dto.Signature != null)
-            sig.Signature = Convert.FromBase64String(dto.Signature);
-
-        if (dto.MessageDigest != null)
+        return new MessageSignature
         {
-            sig.MessageDigest = new HashOutput
-            {
-                Algorithm = ParseHashAlgorithm(dto.MessageDigest.Algorithm),
-                Digest = dto.MessageDigest.Digest != null
-                    ? Convert.FromBase64String(dto.MessageDigest.Digest)
-                    : []
-            };
-        }
-
-        return sig;
+            Signature = dto.Signature != null ? Convert.FromBase64String(dto.Signature) : [],
+            MessageDigest = dto.MessageDigest != null
+                ? new HashOutput
+                {
+                    Algorithm = ParseHashAlgorithm(dto.MessageDigest.Algorithm),
+                    Digest = dto.MessageDigest.Digest != null
+                        ? Convert.FromBase64String(dto.MessageDigest.Digest)
+                        : []
+                }
+                : null
+        };
     }
 
     private static DsseEnvelope FromDto(DsseEnvelopeJson dto)
     {
-        var envelope = new DsseEnvelope
+        return new DsseEnvelope
         {
             PayloadType = dto.PayloadType ?? "",
-            Payload = dto.Payload != null ? Convert.FromBase64String(dto.Payload) : []
-        };
-
-        if (dto.Signatures != null)
-        {
-            envelope.Signatures = dto.Signatures.Select(s => new DsseSignature
+            Payload = dto.Payload != null ? Convert.FromBase64String(dto.Payload) : [],
+            Signatures = dto.Signatures?.Select(s => new DsseSignature
             {
                 KeyId = s.Keyid ?? "",
                 Sig = s.Sig != null ? Convert.FromBase64String(s.Sig) : []
-            }).ToList();
-        }
-
-        return envelope;
+            }).ToList() ?? []
+        };
     }
 
     // --- To DTO ---

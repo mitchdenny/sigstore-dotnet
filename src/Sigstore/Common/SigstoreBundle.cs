@@ -10,22 +10,22 @@ public class SigstoreBundle
     /// <summary>
     /// The media type of the bundle (e.g., "application/vnd.dev.sigstore.bundle.v0.3+json").
     /// </summary>
-    public string MediaType { get; set; } = "application/vnd.dev.sigstore.bundle.v0.3+json";
+    public string MediaType { get; init; } = "application/vnd.dev.sigstore.bundle.v0.3+json";
 
     /// <summary>
     /// The verification material (certificate or public key, log entries, timestamps).
     /// </summary>
-    public VerificationMaterial? VerificationMaterial { get; set; }
+    public VerificationMaterial? VerificationMaterial { get; init; }
 
     /// <summary>
     /// The message signature (for artifact signing).
     /// </summary>
-    public MessageSignature? MessageSignature { get; set; }
+    public MessageSignature? MessageSignature { get; init; }
 
     /// <summary>
     /// The DSSE envelope (for in-toto attestation signing).
     /// </summary>
-    public DsseEnvelope? DsseEnvelope { get; set; }
+    public DsseEnvelope? DsseEnvelope { get; init; }
 
     /// <summary>
     /// Deserializes a Sigstore bundle from JSON.
@@ -60,27 +60,27 @@ public class VerificationMaterial
     /// <summary>
     /// The signing certificate (leaf certificate, DER-encoded).
     /// </summary>
-    public byte[]? Certificate { get; set; }
+    public byte[]? Certificate { get; init; }
 
     /// <summary>
     /// The certificate chain (for v0.1/v0.2 bundles).
     /// </summary>
-    public List<byte[]>? CertificateChain { get; set; }
+    public IReadOnlyList<byte[]>? CertificateChain { get; init; }
 
     /// <summary>
     /// Public key identifier hint (for key-based verification).
     /// </summary>
-    public string? PublicKeyHint { get; set; }
+    public string? PublicKeyHint { get; init; }
 
     /// <summary>
     /// Transparency log entries with inclusion proofs.
     /// </summary>
-    public List<TransparencyLogEntry> TlogEntries { get; set; } = [];
+    public IReadOnlyList<TransparencyLogEntry> TlogEntries { get; init; } = [];
 
     /// <summary>
     /// RFC 3161 signed timestamps.
     /// </summary>
-    public List<byte[]> Rfc3161Timestamps { get; set; } = [];
+    public IReadOnlyList<byte[]> Rfc3161Timestamps { get; init; } = [];
 }
 
 /// <summary>
@@ -91,12 +91,12 @@ public class MessageSignature
     /// <summary>
     /// The digest of the signed message.
     /// </summary>
-    public HashOutput? MessageDigest { get; set; }
+    public HashOutput? MessageDigest { get; init; }
 
     /// <summary>
     /// The raw signature bytes.
     /// </summary>
-    public byte[] Signature { get; set; } = [];
+    public byte[] Signature { get; init; } = [];
 }
 
 /// <summary>
@@ -105,9 +105,9 @@ public class MessageSignature
 public class HashOutput
 {
     /// <summary>The hash algorithm used.</summary>
-    public HashAlgorithmType Algorithm { get; set; }
+    public HashAlgorithmType Algorithm { get; init; }
     /// <summary>The digest bytes.</summary>
-    public byte[] Digest { get; set; } = [];
+    public byte[] Digest { get; init; } = [];
 }
 
 /// <summary>
@@ -137,47 +137,47 @@ public class TransparencyLogEntry
     /// <summary>
     /// The index of the entry in the log.
     /// </summary>
-    public long LogIndex { get; set; }
+    public long LogIndex { get; init; }
 
     /// <summary>
     /// The log ID (SHA-256 of the log's public key).
     /// </summary>
-    public byte[] LogId { get; set; } = [];
+    public byte[] LogId { get; init; } = [];
 
     /// <summary>
     /// The kind (type) and version of the log entry.
     /// </summary>
-    public string? Kind { get; set; }
+    public string? Kind { get; init; }
 
     /// <summary>
     /// The API version of the log entry type.
     /// </summary>
-    public string? KindVersion { get; set; }
+    public string? KindVersion { get; init; }
 
     /// <summary>
     /// The body of the log entry (base64-encoded JSON with kind/apiVersion).
     /// </summary>
-    public string? Body { get; set; }
+    public string? Body { get; init; }
 
     /// <summary>
     /// The integrated time (Unix timestamp).
     /// </summary>
-    public long IntegratedTime { get; set; }
+    public long IntegratedTime { get; init; }
 
     /// <summary>
     /// The inclusion proof.
     /// </summary>
-    public InclusionProof? InclusionProof { get; set; }
+    public InclusionProof? InclusionProof { get; init; }
 
     /// <summary>
     /// The inclusion promise (deprecated, for v0.1 bundles).
     /// </summary>
-    public byte[]? InclusionPromise { get; set; }
+    public byte[]? InclusionPromise { get; init; }
 
     /// <summary>
     /// Checkpoint key ID for Rekor v2 verification.
     /// </summary>
-    public byte[]? CheckpointKeyId { get; set; }
+    public byte[]? CheckpointKeyId { get; init; }
 }
 
 /// <summary>
@@ -186,18 +186,18 @@ public class TransparencyLogEntry
 public class InclusionProof
 {
     /// <summary>The index of the entry in the log.</summary>
-    public long LogIndex { get; set; }
+    public long LogIndex { get; init; }
     /// <summary>The size of the Merkle tree at the time of the proof.</summary>
-    public long TreeSize { get; set; }
+    public long TreeSize { get; init; }
     /// <summary>The root hash of the Merkle tree.</summary>
-    public byte[] RootHash { get; set; } = [];
+    public byte[] RootHash { get; init; } = [];
     /// <summary>The intermediate hashes forming the inclusion proof path.</summary>
-    public List<byte[]> Hashes { get; set; } = [];
+    public IReadOnlyList<byte[]> Hashes { get; init; } = [];
 
     /// <summary>
     /// The signed checkpoint from the transparency log.
     /// </summary>
-    public string? Checkpoint { get; set; }
+    public string? Checkpoint { get; init; }
 }
 
 /// <summary>
@@ -206,11 +206,11 @@ public class InclusionProof
 public class DsseEnvelope
 {
     /// <summary>The payload content type (e.g., "application/vnd.in-toto+json").</summary>
-    public string PayloadType { get; set; } = "";
+    public string PayloadType { get; init; } = "";
     /// <summary>The raw payload bytes.</summary>
-    public byte[] Payload { get; set; } = [];
+    public byte[] Payload { get; init; } = [];
     /// <summary>The signatures over the PAE-encoded payload.</summary>
-    public List<DsseSignature> Signatures { get; set; } = [];
+    public IReadOnlyList<DsseSignature> Signatures { get; init; } = [];
 }
 
 /// <summary>
@@ -219,7 +219,7 @@ public class DsseEnvelope
 public class DsseSignature
 {
     /// <summary>The key identifier for the signer.</summary>
-    public string KeyId { get; set; } = "";
+    public string KeyId { get; init; } = "";
     /// <summary>The raw signature bytes.</summary>
-    public byte[] Sig { get; set; } = [];
+    public byte[] Sig { get; init; } = [];
 }

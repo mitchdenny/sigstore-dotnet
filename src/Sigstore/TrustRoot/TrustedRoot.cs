@@ -11,27 +11,27 @@ public class TrustedRoot
     /// <summary>
     /// The media type of the trusted root.
     /// </summary>
-    public string MediaType { get; set; } = "application/vnd.dev.sigstore.trustedroot.v0.2+json";
+    public string MediaType { get; init; } = "application/vnd.dev.sigstore.trustedroot.v0.2+json";
 
     /// <summary>
     /// Trusted Rekor transparency log instances.
     /// </summary>
-    public List<TransparencyLogInfo> TransparencyLogs { get; set; } = [];
+    public IReadOnlyList<TransparencyLogInfo> TransparencyLogs { get; init; } = [];
 
     /// <summary>
     /// Trusted certificate authorities (e.g., Fulcio).
     /// </summary>
-    public List<CertificateAuthorityInfo> CertificateAuthorities { get; set; } = [];
+    public IReadOnlyList<CertificateAuthorityInfo> CertificateAuthorities { get; init; } = [];
 
     /// <summary>
     /// Trusted certificate transparency log instances.
     /// </summary>
-    public List<TransparencyLogInfo> CtLogs { get; set; } = [];
+    public IReadOnlyList<TransparencyLogInfo> CtLogs { get; init; } = [];
 
     /// <summary>
     /// Trusted timestamp authorities.
     /// </summary>
-    public List<CertificateAuthorityInfo> TimestampAuthorities { get; set; } = [];
+    public IReadOnlyList<CertificateAuthorityInfo> TimestampAuthorities { get; init; } = [];
 
     /// <summary>
     /// Deserializes a TrustedRoot from JSON.
@@ -48,23 +48,23 @@ public class TrustedRoot
 public class TransparencyLogInfo
 {
     /// <summary>The base URL of the transparency log.</summary>
-    public string BaseUrl { get; set; } = "";
+    public string BaseUrl { get; init; } = "";
     /// <summary>The hash algorithm used by the log.</summary>
-    public HashAlgorithmType HashAlgorithm { get; set; }
+    public HashAlgorithmType HashAlgorithm { get; init; }
     /// <summary>The DER-encoded public key bytes of the log.</summary>
-    public byte[] PublicKeyBytes { get; set; } = [];
+    public byte[] PublicKeyBytes { get; init; } = [];
     /// <summary>The algorithm and encoding details of the public key.</summary>
-    public PublicKeyDetails KeyDetails { get; set; }
+    public PublicKeyDetails KeyDetails { get; init; }
     /// <summary>The log ID (SHA-256 hash of the public key).</summary>
-    public byte[] LogId { get; set; } = [];
+    public byte[] LogId { get; init; } = [];
     /// <summary>The checkpoint key ID for Rekor v2 verification.</summary>
-    public byte[]? CheckpointKeyId { get; set; }
+    public byte[]? CheckpointKeyId { get; init; }
     /// <summary>The operator of the transparency log.</summary>
-    public string? Operator { get; set; }
+    public string? Operator { get; init; }
     /// <summary>The start of the log's validity period.</summary>
-    public DateTimeOffset? ValidFrom { get; set; }
+    public DateTimeOffset? ValidFrom { get; init; }
     /// <summary>The end of the log's validity period.</summary>
-    public DateTimeOffset? ValidTo { get; set; }
+    public DateTimeOffset? ValidTo { get; init; }
 }
 
 /// <summary>
@@ -73,13 +73,13 @@ public class TransparencyLogInfo
 public class CertificateAuthorityInfo
 {
     /// <summary>The URI of the certificate authority.</summary>
-    public string Uri { get; set; } = "";
+    public string Uri { get; init; } = "";
     /// <summary>The certificate chain (DER-encoded, leaf to root).</summary>
-    public List<byte[]> CertChain { get; set; } = [];
+    public IReadOnlyList<byte[]> CertChain { get; init; } = [];
     /// <summary>The operator of the certificate authority.</summary>
-    public string? Operator { get; set; }
+    public string? Operator { get; init; }
     /// <summary>The start of the CA's validity period.</summary>
-    public DateTimeOffset? ValidFrom { get; set; }
+    public DateTimeOffset? ValidFrom { get; init; }
     /// <summary>The end of the CA's validity period.</summary>
-    public DateTimeOffset? ValidTo { get; set; }
+    public DateTimeOffset? ValidTo { get; init; }
 }
