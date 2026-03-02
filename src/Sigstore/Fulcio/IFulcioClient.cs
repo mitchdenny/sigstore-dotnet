@@ -1,6 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 
-namespace Sigstore.Fulcio;
+namespace Sigstore;
 
 /// <summary>
 /// Client for interacting with a Fulcio certificate authority instance.

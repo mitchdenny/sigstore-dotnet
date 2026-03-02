@@ -16,8 +16,7 @@
 //   dotnet run -- myfile.txt
 //   # Produces myfile.txt.sigstore.json
 
-using Sigstore.Common;
-using Sigstore.Signing;
+using Sigstore;
 
 if (args.Length < 1)
 {

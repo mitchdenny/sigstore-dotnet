@@ -1,6 +1,5 @@
 using System.Text.Json;
-using Sigstore.TrustRoot;
-using Sigstore.Common;
+using Sigstore;
 
 namespace Sigstore.Tests.TrustRoot;
 
@@ -111,7 +110,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_ParsesMediaType()
     {
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(TrustedRootJson);
+        var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Equal("application/vnd.dev.sigstore.trustedroot+json;version=0.1", root.MediaType);
     }
@@ -119,7 +118,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_ParsesTransparencyLogs()
     {
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(TrustedRootJson);
+        var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Single(root.TransparencyLogs);
         var tlog = root.TransparencyLogs[0];
@@ -135,7 +134,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_ParsesCertificateAuthorities()
     {
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(TrustedRootJson);
+        var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Single(root.CertificateAuthorities);
         var ca = root.CertificateAuthorities[0];
@@ -149,7 +148,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_ParsesCtLogs()
     {
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(TrustedRootJson);
+        var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Single(root.CtLogs);
         Assert.Equal("https://ctfe.sigstore.dev/test", root.CtLogs[0].BaseUrl);
@@ -158,7 +157,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_EmptyTimestampAuthorities()
     {
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(TrustedRootJson);
+        var root = TrustedRoot.Deserialize(TrustedRootJson);
 
         Assert.Empty(root.TimestampAuthorities);
     }
@@ -166,7 +165,7 @@ public class TrustedRootTests
     [Fact]
     public void Deserialize_InvalidJson_Throws()
     {
-        Assert.Throws<JsonException>(() => Sigstore.TrustRoot.TrustedRoot.Deserialize("not json"));
+        Assert.Throws<JsonException>(() => TrustedRoot.Deserialize("not json"));
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public class TrustedRootTests
             }
             """;
 
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(json);
+        var root = TrustedRoot.Deserialize(json);
 
         Assert.Empty(root.TransparencyLogs);
         Assert.Empty(root.CertificateAuthorities);
@@ -213,7 +212,7 @@ public class TrustedRootTests
             }
             """;
 
-        var root = Sigstore.TrustRoot.TrustedRoot.Deserialize(json);
+        var root = TrustedRoot.Deserialize(json);
 
         Assert.Single(root.TimestampAuthorities);
         var tsa = root.TimestampAuthorities[0];

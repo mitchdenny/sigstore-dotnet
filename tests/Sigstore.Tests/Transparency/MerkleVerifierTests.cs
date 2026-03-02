@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using Sigstore.Transparency;
+using Sigstore;
 
 namespace Sigstore.Tests.Transparency;
 

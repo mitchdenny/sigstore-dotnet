@@ -1,6 +1,5 @@
-using Sigstore.Common;
 
-namespace Sigstore.Rekor;
+namespace Sigstore;
 
 /// <summary>
 /// Client for interacting with a Rekor transparency log instance.

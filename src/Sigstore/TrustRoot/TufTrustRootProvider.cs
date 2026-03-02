@@ -1,8 +1,7 @@
 using System.Reflection;
-using Sigstore.Common;
 using Tuf;
 
-namespace Sigstore.TrustRoot;
+namespace Sigstore;
 
 /// <summary>
 /// Obtains the Sigstore trusted root via The Update Framework (TUF),

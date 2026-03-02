@@ -1,4 +1,4 @@
-using Sigstore.Transparency;
+using Sigstore;
 
 namespace Sigstore.Tests.Transparency;
 

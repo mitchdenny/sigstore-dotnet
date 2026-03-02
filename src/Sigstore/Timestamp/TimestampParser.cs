@@ -2,7 +2,7 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace Sigstore.Timestamp;
+namespace Sigstore;
 
 /// <summary>
 /// Pure computation for parsing and verifying RFC 3161 timestamps.
@@ -184,7 +184,7 @@ public static class TimestampParser
     public static bool Verify(
         TimestampInfo info,
         ReadOnlyMemory<byte> signature,
-        IReadOnlyList<TrustRoot.CertificateAuthorityInfo> timestampAuthorities)
+        IReadOnlyList<CertificateAuthorityInfo> timestampAuthorities)
     {
         if (info.Timestamp == default || timestampAuthorities.Count == 0)
             return false;
@@ -288,14 +288,14 @@ public static class TimestampParser
         return false;
     }
 
-    private static Common.HashAlgorithmType MapHashAlgorithm(string oid)
+    private static HashAlgorithmType MapHashAlgorithm(string oid)
     {
         return oid switch
         {
-            "2.16.840.1.101.3.4.2.1" => Common.HashAlgorithmType.Sha2_256,
-            "2.16.840.1.101.3.4.2.2" => Common.HashAlgorithmType.Sha2_384,
-            "2.16.840.1.101.3.4.2.3" => Common.HashAlgorithmType.Sha2_512,
-            _ => Common.HashAlgorithmType.Sha2_256
+            "2.16.840.1.101.3.4.2.1" => HashAlgorithmType.Sha2_256,
+            "2.16.840.1.101.3.4.2.2" => HashAlgorithmType.Sha2_384,
+            "2.16.840.1.101.3.4.2.3" => HashAlgorithmType.Sha2_512,
+            _ => HashAlgorithmType.Sha2_256
         };
     }
 
@@ -329,7 +329,7 @@ public class TimestampInfo
     /// <summary>The timestamp value (genTime) from the TSTInfo.</summary>
     public required DateTimeOffset Timestamp { get; init; }
     /// <summary>The hash algorithm used for the message imprint.</summary>
-    public required Common.HashAlgorithmType HashAlgorithm { get; init; }
+    public required HashAlgorithmType HashAlgorithm { get; init; }
     /// <summary>The message imprint digest from the TSTInfo.</summary>
     public required byte[] MessageImprint { get; init; }
     /// <summary>The raw RFC 3161 timestamp token bytes.</summary>

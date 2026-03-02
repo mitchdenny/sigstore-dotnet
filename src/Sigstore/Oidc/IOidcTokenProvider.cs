@@ -1,4 +1,4 @@
-namespace Sigstore.Oidc;
+namespace Sigstore;
 
 /// <summary>
 /// Provider for obtaining OIDC identity tokens for Sigstore signing.

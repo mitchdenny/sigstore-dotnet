@@ -1,4 +1,4 @@
-namespace Sigstore.Transparency;
+namespace Sigstore;
 
 /// <summary>
 /// Pure computation for verifying Merkle tree inclusion proofs.

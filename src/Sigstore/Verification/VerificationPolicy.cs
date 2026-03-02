@@ -1,4 +1,4 @@
-namespace Sigstore.Verification;
+namespace Sigstore;
 
 /// <summary>
 /// Specifies the policy for verifying a Sigstore bundle.

@@ -1,6 +1,5 @@
-using Sigstore.Common;
 
-namespace Sigstore.TrustRoot;
+namespace Sigstore;
 
 /// <summary>
 /// Loads a trusted root from a JSON file on disk.

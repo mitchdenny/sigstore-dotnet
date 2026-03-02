@@ -1,9 +1,8 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Sigstore.TrustRoot;
 
-namespace Sigstore.Verification;
+namespace Sigstore;
 
 /// <summary>
 /// Verifies Signed Certificate Timestamps (SCTs) embedded in X.509 certificates

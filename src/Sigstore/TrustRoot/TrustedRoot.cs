@@ -1,6 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 
-namespace Sigstore.TrustRoot;
+namespace Sigstore;
 
 /// <summary>
 /// Represents the complete set of trusted entities for Sigstore verification.
@@ -50,11 +50,11 @@ public class TransparencyLogInfo
     /// <summary>The base URL of the transparency log.</summary>
     public string BaseUrl { get; set; } = "";
     /// <summary>The hash algorithm used by the log.</summary>
-    public Common.HashAlgorithmType HashAlgorithm { get; set; }
+    public HashAlgorithmType HashAlgorithm { get; set; }
     /// <summary>The DER-encoded public key bytes of the log.</summary>
     public byte[] PublicKeyBytes { get; set; } = [];
     /// <summary>The algorithm and encoding details of the public key.</summary>
-    public Common.PublicKeyDetails KeyDetails { get; set; }
+    public PublicKeyDetails KeyDetails { get; set; }
     /// <summary>The log ID (SHA-256 hash of the public key).</summary>
     public byte[] LogId { get; set; } = [];
     /// <summary>The checkpoint key ID for Rekor v2 verification.</summary>

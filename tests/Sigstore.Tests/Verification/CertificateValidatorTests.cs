@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Sigstore.TrustRoot;
-using Sigstore.Verification;
+using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
+using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
@@ -12,7 +12,7 @@ public class CertificateValidatorTests
     {
         // Create a self-signed root CA
         using var rootKey = RSA.Create(2048);
-        var rootReq = new CertificateRequest(
+        var rootReq = new X509CertificateRequest(
             "CN=Test Root CA",
             rootKey,
             HashAlgorithmName.SHA256,
@@ -26,7 +26,7 @@ public class CertificateValidatorTests
 
         // Create a leaf certificate signed by the root
         using var leafKey = RSA.Create(2048);
-        var leafReq = new CertificateRequest(
+        var leafReq = new X509CertificateRequest(
             "CN=Test Leaf",
             leafKey,
             HashAlgorithmName.SHA256,
@@ -154,7 +154,7 @@ public class CertificateValidatorTests
 
         // Create a trust root with a DIFFERENT root CA
         using var otherKey = RSA.Create(2048);
-        var otherReq = new CertificateRequest(
+        var otherReq = new X509CertificateRequest(
             "CN=Other Root CA",
             otherKey,
             HashAlgorithmName.SHA256,
@@ -181,7 +181,7 @@ public class CertificateValidatorTests
         public TestCertificateValidator()
         {
             // Use reflection to instantiate the internal DefaultCertificateValidator
-            var type = typeof(ICertificateValidator).Assembly.GetType("Sigstore.Verification.DefaultCertificateValidator")!;
+            var type = typeof(ICertificateValidator).Assembly.GetType("Sigstore.DefaultCertificateValidator")!;
             _inner = (ICertificateValidator)Activator.CreateInstance(type)!;
         }
 

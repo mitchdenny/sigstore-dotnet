@@ -3,11 +3,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Sigstore.Common;
-using Sigstore.Timestamp;
-using Sigstore.Transparency;
 
-namespace Sigstore.Verification;
+namespace Sigstore;
 
 /// <summary>
 /// High-level Sigstore bundle verifier. Orchestrates the full verification workflow
@@ -52,7 +49,7 @@ public class SigstoreVerifier
     /// </summary>
     public SigstoreVerifier()
     {
-        _trustRootProvider = new TrustRoot.TufTrustRootProvider(TrustRoot.TufTrustRootProvider.ProductionUrl);
+        _trustRootProvider = new TufTrustRootProvider(TufTrustRootProvider.ProductionUrl);
         _certificateValidator = new DefaultCertificateValidator();
     }
 
@@ -401,7 +398,7 @@ public class SigstoreVerifier
         ArtifactInput artifactInput,
         SigstoreBundle bundle,
         VerificationPolicy policy,
-        TrustRoot.TrustedRoot trustRoot)
+        TrustedRoot trustRoot)
     {
         var verificationMaterial = bundle.VerificationMaterial;
         if (verificationMaterial == null)
@@ -489,7 +486,7 @@ public class SigstoreVerifier
     /// </summary>
     private static bool VerifyTlogEntryForPublicKey(
         TransparencyLogEntry entry,
-        TrustRoot.TrustedRoot trustRoot,
+        TrustedRoot trustRoot,
         SigstoreBundle bundle,
         byte[] publicKeySpki)
     {
@@ -835,7 +832,7 @@ public class SigstoreVerifier
 
     private static bool VerifyTlogEntry(
         TransparencyLogEntry entry,
-        TrustRoot.TrustedRoot trustRoot,
+        TrustedRoot trustRoot,
         SigstoreBundle bundle,
         byte[] leafCertBytes)
     {
@@ -1163,7 +1160,7 @@ public class SigstoreVerifier
     /// - Rekor v1 ECDSA: SHA256(SPKI_DER)[:4]
     /// - Rekor v2 Ed25519 (note format): SHA256(origin + "\n" + 0x01 + raw_ed25519_key)[:4]
     /// </summary>
-    private static List<byte[]> ComputeAllCheckpointKeyIds(TrustRoot.TransparencyLogInfo log)
+    private static List<byte[]> ComputeAllCheckpointKeyIds(TransparencyLogInfo log)
     {
         var result = new List<byte[]>();
 
@@ -1180,7 +1177,7 @@ public class SigstoreVerifier
         // For Ed25519 keys, also compute the note verifier key ID format:
         // SHA256(origin + "\n" + 0x01 + raw_ed25519_key_32_bytes)[:4]
         if (log.PublicKeyBytes.Length == 44 || // Ed25519 SPKI is 44 bytes
-            log.KeyDetails == Common.PublicKeyDetails.PkixEd25519)
+            log.KeyDetails == PublicKeyDetails.PkixEd25519)
         {
             // Extract the 32-byte raw Ed25519 key from SPKI format
             byte[] rawKey;
@@ -1225,7 +1222,7 @@ public class SigstoreVerifier
     /// The SET is the log's ECDSA signature over the canonicalized JSON payload:
     /// {"body": base64(canonicalizedBody), "integratedTime": N, "logID": hex(keyId), "logIndex": N}
     /// </summary>
-    private static bool VerifySignedEntryTimestamp(TransparencyLogEntry entry, TrustRoot.TrustedRoot trustRoot)
+    private static bool VerifySignedEntryTimestamp(TransparencyLogEntry entry, TrustedRoot trustRoot)
     {
         if (entry.InclusionPromise == null || entry.Body == null)
             return false;

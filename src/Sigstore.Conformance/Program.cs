@@ -2,14 +2,7 @@ using System.CommandLine;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Sigstore.Common;
-using Sigstore.Fulcio;
-using Sigstore.Oidc;
-using Sigstore.Rekor;
-using Sigstore.Signing;
-using Sigstore.Timestamp;
-using Sigstore.TrustRoot;
-using Sigstore.Verification;
+using Sigstore;
 
 namespace Sigstore.Conformance;
 
@@ -250,7 +243,7 @@ public static class Program
             // Use digest-based verification
             await verifier.VerifyAsync(
                 new ReadOnlyMemory<byte>(digestBytes),
-                Common.HashAlgorithmType.Sha2_256,
+                HashAlgorithmType.Sha2_256,
                 bundle, policy, cancellationToken);
         }
         else
@@ -336,7 +329,7 @@ internal sealed class DisposableTrustRootProvider : ITrustRootProvider, IDisposa
 
     public DisposableTrustRootProvider(ITrustRootProvider inner) => _inner = inner;
 
-    public Task<TrustRoot.TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
+    public Task<TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
         => _inner.GetTrustRootAsync(cancellationToken);
 
     public void Dispose()

@@ -1,9 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Sigstore.Bundle;
-using Sigstore.Common;
 
-namespace Sigstore.TrustRoot;
+namespace Sigstore;
 
 // JSON DTO types for the Sigstore trusted root format.
 
@@ -21,7 +19,7 @@ internal sealed class TransparencyLogJson
     public string? BaseUrl { get; set; }
     public string? HashAlgorithm { get; set; }
     public TransparencyLogPublicKeyJson? PublicKey { get; set; }
-    public Bundle.LogIdJson? LogId { get; set; }
+    public LogIdJson? LogId { get; set; }
     public byte[]? CheckpointKeyId { get; set; }
     [JsonPropertyName("operator")]
     public string? Operator { get; set; }
@@ -58,7 +56,7 @@ internal sealed class DistinguishedNameJson
 
 internal sealed class CertChainJson
 {
-    public List<Bundle.CertificateJson>? Certificates { get; set; }
+    public List<CertificateJson>? Certificates { get; set; }
 }
 
 [JsonSourceGenerationOptions(

@@ -1,4 +1,4 @@
-using Sigstore.Signing;
+using Sigstore;
 
 namespace Sigstore.Tests.Signing;
 

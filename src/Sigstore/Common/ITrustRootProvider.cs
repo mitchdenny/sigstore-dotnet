@@ -1,6 +1,5 @@
-using Sigstore.TrustRoot;
 
-namespace Sigstore.Common;
+namespace Sigstore;
 
 /// <summary>
 /// Provider for obtaining the Sigstore trusted root material.

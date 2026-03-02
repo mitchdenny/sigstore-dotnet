@@ -1,8 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Sigstore.TrustRoot;
 
-namespace Sigstore.Verification;
+namespace Sigstore;
 
 /// <summary>
 /// Validates X.509 certificate chains against a trusted root using the Sigstore

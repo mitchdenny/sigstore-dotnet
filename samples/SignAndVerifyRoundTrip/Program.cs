@@ -10,9 +10,7 @@
 // Example:
 //   dotnet run -- myfile.txt
 
-using Sigstore.Common;
-using Sigstore.Signing;
-using Sigstore.Verification;
+using Sigstore;
 
 if (args.Length < 1)
 {

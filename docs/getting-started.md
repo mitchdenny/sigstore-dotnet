@@ -15,8 +15,7 @@ The most common use case is verifying that an artifact was signed by an expected
 ### Basic Verification
 
 ```csharp
-using Sigstore.Common;
-using Sigstore.Verification;
+using Sigstore;
 
 // Create a verifier (downloads the Sigstore public-good trusted root on first use)
 var verifier = new SigstoreVerifier();
@@ -61,7 +60,7 @@ var policy = new VerificationPolicy
 For private Sigstore deployments or testing:
 
 ```csharp
-using Sigstore.TrustRoot;
+using Sigstore;
 
 var trustRoot = TrustedRoot.Deserialize(File.ReadAllText("custom-trusted-root.json"));
 var verifier = new SigstoreVerifier(new InMemoryTrustRootProvider(trustRoot));

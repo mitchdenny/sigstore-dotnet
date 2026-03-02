@@ -1,4 +1,4 @@
-namespace Sigstore.Timestamp;
+namespace Sigstore;
 
 /// <summary>
 /// Client for interacting with an RFC 3161 Timestamp Authority.

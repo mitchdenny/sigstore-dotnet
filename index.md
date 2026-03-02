@@ -17,7 +17,7 @@ dotnet add package Sigstore
 Verify a Sigstore bundle:
 
 ```csharp
-using Sigstore.Verification;
+using Sigstore;
 
 var verifier = new SigstoreVerifier();
 var bundle = SigstoreBundle.Deserialize(File.ReadAllText("artifact.sigstore.json"));

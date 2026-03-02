@@ -1,6 +1,5 @@
-using Sigstore.Bundle;
 
-namespace Sigstore.Common;
+namespace Sigstore;
 
 /// <summary>
 /// Represents a Sigstore bundle containing signature and verification material.

@@ -1,4 +1,4 @@
-namespace Sigstore.Common;
+namespace Sigstore;
 
 /// <summary>
 /// Supported public key algorithms and their encoding/signature details.

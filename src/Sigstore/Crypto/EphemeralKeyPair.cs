@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
 
-namespace Sigstore.Crypto;
+namespace Sigstore;
 
 /// <summary>
 /// An ephemeral ECDSA P-256 keypair for Sigstore keyless signing.
@@ -26,7 +27,7 @@ internal sealed class EphemeralKeyPair : IDisposable
 
     public string CreateCsr(string subject)
     {
-        var req = new CertificateRequest($"CN={subject}", _key, HashAlgorithmName.SHA256);
+        var req = new X509CertificateRequest($"CN={subject}", _key, HashAlgorithmName.SHA256);
         return req.CreateSigningRequestPem();
     }
 

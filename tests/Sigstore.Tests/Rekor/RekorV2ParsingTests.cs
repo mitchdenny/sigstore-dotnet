@@ -1,4 +1,4 @@
-using Sigstore.Rekor;
+using Sigstore;
 
 namespace Sigstore.Tests.Rekor;
 

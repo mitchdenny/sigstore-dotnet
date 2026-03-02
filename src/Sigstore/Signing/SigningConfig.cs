@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Sigstore.Signing;
+namespace Sigstore;
 
 /// <summary>
 /// Signing configuration that specifies service URLs and API versions

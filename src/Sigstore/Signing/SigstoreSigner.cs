@@ -1,15 +1,9 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using Sigstore.Common;
-using Sigstore.Crypto;
-using Sigstore.Fulcio;
-using Sigstore.Oidc;
-using Sigstore.Rekor;
-using Sigstore.Timestamp;
-using FulcioCertificateRequest = Sigstore.Fulcio.CertificateRequest;
+using FulcioCertificateRequest = Sigstore.CertificateRequest;
 
-namespace Sigstore.Signing;
+namespace Sigstore;
 
 /// <summary>
 /// High-level Sigstore signer. Orchestrates the full keyless signing workflow

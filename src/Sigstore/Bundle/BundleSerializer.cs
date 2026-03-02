@@ -1,8 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Sigstore.Common;
 
-namespace Sigstore.Bundle;
+namespace Sigstore;
 
 // JSON DTO types that mirror the Sigstore bundle protobuf-JSON schema.
 // These are internal and only used for serialization/deserialization.

@@ -6,8 +6,7 @@
 // Example:
 //   dotnet run -- release.tar.gz release.tar.gz.sigstore.json sigstore/sigstore-go
 
-using Sigstore.Common;
-using Sigstore.Verification;
+using Sigstore;
 
 if (args.Length < 3)
 {

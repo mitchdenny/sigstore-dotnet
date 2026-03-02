@@ -1,8 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using Sigstore.Common;
 
-namespace Sigstore.Rekor;
+namespace Sigstore;
 
 /// <summary>
 /// HTTP client for Rekor transparency log API. Supports both v1 and v2.

@@ -23,8 +23,7 @@ A .NET library for generating and verifying [Sigstore](https://www.sigstore.dev/
 ### Verification
 
 ```csharp
-using Sigstore.Verification;
-using Sigstore.Common;
+using Sigstore;
 
 // Default constructor uses Sigstore public good instance
 var verifier = new SigstoreVerifier(trustRootProvider);
@@ -45,7 +44,6 @@ var (success, result) = await verifier.TryVerifyAsync(artifactStream, bundle, po
 ### Signing
 
 ```csharp
-using Sigstore.Signing;
 
 var signer = new SigstoreSigner(fulcioClient, rekorClient, tsaClient, oidcProvider);
 
@@ -56,7 +54,6 @@ string json = bundle.Serialize();
 ### Bundle I/O
 
 ```csharp
-using Sigstore.Common;
 
 // Parse a bundle
 SigstoreBundle bundle = SigstoreBundle.Deserialize(json);

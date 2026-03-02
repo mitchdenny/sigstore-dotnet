@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Sigstore.Verification;
-using Sigstore.Common;
+using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
+using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
@@ -371,7 +371,7 @@ public class SigstoreVerifierTests
     private static (X509Certificate2 cert, ECDsa key) CreateSelfSignedCert()
     {
         var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var req = new CertificateRequest("CN=Test", key, HashAlgorithmName.SHA256);
+        var req = new X509CertificateRequest("CN=Test", key, HashAlgorithmName.SHA256);
         req.CertificateExtensions.Add(
             new X509BasicConstraintsExtension(false, false, 0, true));
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
@@ -447,8 +447,8 @@ public class SigstoreVerifierTests
 
     private class FakeTrustRootProvider : ITrustRootProvider
     {
-        public Task<Sigstore.TrustRoot.TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new Sigstore.TrustRoot.TrustedRoot());
+        public Task<Sigstore.TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new Sigstore.TrustedRoot());
     }
 
     private class AlwaysValidCertificateValidator : ICertificateValidator
@@ -463,7 +463,7 @@ public class SigstoreVerifierTests
         public CertificateValidationResult ValidateChain(
             X509Certificate2 leafCertificate,
             X509Certificate2Collection? chain,
-            Sigstore.TrustRoot.TrustedRoot trustRoot,
+            Sigstore.TrustedRoot trustRoot,
             DateTimeOffset signatureTime)
         {
             return new CertificateValidationResult

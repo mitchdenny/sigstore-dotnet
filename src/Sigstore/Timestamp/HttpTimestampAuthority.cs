@@ -2,7 +2,7 @@ using System.Formats.Asn1;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 
-namespace Sigstore.Timestamp;
+namespace Sigstore;
 
 /// <summary>
 /// HTTP client for RFC 3161 Timestamp Authority.

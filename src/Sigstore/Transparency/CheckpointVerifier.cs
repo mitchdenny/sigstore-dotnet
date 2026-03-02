@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Sigstore.Transparency;
+namespace Sigstore;
 
 /// <summary>
 /// Pure computation for verifying signed checkpoints from transparency logs.

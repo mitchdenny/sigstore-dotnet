@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Sigstore.Common;
+using Sigstore;
 
 namespace Sigstore.Tests.Bundle;
 

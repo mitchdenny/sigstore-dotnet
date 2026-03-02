@@ -1,4 +1,4 @@
-using Sigstore.Verification;
+using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 

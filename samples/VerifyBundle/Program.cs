@@ -6,9 +6,7 @@
 // Example:
 //   dotnet run -- myfile.txt myfile.txt.sigstore.json user@example.com https://accounts.google.com
 
-using Sigstore.Common;
-using Sigstore.TrustRoot;
-using Sigstore.Verification;
+using Sigstore;
 
 if (args.Length < 4)
 {

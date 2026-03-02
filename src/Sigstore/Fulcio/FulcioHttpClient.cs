@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace Sigstore.Fulcio;
+namespace Sigstore;
 
 /// <summary>
 /// HTTP client for Fulcio v2 certificate authority API.

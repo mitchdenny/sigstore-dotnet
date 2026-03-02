@@ -1,6 +1,4 @@
-using Sigstore.Common;
-using Sigstore.TrustRoot;
-using Sigstore.Verification;
+using Sigstore;
 
 namespace Sigstore.Tests.Conformance;
 

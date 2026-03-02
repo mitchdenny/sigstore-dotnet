@@ -1,4 +1,4 @@
-namespace Sigstore.Verification;
+namespace Sigstore;
 
 /// <summary>
 /// The result of a successful Sigstore bundle verification.
