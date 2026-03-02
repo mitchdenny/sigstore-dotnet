@@ -37,8 +37,8 @@ public sealed class FulcioHttpClient : IFulcioClient, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<CertificateResponse> GetSigningCertificateAsync(
-        CertificateRequest request,
+    public async Task<FulcioCertificateResponse> GetSigningCertificateAsync(
+        FulcioCertificateRequest request,
         CancellationToken cancellationToken = default)
     {
         var url = new Uri(_baseUrl, "api/v2/signingCert");
@@ -87,7 +87,7 @@ public sealed class FulcioHttpClient : IFulcioClient, IDisposable
             certChain.Add(der);
         }
 
-        return new CertificateResponse { CertificateChain = certChain };
+        return new FulcioCertificateResponse { CertificateChain = certChain };
     }
 
     private static byte[] ConvertPemToDer(string pem)

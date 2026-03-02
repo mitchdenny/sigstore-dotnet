@@ -100,7 +100,7 @@ public class SigningConfigTests
     [Fact]
     public void SelectBest_FiltersExpiredEndpoints()
     {
-        var endpoints = new List<ServiceEndpoint>
+        var endpoints = new List<SigningServiceEndpoint>
         {
             new()
             {
@@ -127,7 +127,7 @@ public class SigningConfigTests
     [Fact]
     public void SelectBest_ReturnsNull_WhenNoValidEndpoints()
     {
-        var endpoints = new List<ServiceEndpoint>
+        var endpoints = new List<SigningServiceEndpoint>
         {
             new()
             {

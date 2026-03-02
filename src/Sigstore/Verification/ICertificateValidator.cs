@@ -8,7 +8,7 @@ namespace Sigstore;
 /// "hybrid model" — where certificates are validated at the time the signature was created,
 /// not at the current time.
 /// </summary>
-public interface ICertificateValidator
+public interface ISigningCertificateValidator
 {
     /// <summary>
     /// Validates a certificate chain against the trusted root at the given signature time.
@@ -18,7 +18,7 @@ public interface ICertificateValidator
     /// <param name="trustRoot">The trusted root containing CAs.</param>
     /// <param name="signatureTime">The time at which the signature was created.</param>
     /// <returns>The validation result.</returns>
-    CertificateValidationResult ValidateChain(
+    SigningCertificateValidationResult ValidateChain(
         X509Certificate2 leafCertificate,
         X509Certificate2Collection? chain,
         TrustedRoot trustRoot,
@@ -28,7 +28,7 @@ public interface ICertificateValidator
 /// <summary>
 /// Result of certificate chain validation.
 /// </summary>
-public sealed class CertificateValidationResult
+public sealed class SigningCertificateValidationResult
 {
     /// <summary>Whether the certificate chain is valid.</summary>
     public bool IsValid { get; init; }
@@ -41,9 +41,9 @@ public sealed class CertificateValidationResult
 /// <summary>
 /// Default certificate validator using .NET X509Chain with hybrid time model.
 /// </summary>
-internal class DefaultCertificateValidator : ICertificateValidator
+internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
 {
-    public CertificateValidationResult ValidateChain(
+    public SigningCertificateValidationResult ValidateChain(
         X509Certificate2 leafCertificate,
         X509Certificate2Collection? chain,
         TrustedRoot trustRoot,
@@ -81,7 +81,7 @@ internal class DefaultCertificateValidator : ICertificateValidator
         {
             var errors = string.Join("; ",
                 x509Chain.ChainStatus.Select(s => s.StatusInformation));
-            return new CertificateValidationResult
+            return new SigningCertificateValidationResult
             {
                 IsValid = false,
                 FailureReason = $"Certificate chain validation failed: {errors}"
@@ -94,7 +94,7 @@ internal class DefaultCertificateValidator : ICertificateValidator
             var cert = element.Certificate;
             if (signatureTime < cert.NotBefore || signatureTime > cert.NotAfter)
             {
-                return new CertificateValidationResult
+                return new SigningCertificateValidationResult
                 {
                     IsValid = false,
                     FailureReason = $"Certificate '{cert.Subject}' was not valid at signature time {signatureTime}. " +
@@ -147,7 +147,7 @@ internal class DefaultCertificateValidator : ICertificateValidator
             }
         }
 
-        return new CertificateValidationResult
+        return new SigningCertificateValidationResult
         {
             IsValid = true,
             SubjectAlternativeName = san

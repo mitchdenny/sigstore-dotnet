@@ -240,8 +240,8 @@ SigstoreBundle bundle = await signer.AttestAsync(inTotoStatement);
 
 public interface IFulcioClient
 {
-    Task<CertificateResponse> GetSigningCertificateAsync(
-        CertificateRequest request,
+    Task<FulcioCertificateResponse> GetSigningCertificateAsync(
+        FulcioCertificateRequest request,
         CancellationToken cancellationToken = default);
 }
 
@@ -289,9 +289,9 @@ SigstoreBundle bundle = SigstoreBundle.Deserialize(stream);
 string json = bundle.Serialize();
 
 // --- Certificate operations ---
-public interface ICertificateValidator
+public interface ISigningCertificateValidator
 {
-    CertificateValidationResult ValidateChain(
+    SigningCertificateValidationResult ValidateChain(
         X509Certificate2 leaf,
         X509Certificate2Collection chain,
         TrustedRoot trustRoot,

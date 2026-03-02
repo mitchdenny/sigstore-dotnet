@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Sigstore;
-using FulcioCertificateRequest = Sigstore.CertificateRequest;
 
 namespace Sigstore.Tests.Signing;
 
@@ -187,10 +186,10 @@ public class SigstoreSignerTests
 
         public FakeFulcioClient(byte[]? certBytes = null) => _certBytes = certBytes;
 
-        public Task<CertificateResponse> GetSigningCertificateAsync(FulcioCertificateRequest request, CancellationToken ct = default)
+        public Task<FulcioCertificateResponse> GetSigningCertificateAsync(FulcioCertificateRequest request, CancellationToken ct = default)
         {
             if (_certBytes == null) throw new NotImplementedException();
-            return Task.FromResult(new CertificateResponse
+            return Task.FromResult(new FulcioCertificateResponse
             {
                 CertificateChain = [_certBytes]
             });

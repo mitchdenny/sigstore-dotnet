@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
 using Sigstore;
 
 namespace Sigstore.Tests.Verification;
@@ -12,7 +11,7 @@ public class CertificateValidatorTests
     {
         // Create a self-signed root CA
         using var rootKey = RSA.Create(2048);
-        var rootReq = new X509CertificateRequest(
+        var rootReq = new CertificateRequest(
             "CN=Test Root CA",
             rootKey,
             HashAlgorithmName.SHA256,
@@ -26,7 +25,7 @@ public class CertificateValidatorTests
 
         // Create a leaf certificate signed by the root
         using var leafKey = RSA.Create(2048);
-        var leafReq = new X509CertificateRequest(
+        var leafReq = new CertificateRequest(
             "CN=Test Leaf",
             leafKey,
             HashAlgorithmName.SHA256,
@@ -154,7 +153,7 @@ public class CertificateValidatorTests
 
         // Create a trust root with a DIFFERENT root CA
         using var otherKey = RSA.Create(2048);
-        var otherReq = new X509CertificateRequest(
+        var otherReq = new CertificateRequest(
             "CN=Other Root CA",
             otherKey,
             HashAlgorithmName.SHA256,
@@ -172,20 +171,20 @@ public class CertificateValidatorTests
     }
 
     /// <summary>
-    /// Wrapper to access the internal DefaultCertificateValidator via the interface.
+    /// Wrapper to access the internal DefaultSigningCertificateValidator via the interface.
     /// </summary>
-    private class TestCertificateValidator : ICertificateValidator
+    private class TestCertificateValidator : ISigningCertificateValidator
     {
-        private readonly ICertificateValidator _inner;
+        private readonly ISigningCertificateValidator _inner;
 
         public TestCertificateValidator()
         {
-            // Use reflection to instantiate the internal DefaultCertificateValidator
-            var type = typeof(ICertificateValidator).Assembly.GetType("Sigstore.DefaultCertificateValidator")!;
-            _inner = (ICertificateValidator)Activator.CreateInstance(type)!;
+            // Use reflection to instantiate the internal DefaultSigningCertificateValidator
+            var type = typeof(ISigningCertificateValidator).Assembly.GetType("Sigstore.DefaultSigningCertificateValidator")!;
+            _inner = (ISigningCertificateValidator)Activator.CreateInstance(type)!;
         }
 
-        public CertificateValidationResult ValidateChain(
+        public SigningCertificateValidationResult ValidateChain(
             X509Certificate2 leafCertificate,
             X509Certificate2Collection? chain,
             TrustedRoot trustRoot,

@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using X509CertificateRequest = System.Security.Cryptography.X509Certificates.CertificateRequest;
 using Sigstore;
 
 namespace Sigstore.Tests.Verification;
@@ -371,7 +370,7 @@ public class SigstoreVerifierTests
     private static (X509Certificate2 cert, ECDsa key) CreateSelfSignedCert()
     {
         var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var req = new X509CertificateRequest("CN=Test", key, HashAlgorithmName.SHA256);
+        var req = new CertificateRequest("CN=Test", key, HashAlgorithmName.SHA256);
         req.CertificateExtensions.Add(
             new X509BasicConstraintsExtension(false, false, 0, true));
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
@@ -500,7 +499,7 @@ public class SigstoreVerifierTests
             => Task.FromResult(new Sigstore.TrustedRoot());
     }
 
-    private class AlwaysValidCertificateValidator : ICertificateValidator
+    private class AlwaysValidCertificateValidator : ISigningCertificateValidator
     {
         private readonly string? _san;
 
@@ -509,13 +508,13 @@ public class SigstoreVerifierTests
             _san = san;
         }
 
-        public CertificateValidationResult ValidateChain(
+        public SigningCertificateValidationResult ValidateChain(
             X509Certificate2 leafCertificate,
             X509Certificate2Collection? chain,
             Sigstore.TrustedRoot trustRoot,
             DateTimeOffset signatureTime)
         {
-            return new CertificateValidationResult
+            return new SigningCertificateValidationResult
             {
                 IsValid = true,
                 SubjectAlternativeName = _san

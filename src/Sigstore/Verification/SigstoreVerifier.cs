@@ -41,7 +41,7 @@ public sealed class SigstoreVerifier
     private const string OidcIssuerV1Oid = "1.3.6.1.4.1.57264.1.1";
 
     private readonly ITrustRootProvider _trustRootProvider;
-    private readonly ICertificateValidator _certificateValidator;
+    private readonly ISigningCertificateValidator _certificateValidator;
 
     /// <summary>
     /// Creates a verifier with default implementations for the Sigstore public good instance.
@@ -50,7 +50,7 @@ public sealed class SigstoreVerifier
     public SigstoreVerifier()
     {
         _trustRootProvider = new TufTrustRootProvider(TufTrustRootProvider.ProductionUrl);
-        _certificateValidator = new DefaultCertificateValidator();
+        _certificateValidator = new DefaultSigningCertificateValidator();
     }
 
     /// <summary>
@@ -60,10 +60,10 @@ public sealed class SigstoreVerifier
     /// <param name="certificateValidator">Certificate chain validator.</param>
     public SigstoreVerifier(
         ITrustRootProvider trustRootProvider,
-        ICertificateValidator? certificateValidator = null)
+        ISigningCertificateValidator? certificateValidator = null)
     {
         _trustRootProvider = trustRootProvider ?? throw new ArgumentNullException(nameof(trustRootProvider));
-        _certificateValidator = certificateValidator ?? new DefaultCertificateValidator();
+        _certificateValidator = certificateValidator ?? new DefaultSigningCertificateValidator();
     }
 
     /// <summary>

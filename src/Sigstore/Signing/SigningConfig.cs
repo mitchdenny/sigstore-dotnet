@@ -12,17 +12,17 @@ public sealed class SigningConfig
     /// <summary>
     /// Certificate Authority service URLs (Fulcio).
     /// </summary>
-    public IReadOnlyList<ServiceEndpoint> CaUrls { get; init; } = [];
+    public IReadOnlyList<SigningServiceEndpoint> CaUrls { get; init; } = [];
 
     /// <summary>
     /// Rekor transparency log service URLs.
     /// </summary>
-    public IReadOnlyList<ServiceEndpoint> RekorTlogUrls { get; init; } = [];
+    public IReadOnlyList<SigningServiceEndpoint> RekorTlogUrls { get; init; } = [];
 
     /// <summary>
     /// Timestamp Authority service URLs.
     /// </summary>
-    public IReadOnlyList<ServiceEndpoint> TsaUrls { get; init; } = [];
+    public IReadOnlyList<SigningServiceEndpoint> TsaUrls { get; init; } = [];
 
     /// <summary>
     /// Parses a signing_config.v0.2.json file.
@@ -45,7 +45,7 @@ public sealed class SigningConfig
     /// Filters to currently valid services and returns the one with the highest
     /// API version and newest start date.
     /// </summary>
-    public static ServiceEndpoint? SelectBest(IReadOnlyList<ServiceEndpoint> endpoints)
+    public static SigningServiceEndpoint? SelectBest(IReadOnlyList<SigningServiceEndpoint> endpoints)
     {
         var now = DateTimeOffset.UtcNow;
         return endpoints
@@ -55,12 +55,12 @@ public sealed class SigningConfig
             .FirstOrDefault();
     }
 
-    private static List<ServiceEndpoint> ParseServiceList(JsonElement root, string propertyName)
+    private static List<SigningServiceEndpoint> ParseServiceList(JsonElement root, string propertyName)
     {
         if (!root.TryGetProperty(propertyName, out var array))
             return [];
 
-        var result = new List<ServiceEndpoint>();
+        var result = new List<SigningServiceEndpoint>();
         foreach (var item in array.EnumerateArray())
         {
             var url = item.GetProperty("url").GetString()!;
@@ -76,7 +76,7 @@ public sealed class SigningConfig
                     validTo = DateTimeOffset.Parse(end.GetString()!);
             }
 
-            result.Add(new ServiceEndpoint
+            result.Add(new SigningServiceEndpoint
             {
                 Url = new Uri(url),
                 MajorApiVersion = apiVersion,
@@ -92,7 +92,7 @@ public sealed class SigningConfig
 /// <summary>
 /// A service endpoint from the signing configuration.
 /// </summary>
-public sealed class ServiceEndpoint
+public sealed class SigningServiceEndpoint
 {
     /// <summary>The service URL.</summary>
     public required Uri Url { get; init; }

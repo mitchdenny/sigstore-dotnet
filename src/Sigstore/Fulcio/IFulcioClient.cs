@@ -13,15 +13,15 @@ public interface IFulcioClient
     /// <param name="request">The certificate signing request details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The issued certificate chain.</returns>
-    Task<CertificateResponse> GetSigningCertificateAsync(
-        CertificateRequest request,
+    Task<FulcioCertificateResponse> GetSigningCertificateAsync(
+        FulcioCertificateRequest request,
         CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// A request to Fulcio for a signing certificate.
 /// </summary>
-public sealed class CertificateRequest
+public sealed class FulcioCertificateRequest
 {
     /// <summary>
     /// The PEM-encoded PKCS#10 certificate signing request.
@@ -37,7 +37,7 @@ public sealed class CertificateRequest
 /// <summary>
 /// Response from Fulcio containing the issued certificate.
 /// </summary>
-public sealed class CertificateResponse
+public sealed class FulcioCertificateResponse
 {
     /// <summary>
     /// The certificate chain, ordered leaf-to-root. Each element is DER-encoded.
