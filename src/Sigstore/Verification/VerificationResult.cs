@@ -79,9 +79,19 @@ public enum TimestampSource
 /// </summary>
 public class VerificationException : Exception
 {
+    /// <summary>The partial verification result, if available.</summary>
+    public VerificationResult? Result { get; }
+
     /// <summary>Initializes a new instance with the specified error message.</summary>
     /// <param name="message">The error message.</param>
     public VerificationException(string message) : base(message) { }
+    /// <summary>Initializes a new instance with the specified error message and partial result.</summary>
+    /// <param name="message">The error message.</param>
+    /// <param name="result">The partial verification result.</param>
+    public VerificationException(string message, VerificationResult? result) : base(message)
+    {
+        Result = result;
+    }
     /// <summary>Initializes a new instance with the specified error message and inner exception.</summary>
     /// <param name="message">The error message.</param>
     /// <param name="innerException">The inner exception.</param>

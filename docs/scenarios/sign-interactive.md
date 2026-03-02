@@ -47,7 +47,7 @@ var policy = new VerificationPolicy
     }
 };
 
-var result = await verifier.VerifyAsync(
+var result = await verifier.VerifyFileAsync(
     new FileInfo("my-release.tar.gz"),
     new FileInfo("my-release.tar.gz.sigstore.json"),
     policy);

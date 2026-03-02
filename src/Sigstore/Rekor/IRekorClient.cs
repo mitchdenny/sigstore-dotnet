@@ -40,7 +40,7 @@ public sealed class RekorEntry
     /// <summary>
     /// The hash algorithm used for the artifact digest.
     /// </summary>
-    public HashAlgorithmType DigestAlgorithm { get; init; } = HashAlgorithmType.Sha2_256;
+    public HashAlgorithmType DigestAlgorithm { get; init; } = HashAlgorithmType.Sha256;
 
     /// <summary>
     /// The signing certificate (PEM-encoded) or public key.

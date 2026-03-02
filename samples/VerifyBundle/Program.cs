@@ -51,7 +51,7 @@ var verifier = new SigstoreVerifier();
 // 4. Verify the bundle against the artifact
 await using var artifactStream = File.OpenRead(artifactPath);
 
-var (success, result) = await verifier.TryVerifyAsync(artifactStream, bundle, policy);
+var (success, result) = await verifier.TryVerifyStreamAsync(artifactStream, bundle, policy);
 
 if (success)
 {

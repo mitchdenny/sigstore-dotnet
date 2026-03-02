@@ -16,11 +16,11 @@ var verifier = new SigstoreVerifier();
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "myorg",
+        owner: "myorg",
         repository: "myapp")
 };
 
-var result = await verifier.VerifyAsync(
+var result = await verifier.VerifyFileAsync(
     new FileInfo("myapp-1.0.0.tar.gz"),
     new FileInfo("myapp-1.0.0.tar.gz.sigstore.json"),
     policy);
@@ -37,7 +37,7 @@ To verify the artifact was signed from a specific branch (e.g., `main`):
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "myorg",
+        owner: "myorg",
         repository: "myapp",
         workflowRef: "refs/heads/main")
 };
@@ -61,10 +61,10 @@ var policy = new VerificationPolicy
 
 ## Handle Verification Failures
 
-Use `TryVerifyAsync` for non-throwing verification:
+Use `TryVerifyFileAsync` for non-throwing verification:
 
 ```csharp
-var (success, result) = await verifier.TryVerifyAsync(
+var (success, result) = await verifier.TryVerifyFileAsync(
     new FileInfo("myapp-1.0.0.tar.gz"),
     new FileInfo("myapp-1.0.0.tar.gz.sigstore.json"),
     policy);

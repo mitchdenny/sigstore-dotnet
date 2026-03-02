@@ -103,7 +103,7 @@ public sealed class SigstoreSigner
             {
                 Signature = signature,
                 ArtifactDigest = hash,
-                DigestAlgorithm = HashAlgorithmType.Sha2_256,
+                DigestAlgorithm = HashAlgorithmType.Sha256,
                 VerificationMaterial = leafCertPem
             },
             cancellationToken);
@@ -124,7 +124,7 @@ public sealed class SigstoreSigner
             {
                 MessageDigest = new HashOutput
                 {
-                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Algorithm = HashAlgorithmType.Sha256,
                     Digest = hash
                 },
                 Signature = signature

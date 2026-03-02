@@ -163,7 +163,7 @@ Based on design discussions, the API follows these principles:
 2. **Constructor injection** — DI-container friendly; all dependencies are interfaces
 3. **Default constructor wires defaults** — `new SigstoreVerifier()` just works out of the box
 4. **Three layers** — high-level orchestrators, service client interfaces, pure computation primitives
-5. **Dual verification pattern** — `VerifyAsync` throws on failure; `TryVerifyAsync` returns `bool` + result
+5. **Dual verification pattern** — `VerifyStreamAsync` throws on failure; `TryVerifyStreamAsync` returns `bool` + result
 6. **Layered** — each layer is independently usable; advanced users can compose their own workflows
 
 ### Key Public API Surface (Draft)
@@ -197,17 +197,17 @@ var policy = new VerificationPolicy
 };
 
 // Option A: Throws VerificationException on failure (with detailed reason)
-VerificationResult result = await verifier.VerifyAsync(artifact, bundle, policy);
+VerificationResult result = await verifier.VerifyStreamAsync(artifact, bundle, policy);
 // result.SignerIdentity, result.VerifiedTimestamps, result.Certificate, etc.
 
 // Option B: Returns false on failure (no exception)
-bool isValid = await verifier.TryVerifyAsync(artifact, bundle, policy, out VerificationResult? result);
+bool isValid = await verifier.TryVerifyStreamAsync(artifact, bundle, policy, out VerificationResult? result);
 
 // GitHub Actions identity verification (common use case, first-class support)
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "sigstore",
+        owner: "sigstore",
         repository: "sigstore-dotnet",
         issuer: "https://token.actions.githubusercontent.com"
     )

@@ -59,12 +59,12 @@ var verifier = new SigstoreVerifier();
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "myorg",
+        owner: "myorg",
         repository: "myapp",
         workflowRef: "refs/tags/v1.0.0")
 };
 
-var result = await verifier.VerifyAsync(
+var result = await verifier.VerifyFileAsync(
     new FileInfo("myapp.tar.gz"),
     new FileInfo("myapp.tar.gz.sigstore.json"),
     policy);

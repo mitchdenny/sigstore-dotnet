@@ -35,7 +35,7 @@ var policy = new VerificationPolicy
 
 // Verify
 using var artifact = File.OpenRead("artifact.tar.gz");
-var result = await verifier.VerifyAsync(artifact, bundle, policy);
+var result = await verifier.VerifyStreamAsync(artifact, bundle, policy);
 
 Console.WriteLine($"Signed by: {result.SignerIdentity!.SubjectAlternativeName}");
 Console.WriteLine($"Issuer: {result.SignerIdentity.Issuer}");
@@ -50,7 +50,7 @@ Use the convenience factory for GitHub Actions workflows:
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "owner",
+        owner: "owner",
         repository: "repo",
         workflowRef: "refs/heads/main")
 };
@@ -72,7 +72,7 @@ var verifier = new SigstoreVerifier(new InMemoryTrustRootProvider(trustRoot));
 If you prefer to handle failures without exceptions:
 
 ```csharp
-var (success, result) = await verifier.TryVerifyAsync(artifact, bundle, policy);
+var (success, result) = await verifier.TryVerifyStreamAsync(artifact, bundle, policy);
 if (success)
 {
     Console.WriteLine($"Verified: {result!.SignerIdentity!.SubjectAlternativeName}");

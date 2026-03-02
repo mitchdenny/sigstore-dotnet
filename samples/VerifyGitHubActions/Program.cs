@@ -25,7 +25,7 @@ if (args.Length < 4)
 
 string artifactPath = args[0];
 string bundlePath = args[1];
-string organizationOrUser = args[2];
+string owner = args[2];
 string repository = args[3];
 
 // 1. Load the bundle
@@ -33,15 +33,15 @@ string bundleJson = await File.ReadAllTextAsync(bundlePath);
 SigstoreBundle bundle = SigstoreBundle.Deserialize(bundleJson);
 
 Console.WriteLine($"Loaded bundle: {bundle.MediaType}");
-Console.WriteLine($"Verifying against repository: {organizationOrUser}/{repository}");
+Console.WriteLine($"Verifying against repository: {owner}/{repository}");
 
 // 2. Create a verification policy for GitHub Actions
 //    CertificateIdentity.ForGitHubActions() sets up:
 //    - OIDC issuer: https://token.actions.githubusercontent.com
-//    - SAN pattern: https://github.com/{organizationOrUser}/{repository}/.*
+//    - SAN pattern: https://github.com/{owner}/{repository}/.*
 var policy = new VerificationPolicy
 {
-    CertificateIdentity = CertificateIdentity.ForGitHubActions(organizationOrUser, repository)
+    CertificateIdentity = CertificateIdentity.ForGitHubActions(owner, repository)
 };
 
 // 3. Verify — default constructor downloads Sigstore public-good trust root
@@ -50,12 +50,12 @@ await using var artifactStream = File.OpenRead(artifactPath);
 
 try
 {
-    var result = await verifier.VerifyAsync(artifactStream, bundle, policy);
+    var result = await verifier.VerifyStreamAsync(artifactStream, bundle, policy);
 
     Console.WriteLine("✅ Verification succeeded!");
     Console.WriteLine($"   Signer: {result.SignerIdentity?.SubjectAlternativeName}");
     Console.WriteLine($"   Issuer: {result.SignerIdentity?.Issuer}");
-    Console.WriteLine($"   This artifact was signed by a GitHub Actions workflow in {organizationOrUser}/{repository}");
+    Console.WriteLine($"   This artifact was signed by a GitHub Actions workflow in {owner}/{repository}");
     return 0;
 }
 catch (VerificationException ex)

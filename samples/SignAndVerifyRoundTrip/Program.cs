@@ -87,7 +87,7 @@ await using (var signStream = File.OpenRead(artifactPath))
 
     // Verify
     await using var verifyStream = File.OpenRead(artifactPath);
-    var (success, result) = await verifier.TryVerifyAsync(verifyStream, parsedBundle, policy);
+    var (success, result) = await verifier.TryVerifyStreamAsync(verifyStream, parsedBundle, policy);
 
     if (success)
     {

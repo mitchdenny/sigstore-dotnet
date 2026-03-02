@@ -31,15 +31,15 @@ var verifier = new SigstoreVerifier(trustRootProvider);
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        organizationOrUser: "owner",
+        owner: "owner",
         repository: "repo")
 };
 
 // Throws VerificationException on failure
-var result = await verifier.VerifyAsync(artifactStream, bundle, policy);
+var result = await verifier.VerifyStreamAsync(artifactStream, bundle, policy);
 
-// Or use TryVerifyAsync for non-throwing verification
-var (success, result) = await verifier.TryVerifyAsync(artifactStream, bundle, policy);
+// Or use TryVerifyStreamAsync for non-throwing verification
+var (success, result) = await verifier.TryVerifyStreamAsync(artifactStream, bundle, policy);
 ```
 
 ### Signing

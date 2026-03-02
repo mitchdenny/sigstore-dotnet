@@ -208,7 +208,7 @@ public static class TimestampParser
 
             // Check TSA cert chain validity at timestamp time
             bool certsValidAtTimestamp = true;
-            foreach (var certBytes in tsa.CertChain)
+            foreach (var certBytes in tsa.CertificateChain)
             {
                 try
                 {
@@ -230,7 +230,7 @@ public static class TimestampParser
 
             // Build trusted cert set for this TSA
             var trustedCerts = new HashSet<string>();
-            foreach (var certBytes in tsa.CertChain)
+            foreach (var certBytes in tsa.CertificateChain)
             {
                 try
                 {
@@ -255,7 +255,7 @@ public static class TimestampParser
                             return true;
 
                         // Check if issued by a trusted cert
-                        foreach (var trustedCertBytes in tsa.CertChain)
+                        foreach (var trustedCertBytes in tsa.CertificateChain)
                         {
                             using var trustedCert = X509CertificateLoader.LoadCertificate(trustedCertBytes.Span);
                             if (cert.IssuerName.RawData.AsSpan().SequenceEqual(trustedCert.SubjectName.RawData))
@@ -270,7 +270,7 @@ public static class TimestampParser
                 // No embedded certs — match signer issuer against trusted TSA cert chain
                 if (info.SignerIssuerDer != null)
                 {
-                    foreach (var trustedCertBytes in tsa.CertChain)
+                    foreach (var trustedCertBytes in tsa.CertificateChain)
                     {
                         try
                         {
@@ -292,10 +292,10 @@ public static class TimestampParser
     {
         return oid switch
         {
-            "2.16.840.1.101.3.4.2.1" => HashAlgorithmType.Sha2_256,
-            "2.16.840.1.101.3.4.2.2" => HashAlgorithmType.Sha2_384,
-            "2.16.840.1.101.3.4.2.3" => HashAlgorithmType.Sha2_512,
-            _ => HashAlgorithmType.Sha2_256
+            "2.16.840.1.101.3.4.2.1" => HashAlgorithmType.Sha256,
+            "2.16.840.1.101.3.4.2.2" => HashAlgorithmType.Sha384,
+            "2.16.840.1.101.3.4.2.3" => HashAlgorithmType.Sha512,
+            _ => HashAlgorithmType.Sha256
         };
     }
 

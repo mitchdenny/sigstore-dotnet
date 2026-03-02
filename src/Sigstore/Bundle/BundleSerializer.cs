@@ -426,11 +426,11 @@ internal static class BundleSerializer
     {
         return value switch
         {
-            "SHA2_256" => HashAlgorithmType.Sha2_256,
-            "SHA2_384" => HashAlgorithmType.Sha2_384,
-            "SHA2_512" => HashAlgorithmType.Sha2_512,
-            "SHA3_256" => HashAlgorithmType.Sha3_256,
-            "SHA3_384" => HashAlgorithmType.Sha3_384,
+            "SHA2_256" => HashAlgorithmType.Sha256,
+            "SHA2_384" => HashAlgorithmType.Sha384,
+            "SHA2_512" => HashAlgorithmType.Sha512,
+            "SHA3_256" => HashAlgorithmType.Sha3256,
+            "SHA3_384" => HashAlgorithmType.Sha3384,
             _ => HashAlgorithmType.Unspecified
         };
     }
@@ -439,11 +439,11 @@ internal static class BundleSerializer
     {
         return alg switch
         {
-            HashAlgorithmType.Sha2_256 => "SHA2_256",
-            HashAlgorithmType.Sha2_384 => "SHA2_384",
-            HashAlgorithmType.Sha2_512 => "SHA2_512",
-            HashAlgorithmType.Sha3_256 => "SHA3_256",
-            HashAlgorithmType.Sha3_384 => "SHA3_384",
+            HashAlgorithmType.Sha256 => "SHA2_256",
+            HashAlgorithmType.Sha384 => "SHA2_384",
+            HashAlgorithmType.Sha512 => "SHA2_512",
+            HashAlgorithmType.Sha3256 => "SHA3_256",
+            HashAlgorithmType.Sha3384 => "SHA3_384",
             _ => "HASH_ALGORITHM_UNSPECIFIED"
         };
     }

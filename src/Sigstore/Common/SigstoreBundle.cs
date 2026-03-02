@@ -144,15 +144,15 @@ public enum HashAlgorithmType
     /// <summary>Unspecified hash algorithm.</summary>
     Unspecified = 0,
     /// <summary>SHA2-256.</summary>
-    Sha2_256 = 1,
+    Sha256 = 1,
     /// <summary>SHA2-384.</summary>
-    Sha2_384 = 2,
+    Sha384 = 2,
     /// <summary>SHA2-512.</summary>
-    Sha2_512 = 3,
+    Sha512 = 3,
     /// <summary>SHA3-256.</summary>
-    Sha3_256 = 4,
+    Sha3256 = 4,
     /// <summary>SHA3-384.</summary>
-    Sha3_384 = 5
+    Sha3384 = 5
 }
 
 /// <summary>

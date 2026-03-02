@@ -49,11 +49,11 @@ public class SigstoreBundleTests
     {
         var hash = new HashOutput
         {
-            Algorithm = HashAlgorithmType.Sha2_256,
+            Algorithm = HashAlgorithmType.Sha256,
             Digest = new byte[] { 1, 2, 3 }
         };
 
-        Assert.Equal(HashAlgorithmType.Sha2_256, hash.Algorithm);
+        Assert.Equal(HashAlgorithmType.Sha256, hash.Algorithm);
         Assert.Equal(new byte[] { 1, 2, 3 }, hash.Digest);
     }
 
@@ -92,11 +92,11 @@ public class SigstoreBundleTests
     public void HashAlgorithmType_HasExpectedValues()
     {
         Assert.Equal(0, (int)HashAlgorithmType.Unspecified);
-        Assert.Equal(1, (int)HashAlgorithmType.Sha2_256);
-        Assert.Equal(2, (int)HashAlgorithmType.Sha2_384);
-        Assert.Equal(3, (int)HashAlgorithmType.Sha2_512);
-        Assert.Equal(4, (int)HashAlgorithmType.Sha3_256);
-        Assert.Equal(5, (int)HashAlgorithmType.Sha3_384);
+        Assert.Equal(1, (int)HashAlgorithmType.Sha256);
+        Assert.Equal(2, (int)HashAlgorithmType.Sha384);
+        Assert.Equal(3, (int)HashAlgorithmType.Sha512);
+        Assert.Equal(4, (int)HashAlgorithmType.Sha3256);
+        Assert.Equal(5, (int)HashAlgorithmType.Sha3384);
     }
 
     // --- Serialization / Deserialization tests ---
@@ -174,7 +174,7 @@ public class SigstoreBundleTests
         Assert.Equal("rekor.sigstore.dev - 12345", entry.InclusionProof.Checkpoint);
 
         // Message signature
-        Assert.Equal(HashAlgorithmType.Sha2_256, bundle.MessageSignature.MessageDigest!.Algorithm);
+        Assert.Equal(HashAlgorithmType.Sha256, bundle.MessageSignature.MessageDigest!.Algorithm);
         Assert.Equal(new byte[] { 20, 21, 22, 23, 24, 25 }, bundle.MessageSignature.MessageDigest.Digest.ToArray());
         Assert.Equal(new byte[] { 26, 27, 28, 29, 30, 31 }, bundle.MessageSignature.Signature.ToArray());
     }
@@ -453,7 +453,7 @@ public class SigstoreBundleTests
             {
                 MessageDigest = new HashOutput
                 {
-                    Algorithm = HashAlgorithmType.Sha2_384,
+                    Algorithm = HashAlgorithmType.Sha384,
                     Digest = new byte[] { 1, 2, 3 }
                 },
                 Signature = new byte[] { 4, 5, 6 }
@@ -476,7 +476,7 @@ public class SigstoreBundleTests
                 Signature = new byte[] { 1, 2, 3 },
                 MessageDigest = new HashOutput
                 {
-                    Algorithm = HashAlgorithmType.Sha2_256,
+                    Algorithm = HashAlgorithmType.Sha256,
                     Digest = new byte[] { 4, 5, 6 }
                 }
             }

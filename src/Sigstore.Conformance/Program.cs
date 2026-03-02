@@ -241,15 +241,15 @@ public static class Program
             }
 
             // Use digest-based verification
-            await verifier.VerifyAsync(
+            await verifier.VerifyDigestAsync(
                 new ReadOnlyMemory<byte>(digestBytes),
-                HashAlgorithmType.Sha2_256,
+                HashAlgorithmType.Sha256,
                 bundle, policy, cancellationToken);
         }
         else
         {
             await using var stream = File.OpenRead(fileOrDigest);
-            await verifier.VerifyAsync(stream, bundle, policy, cancellationToken);
+            await verifier.VerifyStreamAsync(stream, bundle, policy, cancellationToken);
         }
 
         Console.WriteLine("OK");

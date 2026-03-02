@@ -279,9 +279,9 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
 
     private static string FormatHashAlgorithm(HashAlgorithmType alg) => alg switch
     {
-        HashAlgorithmType.Sha2_256 => "sha256",
-        HashAlgorithmType.Sha2_384 => "sha384",
-        HashAlgorithmType.Sha2_512 => "sha512",
+        HashAlgorithmType.Sha256 => "sha256",
+        HashAlgorithmType.Sha384 => "sha384",
+        HashAlgorithmType.Sha512 => "sha512",
         _ => "sha256"
     };
 

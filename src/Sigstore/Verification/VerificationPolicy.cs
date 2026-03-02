@@ -69,19 +69,19 @@ public sealed class CertificateIdentity
     /// <summary>
     /// Creates a CertificateIdentity for verifying artifacts signed by GitHub Actions.
     /// </summary>
-    /// <param name="organizationOrUser">The GitHub organization or user (e.g., "myorg").</param>
+    /// <param name="owner">The GitHub organization or user (e.g., "myorg").</param>
     /// <param name="repository">The GitHub repository name (e.g., "myapp").</param>
     /// <param name="issuer">The OIDC issuer. Defaults to GitHub Actions token issuer.</param>
     /// <param name="workflowRef">Optional workflow ref to match (e.g., "refs/heads/main").</param>
     public static CertificateIdentity ForGitHubActions(
-        string organizationOrUser,
+        string owner,
         string repository,
         string issuer = "https://token.actions.githubusercontent.com",
         string? workflowRef = null)
     {
         var sanPattern = workflowRef is not null
-            ? $"https://github.com/{organizationOrUser}/{repository}/.github/workflows/.*@{workflowRef}"
-            : $"https://github.com/{organizationOrUser}/{repository}/.*";
+            ? $"https://github.com/{owner}/{repository}/.github/workflows/.*@{workflowRef}"
+            : $"https://github.com/{owner}/{repository}/.*";
 
         return new CertificateIdentity
         {

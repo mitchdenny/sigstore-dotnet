@@ -28,7 +28,7 @@ var policy = new VerificationPolicy
 };
 
 using var artifact = File.OpenRead("artifact.tar.gz");
-var result = await verifier.VerifyAsync(artifact, bundle, policy);
+var result = await verifier.VerifyStreamAsync(artifact, bundle, policy);
 
 Console.WriteLine($"Verified: signed by {result.SignerIdentity!.SubjectAlternativeName}");
 ```

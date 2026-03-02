@@ -29,7 +29,7 @@ namespace Sigstore;
 ///     }
 /// };
 ///
-/// var result = await verifier.VerifyAsync(artifactStream, bundle, policy);
+/// var result = await verifier.VerifyStreamAsync(artifactStream, bundle, policy);
 /// </code>
 /// </example>
 /// </summary>
@@ -67,21 +67,21 @@ public sealed class SigstoreVerifier
     }
 
     /// <summary>
-    /// Verifies a Sigstore bundle against an artifact.
+    /// Verifies a Sigstore bundle against an artifact stream.
     /// Throws <see cref="VerificationException"/> on failure with detailed reason.
     /// </summary>
-    public async Task<VerificationResult> VerifyAsync(
+    public async Task<VerificationResult> VerifyStreamAsync(
         Stream artifact,
         SigstoreBundle bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var (success, result) = await TryVerifyAsync(artifact, bundle, policy, cancellationToken);
+        var (success, result) = await TryVerifyStreamAsync(artifact, bundle, policy, cancellationToken);
         if (success)
         {
             return result!;
         }
-        throw new VerificationException(result?.FailureReason ?? "Verification failed.");
+        throw new VerificationException(result?.FailureReason ?? "Verification failed.", result);
     }
 
     /// <summary>
@@ -94,25 +94,39 @@ public sealed class SigstoreVerifier
     /// <param name="bundle">The Sigstore bundle to verify.</param>
     /// <param name="policy">The verification policy to enforce.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<VerificationResult> VerifyAsync(
+    public async Task<VerificationResult> VerifyDigestAsync(
         ReadOnlyMemory<byte> artifactDigest,
         HashAlgorithmType digestAlgorithm,
         SigstoreBundle bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var (success, result) = await TryVerifyAsync(artifactDigest, digestAlgorithm, bundle, policy, cancellationToken);
+        var (success, result) = await TryVerifyDigestAsync(artifactDigest, digestAlgorithm, bundle, policy, cancellationToken);
         if (success)
         {
             return result!;
         }
-        throw new VerificationException(result?.FailureReason ?? "Verification failed.");
+        throw new VerificationException(result?.FailureReason ?? "Verification failed.", result);
     }
 
     /// <summary>
-    /// Attempts to verify a Sigstore bundle against an artifact without throwing on failure.
+    /// Verifies a Sigstore bundle against artifact bytes.
+    /// Throws <see cref="VerificationException"/> on failure with detailed reason.
     /// </summary>
-    public Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+    public async Task<VerificationResult> VerifyAsync(
+        ReadOnlyMemory<byte> artifact,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        CancellationToken cancellationToken = default)
+    {
+        using var stream = new MemoryStream(artifact.ToArray());
+        return await VerifyStreamAsync(stream, bundle, policy, cancellationToken);
+    }
+
+    /// <summary>
+    /// Attempts to verify a Sigstore bundle against an artifact stream without throwing on failure.
+    /// </summary>
+    public Task<(bool Success, VerificationResult? Result)> TryVerifyStreamAsync(
         Stream artifact,
         SigstoreBundle bundle,
         VerificationPolicy policy,
@@ -125,7 +139,7 @@ public sealed class SigstoreVerifier
     /// <summary>
     /// Attempts to verify a Sigstore bundle using a pre-computed artifact digest without throwing on failure.
     /// </summary>
-    public Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+    public Task<(bool Success, VerificationResult? Result)> TryVerifyDigestAsync(
         ReadOnlyMemory<byte> artifactDigest,
         HashAlgorithmType digestAlgorithm,
         SigstoreBundle bundle,
@@ -136,6 +150,19 @@ public sealed class SigstoreVerifier
     }
 
     /// <summary>
+    /// Attempts to verify a Sigstore bundle against artifact bytes without throwing on failure.
+    /// </summary>
+    public async Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+        ReadOnlyMemory<byte> artifact,
+        SigstoreBundle bundle,
+        VerificationPolicy policy,
+        CancellationToken cancellationToken = default)
+    {
+        using var stream = new MemoryStream(artifact.ToArray());
+        return await TryVerifyStreamAsync(stream, bundle, policy, cancellationToken);
+    }
+
+    /// <summary>
     /// Verifies an artifact file against a Sigstore bundle file.
     /// Throws <see cref="VerificationException"/> on failure with detailed reason.
     /// </summary>
@@ -143,7 +170,7 @@ public sealed class SigstoreVerifier
     /// <param name="bundle">The Sigstore bundle file.</param>
     /// <param name="policy">The verification policy to enforce.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<VerificationResult> VerifyAsync(
+    public async Task<VerificationResult> VerifyFileAsync(
         FileInfo artifact,
         FileInfo bundle,
         VerificationPolicy policy,
@@ -151,7 +178,7 @@ public sealed class SigstoreVerifier
     {
         var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
         await using var stream = artifact.OpenRead();
-        return await VerifyAsync(stream, sigstoreBundle, policy, cancellationToken);
+        return await VerifyStreamAsync(stream, sigstoreBundle, policy, cancellationToken);
     }
 
     /// <summary>
@@ -161,7 +188,7 @@ public sealed class SigstoreVerifier
     /// <param name="bundle">The Sigstore bundle file.</param>
     /// <param name="policy">The verification policy to enforce.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<(bool Success, VerificationResult? Result)> TryVerifyAsync(
+    public async Task<(bool Success, VerificationResult? Result)> TryVerifyFileAsync(
         FileInfo artifact,
         FileInfo bundle,
         VerificationPolicy policy,
@@ -169,7 +196,7 @@ public sealed class SigstoreVerifier
     {
         var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
         await using var stream = artifact.OpenRead();
-        return await TryVerifyAsync(stream, sigstoreBundle, policy, cancellationToken);
+        return await TryVerifyStreamAsync(stream, sigstoreBundle, policy, cancellationToken);
     }
 
     private async Task<(bool Success, VerificationResult? Result)> TryVerifyCoreAsync(
@@ -241,7 +268,7 @@ public sealed class SigstoreVerifier
                     // Try to find issuer in trusted root certificate authorities
                     foreach (var ca in trustRoot.CertificateAuthorities)
                     {
-                        foreach (var caCertBytes in ca.CertChain)
+                        foreach (var caCertBytes in ca.CertificateChain)
                         {
                             try
                             {
@@ -718,9 +745,9 @@ public sealed class SigstoreVerifier
         {
             byte[] computedHash = bundleDigest.Algorithm switch
             {
-                HashAlgorithmType.Sha2_256 => SHA256.HashData(artifactBytes),
-                HashAlgorithmType.Sha2_384 => SHA384.HashData(artifactBytes),
-                HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
+                HashAlgorithmType.Sha256 => SHA256.HashData(artifactBytes),
+                HashAlgorithmType.Sha384 => SHA384.HashData(artifactBytes),
+                HashAlgorithmType.Sha512 => SHA512.HashData(artifactBytes),
                 _ => SHA256.HashData(artifactBytes)
             };
             if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest.Span))
@@ -1384,9 +1411,9 @@ public sealed class SigstoreVerifier
         {
             byte[] computedHash = bundleDigest.Algorithm switch
             {
-                HashAlgorithmType.Sha2_256 => SHA256.HashData(artifactBytes),
-                HashAlgorithmType.Sha2_384 => SHA384.HashData(artifactBytes),
-                HashAlgorithmType.Sha2_512 => SHA512.HashData(artifactBytes),
+                HashAlgorithmType.Sha256 => SHA256.HashData(artifactBytes),
+                HashAlgorithmType.Sha384 => SHA384.HashData(artifactBytes),
+                HashAlgorithmType.Sha512 => SHA512.HashData(artifactBytes),
                 _ => SHA256.HashData(artifactBytes)
             };
             if (!computedHash.AsSpan().SequenceEqual(bundleDigest.Digest.Span))
