@@ -16,7 +16,8 @@ var verifier = new SigstoreVerifier();
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "myorg/myapp")
+        organizationOrUser: "myorg",
+        repository: "myapp")
 };
 
 var result = await verifier.VerifyAsync(
@@ -36,7 +37,8 @@ To verify the artifact was signed from a specific branch (e.g., `main`):
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "myorg/myapp",
+        organizationOrUser: "myorg",
+        repository: "myapp",
         workflowRef: "refs/heads/main")
 };
 ```
@@ -82,7 +84,7 @@ else
 
 ## How It Works
 
-When you call `CertificateIdentity.ForGitHubActions("myorg/myapp")`, it creates a policy that:
+When you call `CertificateIdentity.ForGitHubActions("myorg", "myapp")`, it creates a policy that:
 
 1. Sets the expected OIDC issuer to `https://token.actions.githubusercontent.com`
 2. Sets a Subject Alternative Name pattern matching `https://github.com/myorg/myapp/.*`

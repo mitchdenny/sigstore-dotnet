@@ -207,7 +207,8 @@ bool isValid = await verifier.TryVerifyAsync(artifact, bundle, policy, out Verif
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "sigstore/sigstore-dotnet",
+        organizationOrUser: "sigstore",
+        repository: "sigstore-dotnet",
         issuer: "https://token.actions.githubusercontent.com"
     )
 };
@@ -299,7 +300,7 @@ public interface ISigningCertificateValidator
 }
 
 // --- Merkle tree / transparency log ---
-public static class MerkleVerifier
+internal static class MerkleVerifier
 {
     public static bool VerifyInclusionProof(InclusionProof proof, ReadOnlySpan<byte> leafHash);
 }

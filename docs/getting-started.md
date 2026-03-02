@@ -50,7 +50,8 @@ Use the convenience factory for GitHub Actions workflows:
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "owner/repo",
+        organizationOrUser: "owner",
+        repository: "repo",
         workflowRef: "refs/heads/main")
 };
 ```
@@ -92,14 +93,12 @@ else
 | `RequireSignedTimestamps` | `false` | Require RFC 3161 TSA timestamps |
 | `SignedTimestampThreshold` | `1` | Minimum signed timestamps (when required) |
 | `RequireSignedCertificateTimestamps` | `true` | Require SCT verification |
-| `IsOffline` | `false` | Skip network calls (all material must be in bundle) |
 
 ## Next Steps
 
 - **[Verify GitHub Actions Artifacts](scenarios/verify-github-actions.md)** — the most common verification scenario
 - **[Sign Artifacts in CI/CD](scenarios/sign-in-ci.md)** — automated signing in pipelines
 - **[Custom Trust Root](scenarios/custom-trust-root.md)** — private Sigstore deployments
-- **[ASP.NET Core Integration](scenarios/aspnet-integration.md)** — using with dependency injection
 - **[Troubleshooting](scenarios/troubleshooting.md)** — common issues and fixes
 - See the [Design Overview](design-overview.md) for architecture details
 - Browse the [API Reference](../api/index.md) for complete type documentation

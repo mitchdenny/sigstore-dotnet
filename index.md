@@ -24,7 +24,7 @@ var bundle = SigstoreBundle.Deserialize(File.ReadAllText("artifact.sigstore.json
 
 var policy = new VerificationPolicy
 {
-    CertificateIdentity = CertificateIdentity.ForGitHubActions("owner/repo")
+    CertificateIdentity = CertificateIdentity.ForGitHubActions("owner", "repo")
 };
 
 using var artifact = File.OpenRead("artifact.tar.gz");

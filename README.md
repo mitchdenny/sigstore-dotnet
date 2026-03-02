@@ -31,7 +31,8 @@ var verifier = new SigstoreVerifier(trustRootProvider);
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "owner/repo")
+        organizationOrUser: "owner",
+        repository: "repo")
 };
 
 // Throws VerificationException on failure

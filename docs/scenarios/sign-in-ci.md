@@ -59,7 +59,8 @@ var verifier = new SigstoreVerifier();
 var policy = new VerificationPolicy
 {
     CertificateIdentity = CertificateIdentity.ForGitHubActions(
-        repository: "myorg/myapp",
+        organizationOrUser: "myorg",
+        repository: "myapp",
         workflowRef: "refs/tags/v1.0.0")
 };
 
