@@ -1,0 +1,35 @@
+test_invalid_initial_root
+test_unsigned_initial_root
+test_timestamp_content_changes
+test_deprecated_keyid_hash_algorithms
+test_multiple_changes_to_target
+test_download_with_hash_algorithms[hashes1]
+test_duplicate_sig_keyids
+test_keytype_and_scheme[ed25519/ed25519]
+test_snapshot_rollback[basic]
+test_snapshot_rollback[with hashes]
+test_targets_role_removal
+test_targets_fast_forward_recovery
+test_new_timestamp_fast_forward_recovery
+test_delegation_not_in_snapshot
+test_unusual_role_name[?]
+test_unusual_role_name[#]
+test_unusual_role_name[/delegatedrole]
+test_unusual_role_name[../delegatedrole]
+test_static_repository[tuf-on-ci-0.11]
+test_graph_traversal[basic-delegation]
+test_graph_traversal[single-level-delegations]
+test_graph_traversal[two-level-delegations]
+test_graph_traversal[two-level-test-DFS-order-of-traversal]
+test_graph_traversal[three-level-delegation-test-DFS-order-of-traversal]
+test_graph_traversal[two-level-terminating-ignores-all-but-roles-descendants]
+test_graph_traversal[three-level-terminating-ignores-all-but-roles-descendants]
+test_graph_traversal[two-level-ignores-all-branches-not-matching-paths]
+test_graph_traversal[three-level-ignores-all-branches-not-matching-paths]
+test_graph_traversal[cyclic-graph]
+test_graph_traversal[two-roles-delegating-to-a-third]
+test_graph_traversal[two-roles-delegating-to-a-third-different-paths]
+test_targetfile_search[targetpath matches wildcard]
+test_targetfile_search[targetpath with separators x]
+test_targetfile_search[targetpath with separators y]
+test_targetfile_search[targetpath is not delegated by all roles in the chain]

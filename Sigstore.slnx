@@ -10,6 +10,7 @@
     <Project Path="src/Sigstore/Sigstore.csproj" />
     <Project Path="src/Sigstore.Conformance/Sigstore.Conformance.csproj" />
     <Project Path="src/Tuf/Tuf.csproj" />
+    <Project Path="src/Tuf.Conformance/Tuf.Conformance.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sigstore.Tests/Sigstore.Tests.csproj" />

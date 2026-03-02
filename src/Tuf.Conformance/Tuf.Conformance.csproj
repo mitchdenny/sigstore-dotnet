@@ -5,14 +5,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>Sigstore.Conformance</RootNamespace>
+    <RootNamespace>Tuf.Conformance</RootNamespace>
     <IsPackable>false</IsPackable>
     <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.3" />
-    <ProjectReference Include="..\Sigstore\Sigstore.csproj" />
+    <ProjectReference Include="..\Tuf\Tuf.csproj" />
   </ItemGroup>
 
 </Project>
