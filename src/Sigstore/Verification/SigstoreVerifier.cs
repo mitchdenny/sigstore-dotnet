@@ -311,12 +311,14 @@ public sealed class SigstoreVerifier
                     ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
                     if (trustRoot.TimestampAuthorities.Count > 0)
                     {
-                        if (TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities))
+                        var (tsVerified, tsAuthorityUri) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
+                        if (tsVerified)
                         {
                             verifiedTimestamps.Add(new VerifiedTimestamp
                             {
                                 Source = TimestampSource.TimestampAuthority,
-                                Timestamp = tsInfo.Timestamp
+                                Timestamp = tsInfo.Timestamp,
+                                AuthorityUri = tsAuthorityUri
                             });
                         }
                     }
@@ -336,9 +338,28 @@ public sealed class SigstoreVerifier
                 }
             }
 
-            // 3b: Use integrated time from tlog entries (only if SET verifies)
+            // Deduplicate TSA timestamps by authority URI
+            var seenTsaAuthorities = new HashSet<Uri>();
+            var deduplicatedTimestamps = new List<VerifiedTimestamp>();
+            foreach (var ts in verifiedTimestamps)
+            {
+                if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
+                {
+                    if (!seenTsaAuthorities.Add(ts.AuthorityUri))
+                        continue; // Skip duplicate from same TSA
+                }
+                deduplicatedTimestamps.Add(ts);
+            }
+            verifiedTimestamps = deduplicatedTimestamps;
+
+            // 3b: Use integrated time from tlog entries (only if SET verifies and entry is v1)
             foreach (var entry in verificationMaterial.TlogEntries)
             {
+                // Only trust integrated time from Rekor v1 entries
+                // v2 entries (e.g., dsse v0.0.2) use checkpoint-based verification, not SET
+                if (!IsRekorV1Entry(entry))
+                    continue;
+
                 if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
                 {
                     // Verify the Signed Entry Timestamp (SET) before trusting integratedTime
@@ -353,8 +374,15 @@ public sealed class SigstoreVerifier
                 }
             }
 
-            if (verifiedTimestamps.Count == 0)
+            int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
+            int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
+            int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
+
+            if (totalTimestamps == 0)
                 return Fail("No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
+
+            if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
+                return Fail($"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
 
             // Step 3c: Verify ALL timestamps fall within signing cert validity
             foreach (var ts in verifiedTimestamps)
@@ -488,12 +516,14 @@ public sealed class SigstoreVerifier
                 ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
                 if (trustRoot.TimestampAuthorities.Count > 0)
                 {
-                    if (TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities))
+                    var (tsVerified2, tsAuthorityUri2) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
+                    if (tsVerified2)
                     {
                         verifiedTimestamps.Add(new VerifiedTimestamp
                         {
                             Source = TimestampSource.TimestampAuthority,
-                            Timestamp = tsInfo.Timestamp
+                            Timestamp = tsInfo.Timestamp,
+                            AuthorityUri = tsAuthorityUri2
                         });
                     }
                 }
@@ -509,8 +539,26 @@ public sealed class SigstoreVerifier
             catch { }
         }
 
+        // Deduplicate TSA timestamps by authority URI
+        var seenTsaAuthorities = new HashSet<Uri>();
+        var deduplicatedTimestamps = new List<VerifiedTimestamp>();
+        foreach (var ts in verifiedTimestamps)
+        {
+            if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
+            {
+                if (!seenTsaAuthorities.Add(ts.AuthorityUri))
+                    continue; // Skip duplicate from same TSA
+            }
+            deduplicatedTimestamps.Add(ts);
+        }
+        verifiedTimestamps = deduplicatedTimestamps;
+
         foreach (var entry in verificationMaterial.TlogEntries)
         {
+            // Only trust integrated time from Rekor v1 entries
+            if (!IsRekorV1Entry(entry))
+                continue;
+
             if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
             {
                 if (VerifySignedEntryTimestamp(entry, trustRoot))
@@ -524,8 +572,15 @@ public sealed class SigstoreVerifier
             }
         }
 
-        if (verifiedTimestamps.Count == 0)
+        int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
+        int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
+        int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
+
+        if (totalTimestamps == 0)
             return Fail("No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
+
+        if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
+            return Fail($"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
 
         // Verify tlog inclusion proofs (using the public key for cross-verification)
         if (policy.RequireTransparencyLog)
@@ -673,6 +728,10 @@ public sealed class SigstoreVerifier
                 }
             }
 
+            // Verify artifact hash matches
+            if (!CrossVerifyHashedrekordArtifactHash(spec, bundle))
+                return false;
+
             return true;
         }
 
@@ -807,7 +866,31 @@ public sealed class SigstoreVerifier
         }
         catch (CryptographicException) { }
 
+        // Try Ed25519
+        try
+        {
+            return VerifyEd25519Data(data, signature, publicKeySpki)
+                ? (true, null) : (false, "Ed25519 signature verification failed.");
+        }
+        catch (CryptographicException) { }
+        catch (Exception) { }
+
         return (false, "Unsupported public key algorithm.");
+    }
+
+    internal static bool VerifyEd25519Data(byte[] data, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeySpki)
+    {
+        ReadOnlySpan<byte> rawKey;
+        if (publicKeySpki.Length == 44)
+            rawKey = publicKeySpki.Span.Slice(12);
+        else if (publicKeySpki.Length == 32)
+            rawKey = publicKeySpki.Span;
+        else
+            return false;
+
+        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
+        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
+        return algorithm.Verify(pk, data, signature);
     }
 
     private static (bool IsValid, string? Reason) VerifyHashWithKey(
@@ -1054,8 +1137,52 @@ public sealed class SigstoreVerifier
             }
         }
 
+        // Verify artifact hash matches
+        if (!CrossVerifyHashedrekordArtifactHash(spec, bundle))
+            return false;
+
         return true;
     }
+
+    /// <summary>
+    /// Verifies the artifact hash in a hashedrekord spec against the bundle's message digest.
+    /// Returns false only if both have hash values and they don't match.
+    /// </summary>
+    internal static bool CrossVerifyHashedrekordArtifactHash(JsonElement spec, SigstoreBundle bundle)
+    {
+        if (spec.TryGetProperty("data", out var dataElem) &&
+            dataElem.TryGetProperty("hash", out var hashElem))
+        {
+            if (hashElem.TryGetProperty("value", out var hashValue))
+            {
+                var expectedHash = hashValue.GetString();
+                if (expectedHash != null &&
+                    bundle.MessageSignature?.MessageDigest is { } digest)
+                {
+                    var hashAlg = hashElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : "sha256";
+
+                    // Only compare if the algorithms match
+                    if (MapRekorHashAlgorithm(hashAlg) == digest.Algorithm &&
+                        digest.Algorithm != HashAlgorithmType.Unspecified)
+                    {
+                        var bundleHashHex = Convert.ToHexString(digest.Digest.Span).ToLowerInvariant();
+                        if (!string.Equals(expectedHash, bundleHashHex, StringComparison.OrdinalIgnoreCase))
+                            return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static HashAlgorithmType MapRekorHashAlgorithm(string? algorithm) => algorithm switch
+    {
+        "sha256" => HashAlgorithmType.Sha256,
+        "sha384" => HashAlgorithmType.Sha384,
+        "sha512" => HashAlgorithmType.Sha512,
+        _ => HashAlgorithmType.Unspecified
+    };
 
     private static bool CrossVerifyDsse(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
@@ -1289,6 +1416,28 @@ public sealed class SigstoreVerifier
     }
 
     /// <summary>
+    /// Determines if a tlog entry is a Rekor v1 entry based on its kind and version.
+    /// V1 entries: hashedrekord v0.0.1, intoto v0.0.1/v0.0.2, dsse v0.0.1
+    /// V2 entries: dsse v0.0.2
+    /// If kind/version is unknown, fall back to checking InclusionPromise (v1 has it, v2 doesn't).
+    /// </summary>
+    private static bool IsRekorV1Entry(TransparencyLogEntry entry)
+    {
+        // If we have explicit kind+version info, use it
+        if (!string.IsNullOrEmpty(entry.KindVersion))
+        {
+            // dsse v0.0.2 is the v2 entry format
+            if (entry.Kind == "dsse" && entry.KindVersion == "0.0.2")
+                return false;
+        }
+
+        // For entries without explicit version info, check for v1 characteristics:
+        // - v1 entries have an InclusionPromise (SET)
+        // - v2 entries typically don't
+        return entry.InclusionPromise != null;
+    }
+
+    /// <summary>
     /// Verifies the Signed Entry Timestamp (SET / inclusion promise) for a tlog entry.
     /// The SET is the log's ECDSA signature over the canonicalized JSON payload:
     /// {"body": base64(canonicalizedBody), "integratedTime": N, "logID": hex(keyId), "logIndex": N}
@@ -1320,18 +1469,32 @@ public sealed class SigstoreVerifier
         var payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
         var hash = SHA256.HashData(payloadBytes);
 
+        // Try ECDSA first
         try
         {
             using var ecdsa = LoadEcdsaPublicKey(logInfo.PublicKeyBytes.Span);
-            if (ecdsa == null)
-                return false;
+            if (ecdsa != null)
+                return ecdsa.VerifyHash(hash, entry.InclusionPromise.Value.Span, DSASignatureFormat.Rfc3279DerSequence);
+        }
+        catch { }
 
-            return ecdsa.VerifyHash(hash, entry.InclusionPromise.Value.Span, DSASignatureFormat.Rfc3279DerSequence);
-        }
-        catch
+        // Try RSA
+        try
         {
-            return false;
+            using var rsa = RSA.Create();
+            rsa.ImportSubjectPublicKeyInfo(logInfo.PublicKeyBytes.Span, out _);
+            return rsa.VerifyHash(hash, entry.InclusionPromise.Value.Span, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         }
+        catch { }
+
+        // Try Ed25519 — note: Ed25519 signs message directly, not hash
+        try
+        {
+            return VerifyEd25519Data(payloadBytes, entry.InclusionPromise.Value.Span, logInfo.PublicKeyBytes);
+        }
+        catch { }
+
+        return false;
     }
 
     private static ECDsa? LoadEcdsaPublicKey(ReadOnlySpan<byte> publicKeyBytes)
