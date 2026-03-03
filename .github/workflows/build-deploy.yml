@@ -15,6 +15,10 @@ on:
         description: 'Produce a GA release (no prerelease suffix). Only valid on release/* branches.'
         type: boolean
         default: false
+      skip_conformance:
+        description: 'Skip conformance tests (use when upstream Sigstore infrastructure is unavailable).'
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -65,8 +69,8 @@ jobs:
   conformance-production:
     runs-on: ubuntu-latest
     needs: test
+    if: ${{ !(inputs.skip_conformance || false) }}
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
       id-token: write
@@ -100,8 +104,8 @@ jobs:
   conformance-staging:
     runs-on: ubuntu-latest
     needs: test
+    if: ${{ !(inputs.skip_conformance || false) }}
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
       id-token: write
@@ -135,6 +139,7 @@ jobs:
   tuf-conformance:
     runs-on: ubuntu-latest
     needs: test
+    if: ${{ !(inputs.skip_conformance || false) }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -168,6 +173,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: [test, conformance-production, conformance-staging, tuf-conformance]
+    if: ${{ !cancelled() && needs.test.result == 'success' && (inputs.skip_conformance || (needs.conformance-production.result == 'success' && needs.conformance-staging.result == 'success' && needs.tuf-conformance.result == 'success')) }}
     permissions:
       contents: read
     outputs:
