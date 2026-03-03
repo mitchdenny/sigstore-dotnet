@@ -218,7 +218,7 @@ jobs:
   publish-github:
     runs-on: ubuntu-latest
     needs: build
-    if: ${{ needs.build.outputs.is_release != 'true' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.is_release != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -295,7 +295,7 @@ jobs:
   publish-nuget:
     runs-on: ubuntu-latest
     needs: build
-    if: ${{ needs.build.outputs.is_release == 'true' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.is_release == 'true' }}
     environment: production
     permissions:
       contents: write
