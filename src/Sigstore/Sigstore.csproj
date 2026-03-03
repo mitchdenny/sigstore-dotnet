@@ -13,6 +13,7 @@
     <PackageProjectUrl>https://github.com/mitchdenny/sigstore-dotnet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mitchdenny/sigstore-dotnet</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
     <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
