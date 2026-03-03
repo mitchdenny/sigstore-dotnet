@@ -88,15 +88,61 @@ When you call `CertificateIdentity.ForGitHubActions("myorg", "myapp")`, it creat
 
 1. Sets the expected OIDC issuer to `https://token.actions.githubusercontent.com`
 2. Sets a Subject Alternative Name pattern matching `https://github.com/myorg/myapp/.*`
+3. Requires the `SourceRepositoryUri` certificate extension to match `https://github.com/myorg/myapp`
 
 During verification, the library checks that:
 - The signing certificate was issued by Sigstore's Fulcio CA
 - The certificate's OIDC issuer extension matches GitHub Actions
 - The certificate's SAN matches your repository pattern
+- The certificate's Fulcio extensions match the expected source repository
 - The signature is recorded in the Rekor transparency log
 - All timestamps are valid and verified
 
+## Enforce Additional Extension Policies
+
+For stricter supply chain policies, require specific certificate extensions:
+
+```csharp
+var policy = new VerificationPolicy
+{
+    CertificateIdentity = new CertificateIdentity
+    {
+        Issuer = "https://token.actions.githubusercontent.com",
+        SubjectAlternativeNamePattern = @"https://github\.com/myorg/myapp/.*",
+        Extensions = new CertificateExtensionPolicy
+        {
+            SourceRepositoryUri = "https://github.com/myorg/myapp",
+            RunnerEnvironment = "github-hosted",
+            SourceRepositoryRef = "refs/tags/v1.0.0"
+        }
+    }
+};
+```
+
+## Inspect Build Provenance After Verification
+
+After verification, access rich build provenance from the certificate and attestation:
+
+```csharp
+var result = await verifier.VerifyFileAsync(artifact, bundleFile, policy);
+
+// Certificate extensions contain CI/CD identity
+var ext = result.SignerIdentity!.Extensions!;
+Console.WriteLine($"Built from: {ext.SourceRepositoryUri} @ {ext.SourceRepositoryRef}");
+Console.WriteLine($"Runner: {ext.RunnerEnvironment}");
+Console.WriteLine($"Trigger: {ext.BuildTrigger}");
+
+// For DSSE bundles, the in-toto statement is also available
+if (result.Statement is { } statement)
+{
+    Console.WriteLine($"Predicate: {statement.PredicateType}");
+    foreach (var subject in statement.Subject)
+        Console.WriteLine($"Subject: {subject.Name}");
+}
+```
+
 ## See Also
 
+- [Asserting on Attestations](asserting-on-attestations.md) — deep dive into attestation inspection and SLSA provenance
 - [Verify a Bundle](verify-bundle.md) — generic bundle verification
 - [Sign Artifacts in CI](sign-in-ci.md) — signing artifacts in GitHub Actions

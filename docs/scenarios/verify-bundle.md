@@ -99,6 +99,7 @@ var policy = new VerificationPolicy
 | Property | Default | Description |
 |---|---|---|
 | `CertificateIdentity` | `null` | Expected signer identity (SAN + OIDC issuer) |
+| `CertificateIdentity.Extensions` | `null` | Expected Fulcio certificate extensions |
 | `RequireTransparencyLog` | `true` | Require verified transparency log entry |
 | `TransparencyLogThreshold` | `1` | Minimum verified tlog entries |
 | `RequireSignedTimestamps` | `false` | Require RFC 3161 TSA timestamps |
@@ -109,4 +110,5 @@ var policy = new VerificationPolicy
 ## See Also
 
 - [Verify GitHub Actions Artifacts](verify-github-actions.md) — specialized GitHub Actions verification
+- [Asserting on Attestations](asserting-on-attestations.md) — inspect provenance, enforce extension policies
 - [Custom Trust Root](custom-trust-root.md) — private Sigstore deployments

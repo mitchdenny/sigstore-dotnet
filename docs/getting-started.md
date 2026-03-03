@@ -40,6 +40,20 @@ var result = await verifier.VerifyStreamAsync(artifact, bundle, policy);
 Console.WriteLine($"Signed by: {result.SignerIdentity!.SubjectAlternativeName}");
 Console.WriteLine($"Issuer: {result.SignerIdentity.Issuer}");
 Console.WriteLine($"Timestamps: {result.VerifiedTimestamps.Count}");
+
+// Access rich build provenance from certificate extensions
+if (result.SignerIdentity.Extensions is { } extensions)
+{
+    Console.WriteLine($"Source repo: {extensions.SourceRepositoryUri}");
+    Console.WriteLine($"Build trigger: {extensions.BuildTrigger}");
+}
+
+// For DSSE/in-toto bundles, access the attestation statement
+if (result.Statement is { } statement)
+{
+    Console.WriteLine($"Predicate type: {statement.PredicateType}");
+    Console.WriteLine($"Subjects: {statement.Subject.Count}");
+}
 ```
 
 ### Verifying GitHub Actions Signatures
@@ -88,6 +102,7 @@ else
 | Property | Default | Description |
 |---|---|---|
 | `CertificateIdentity` | `null` | Expected signer identity (SAN + OIDC issuer) |
+| `CertificateIdentity.Extensions` | `null` | Expected Fulcio certificate extensions (source repo, runner, etc.) |
 | `RequireTransparencyLog` | `true` | Require at least one verified tlog entry |
 | `TransparencyLogThreshold` | `1` | Minimum number of verified tlog entries |
 | `RequireSignedTimestamps` | `false` | Require RFC 3161 TSA timestamps |
@@ -97,6 +112,7 @@ else
 ## Next Steps
 
 - **[Verify GitHub Actions Artifacts](scenarios/verify-github-actions.md)** — the most common verification scenario
+- **[Asserting on Attestations](scenarios/asserting-on-attestations.md)** — inspect provenance, enforce extension policies, navigate SLSA predicates
 - **[Sign Artifacts in CI/CD](scenarios/sign-in-ci.md)** — automated signing in pipelines
 - **[Custom Trust Root](scenarios/custom-trust-root.md)** — private Sigstore deployments
 - **[Troubleshooting](scenarios/troubleshooting.md)** — common issues and fixes

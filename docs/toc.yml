@@ -8,6 +8,8 @@
       href: scenarios/verify-bundle.md
     - name: Verify GitHub Actions Artifacts
       href: scenarios/verify-github-actions.md
+    - name: Asserting on Attestations
+      href: scenarios/asserting-on-attestations.md
     - name: Sign in CI/CD
       href: scenarios/sign-in-ci.md
     - name: Sign Interactively
