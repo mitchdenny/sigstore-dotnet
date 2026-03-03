@@ -46,7 +46,7 @@ runs:
           MINOR=$(echo "$RELEASE_XY" | cut -d'.' -f2)
 
           # Find latest vX.Y.* release tag to determine patch
-          LATEST_PATCH_TAG=$(git tag -l "v${MAJOR}.${MINOR}.*" | grep -v '-' | sort -V | tail -n1)
+          LATEST_PATCH_TAG=$(git tag -l "v${MAJOR}.${MINOR}.*" | { grep -v '-' || true; } | sort -V | tail -n1)
           if [ -n "$LATEST_PATCH_TAG" ]; then
             LATEST_PATCH=$(echo "${LATEST_PATCH_TAG#v}" | cut -d'.' -f3)
             PATCH=$((LATEST_PATCH + 1))
