@@ -285,7 +285,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: ${{ needs.build.outputs.is_release == 'true' }}
-    environment: nuget-production
+    environment: production
     permissions:
       contents: write
       packages: write
