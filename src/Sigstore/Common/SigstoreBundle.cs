@@ -236,6 +236,19 @@ public sealed class DsseEnvelope
     public ReadOnlyMemory<byte> Payload { get; init; }
     /// <summary>The signatures over the PAE-encoded payload.</summary>
     public IReadOnlyList<DsseSignature> Signatures { get; init; } = [];
+
+    /// <summary>
+    /// Parses the payload as an in-toto statement.
+    /// Returns <c>null</c> if the payload type is not <c>application/vnd.in-toto+json</c>
+    /// or if the payload cannot be parsed.
+    /// </summary>
+    public InTotoStatement? GetStatement()
+    {
+        if (!string.Equals(PayloadType, "application/vnd.in-toto+json", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return InTotoStatement.Parse(Payload);
+    }
 }
 
 /// <summary>

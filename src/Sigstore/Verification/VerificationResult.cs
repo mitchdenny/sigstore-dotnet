@@ -16,6 +16,13 @@ public sealed record VerificationResult
     public IReadOnlyList<VerifiedTimestamp> VerifiedTimestamps { get; init; } = [];
 
     /// <summary>
+    /// The parsed in-toto statement from the DSSE envelope, if the bundle contains one.
+    /// This is automatically populated when verifying a DSSE/in-toto attestation bundle.
+    /// For message signature bundles, this will be <c>null</c>.
+    /// </summary>
+    public InTotoStatement? Statement { get; init; }
+
+    /// <summary>
     /// The failure reason, if verification failed. Null on success.
     /// </summary>
     public string? FailureReason { get; init; }
@@ -35,6 +42,12 @@ public sealed record VerifiedIdentity
     /// The OIDC issuer from the certificate extension.
     /// </summary>
     public required string Issuer { get; init; }
+
+    /// <summary>
+    /// All parsed Fulcio certificate extensions describing the CI/CD identity and build provenance.
+    /// Populated when the signing certificate contains Fulcio-specific extensions.
+    /// </summary>
+    public FulcioCertificateExtensions? Extensions { get; init; }
 }
 
 /// <summary>

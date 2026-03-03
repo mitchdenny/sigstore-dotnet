@@ -427,6 +427,15 @@ public sealed class SigstoreVerifier
                         return Fail($"Certificate issuer '{issuer}' does not match expected '{policy.CertificateIdentity.Issuer}'.");
                 }
 
+                // Match certificate extension policy (SourceRepositoryUri, BuildSignerUri, etc.)
+                if (policy.CertificateIdentity.Extensions != null)
+                {
+                    var certExtensions = FulcioCertificateExtensions.FromCertificate(leafCert);
+                    var (extMatch, extReason) = policy.CertificateIdentity.Extensions.Matches(certExtensions);
+                    if (!extMatch)
+                        return Fail(extReason ?? "Certificate extension policy mismatch.");
+                }
+
                 // Step 6: Verify transparency log entries
                 if (policy.RequireTransparencyLog)
                 {
@@ -446,14 +455,19 @@ public sealed class SigstoreVerifier
                 if (!sigVerifyResult.IsValid)
                     return Fail($"Signature verification failed: {sigVerifyResult.Reason}");
 
+                var extensions = FulcioCertificateExtensions.FromCertificate(leafCert);
+                var statement = bundle.DsseEnvelope?.GetStatement();
+
                 return (true, new VerificationResult
                 {
                     SignerIdentity = new VerifiedIdentity
                     {
                         SubjectAlternativeName = san,
-                        Issuer = issuer ?? ""
+                        Issuer = issuer ?? "",
+                        Extensions = extensions
                     },
-                    VerifiedTimestamps = verifiedTimestamps
+                    VerifiedTimestamps = verifiedTimestamps,
+                    Statement = statement
                 });
             }
 
@@ -478,7 +492,8 @@ public sealed class SigstoreVerifier
             return (true, new VerificationResult
             {
                 SignerIdentity = null,
-                VerifiedTimestamps = verifiedTimestamps
+                VerifiedTimestamps = verifiedTimestamps,
+                Statement = bundle.DsseEnvelope?.GetStatement()
             });
         }
         catch (ArgumentNullException)
@@ -604,7 +619,8 @@ public sealed class SigstoreVerifier
         return (true, new VerificationResult
         {
             SignerIdentity = null,
-            VerifiedTimestamps = verifiedTimestamps
+            VerifiedTimestamps = verifiedTimestamps,
+            Statement = bundle.DsseEnvelope?.GetStatement()
         });
     }
 
