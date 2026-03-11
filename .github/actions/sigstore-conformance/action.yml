@@ -1,0 +1,76 @@
+name: 'Run Sigstore Conformance'
+description: 'Runs the pinned sigstore-conformance suite using the workflow job OIDC token'
+
+inputs:
+  entrypoint:
+    description: 'the command to invoke the Sigstore client'
+    required: true
+  internal-be-careful-debug:
+    description: 'run with debug logs (default false)'
+    required: false
+    default: 'false'
+  skip-signing:
+    description: 'skip tests that involve signing (default false)'
+    required: false
+    default: 'false'
+  skip-result-upload:
+    description: 'skip upload of conformance results (default false), staging environment runs are always skipped.'
+    required: false
+    default: 'false'
+  skip-cpython-release-tests:
+    description: 'skip all CPython Sigstore bundle tests'
+    required: false
+    default: 'false'
+  environment:
+    description: "'production' (default) or 'staging'"
+    required: false
+    default: 'production'
+  xfail:
+    description: 'one or more tests that are expected to fail, whitespace-separated'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check out latest CPython release metadata
+      uses: actions/checkout@v4
+      with:
+        repository: woodruffw/cpython-release-tracker
+        persist-credentials: false
+        path: cpython-release-tracker
+        ref: f5ef7e3a49c5b9aa2a5c8f9591e2c9feb1939060
+
+    - name: Check out pinned sigstore-conformance
+      uses: actions/checkout@v4
+      with:
+        repository: sigstore/sigstore-conformance
+        persist-credentials: false
+        path: sigstore-conformance-action
+        ref: 9611941d54398f2e3f6383b6f744442a56d2fb2a
+
+    - name: Run sigstore-conformance
+      shell: bash
+      env:
+        GHA_SIGSTORE_CONFORMANCE_ENVIRONMENT: ${{ inputs.environment }}
+        GHA_SIGSTORE_CONFORMANCE_ENTRYPOINT: ${{ inputs.entrypoint }}
+        GHA_SIGSTORE_CONFORMANCE_INTERNAL_BE_CAREFUL_DEBUG: ${{ inputs.internal-be-careful-debug }}
+        GHA_SIGSTORE_CONFORMANCE_SKIP_SIGNING: ${{ inputs.skip-signing }}
+        GHA_SIGSTORE_CONFORMANCE_SKIP_CPYTHON_RELEASE_TESTS: ${{ inputs.skip-cpython-release-tests }}
+        GHA_SIGSTORE_CONFORMANCE_XFAIL: ${{ inputs.xfail }}
+        GHA_SIGSTORE_CONFORMANCE_CLIENT_NAME: ${{ github.repository }}
+        GHA_SIGSTORE_CONFORMANCE_CLIENT_URL: ${{ github.server_url }}/${{ github.repository }}
+        GHA_SIGSTORE_CONFORMANCE_CLIENT_SHA: ${{ github.sha }}
+        GHA_SIGSTORE_CONFORMANCE_CLIENT_SHA_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        GHA_SIGSTORE_CONFORMANCE_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        GHA_SIGSTORE_CONFORMANCE_SELFTEST_ENV: ${{ github.workspace }}/sigstore-conformance-selftest-env
+      run: bash "${{ github.action_path }}/run.sh"
+
+    - name: Upload conformance result
+      if: ${{ always() && inputs.skip-result-upload == 'false' && inputs.environment == 'production' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: conformance-results
+        overwrite: true
+        path: ./conformance-report.json
+        retention-days: 7
