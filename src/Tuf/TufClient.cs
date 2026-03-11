@@ -705,6 +705,8 @@ public sealed class TufClient : IDisposable
 
     private static bool VerifyTargetHashes(byte[] data, TargetFileInfo targetInfo)
     {
+        var verifiedAnySupportedHash = false;
+
         foreach (var (algo, expectedHash) in targetInfo.Hashes)
         {
             var actualHash = algo.ToLowerInvariant() switch
@@ -714,10 +716,17 @@ public sealed class TufClient : IDisposable
                 _ => null
             };
 
-            if (actualHash != null && actualHash != expectedHash.ToLowerInvariant())
+            if (actualHash == null)
+            {
+                continue;
+            }
+
+            verifiedAnySupportedHash = true;
+            if (actualHash != expectedHash.ToLowerInvariant())
                 return false;
         }
-        return true;
+
+        return verifiedAnySupportedHash;
     }
 
     /// <inheritdoc/>

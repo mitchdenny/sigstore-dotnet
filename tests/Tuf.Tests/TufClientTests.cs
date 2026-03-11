@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Reflection;
+using Tuf.Metadata;
 
 namespace Tuf.Tests;
 
@@ -266,6 +268,28 @@ public class TufClientTests : IDisposable
         var ex = await Assert.ThrowsAsync<TufException>(
             () => client.DownloadTargetAsync("file.txt"));
         Assert.Contains("hash verification failed", ex.Message);
+    }
+
+    [Fact]
+    public void VerifyTargetHashes_UnknownAlgorithmsOnly_ReturnsFalse()
+    {
+        var verifyMethod = typeof(TufClient).GetMethod(
+            "VerifyTargetHashes",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var result = (bool)verifyMethod!.Invoke(null, [
+            "data"u8.ToArray(),
+            new TargetFileInfo
+            {
+                Length = 4,
+                Hashes = new Dictionary<string, string>
+                {
+                    ["unknown-hash"] = "deadbeef"
+                }
+            }
+        ])!;
+
+        Assert.False(result);
     }
 
     [Fact]
