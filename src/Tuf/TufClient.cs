@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Tuf.Metadata;
 using Tuf.Serialization;
 
@@ -132,7 +133,16 @@ public sealed class TufClient : IDisposable
     {
         var rootBytes = _cache.LoadMetadata("root")
             ?? throw new TufException("No trusted root metadata in cache.");
-        _trustedRoot = TufMetadataParser.ParseRoot(rootBytes);
+        try
+        {
+            _trustedRoot = TufMetadataParser.ParseRoot(rootBytes);
+        }
+        catch (JsonException ex)
+        {
+            throw new TufException("Trusted root metadata is invalid.", ex);
+        }
+
+        ValidateTrustedRoot(_trustedRoot);
 
         // Also load any cached timestamp/snapshot/targets
         var tsBytes = _cache.LoadMetadata("timestamp");
@@ -143,6 +153,23 @@ public sealed class TufClient : IDisposable
 
         var targetsBytes = _cache.LoadMetadata("targets");
         if (targetsBytes != null) _trustedTargets = TufMetadataParser.ParseTargets(targetsBytes);
+    }
+
+    private static void ValidateTrustedRoot(SignedMetadata<RootMetadata> trustedRoot)
+    {
+        if (!trustedRoot.Signed.Roles.TryGetValue("root", out var rootRole))
+        {
+            throw new TufException("Trusted root metadata is missing the root role.");
+        }
+
+        if (!TufMetadataVerifier.VerifyThreshold(
+                trustedRoot.Signatures,
+                trustedRoot.SignedBytes,
+                rootRole,
+                trustedRoot.Signed.Keys))
+        {
+            throw new TufException("Trusted root signature verification failed.");
+        }
     }
 
     /// <summary>

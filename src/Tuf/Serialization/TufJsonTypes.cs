@@ -36,8 +36,6 @@ internal sealed class KeyJson
     public string? Keytype { get; set; }
     public string? Scheme { get; set; }
     public Dictionary<string, string>? Keyval { get; set; }
-    [JsonPropertyName("keyid_hash_algorithms")]
-    public List<string>? KeyidHashAlgorithms { get; set; }
 }
 
 internal sealed class RoleJson

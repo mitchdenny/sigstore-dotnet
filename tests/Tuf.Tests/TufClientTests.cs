@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace Tuf.Tests;
 
 public class TufClientTests : IDisposable
@@ -249,5 +252,45 @@ public class TufClientTests : IDisposable
         var ex = await Assert.ThrowsAsync<TufException>(
             () => client.DownloadTargetAsync("file.txt"));
         Assert.Contains("hash verification failed", ex.Message);
+    }
+
+    [Fact]
+    public async Task Refresh_InvalidTrustedRoot_ThrowsBeforeAnyRequests()
+    {
+        var invalidRoot = ModifyJson(_repo.GetInitialRoot(), root =>
+        {
+            root["signed"]!.AsObject().Remove("version");
+        });
+
+        var client = CreateClient(invalidRoot);
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("Trusted root metadata is invalid", ex.Message);
+        Assert.Empty(_repo.RequestLog);
+    }
+
+    [Fact]
+    public async Task Refresh_UnsignedTrustedRoot_ThrowsBeforeAnyRequests()
+    {
+        var unsignedRoot = ModifyJson(_repo.GetInitialRoot(), root =>
+        {
+            root["signatures"]!.AsArray()[0]!["sig"] = "00";
+        });
+
+        var client = CreateClient(unsignedRoot);
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("Trusted root signature verification failed", ex.Message);
+        Assert.Empty(_repo.RequestLog);
+    }
+
+    private static byte[] ModifyJson(byte[] json, Action<JsonObject> mutate)
+    {
+        var root = JsonNode.Parse(json)?.AsObject()
+            ?? throw new InvalidOperationException("Failed to parse test JSON.");
+        mutate(root);
+        return JsonSerializer.SerializeToUtf8Bytes(root);
     }
 }
