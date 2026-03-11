@@ -1,3 +1,7 @@
+using System.IO.Enumeration;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Tuf.Metadata;
 
 /// <summary>
@@ -115,6 +119,39 @@ public sealed class Delegations
     /// The delegated roles in priority order.
     /// </summary>
     public required List<DelegatedRole> Roles { get; init; }
+
+    /// <summary>
+    /// Returns delegated roles that are responsible for a target path,
+    /// preserving delegation priority order.
+    /// </summary>
+    public IEnumerable<DelegatedRole> GetRolesForTarget(string targetPath)
+    {
+        foreach (var role in Roles)
+        {
+            if (role.IsDelegatedPath(targetPath))
+            {
+                yield return role;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Looks up a delegated role by name.
+    /// </summary>
+    public bool TryGetRole(string roleName, out DelegatedRole delegatedRole)
+    {
+        foreach (var role in Roles)
+        {
+            if (role.Name == roleName)
+            {
+                delegatedRole = role;
+                return true;
+            }
+        }
+
+        delegatedRole = null!;
+        return false;
+    }
 }
 
 /// <summary>
@@ -151,4 +188,57 @@ public sealed class DelegatedRole
     /// Hash prefix path patterns this delegation is responsible for.
     /// </summary>
     public List<string>? PathHashPrefixes { get; init; }
+
+    /// <summary>
+    /// Returns whether this delegation is responsible for the given target path.
+    /// </summary>
+    public bool IsDelegatedPath(string targetPath)
+    {
+        if (Paths is { Count: > 0 })
+        {
+            foreach (var pathPattern in Paths)
+            {
+                if (IsTargetInPathPattern(targetPath, pathPattern))
+                {
+                    return true;
+                }
+            }
+        }
+        else if (PathHashPrefixes is { Count: > 0 })
+        {
+            var targetPathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(targetPath)))
+                .ToLowerInvariant();
+
+            foreach (var pathHashPrefix in PathHashPrefixes)
+            {
+                if (targetPathHash.StartsWith(pathHashPrefix, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsTargetInPathPattern(string targetPath, string pathPattern)
+    {
+        var targetParts = targetPath.Split('/');
+        var patternParts = pathPattern.Split('/');
+
+        if (targetParts.Length != patternParts.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < targetParts.Length; i++)
+        {
+            if (!FileSystemName.MatchesSimpleExpression(patternParts[i], targetParts[i], ignoreCase: false))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

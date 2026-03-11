@@ -26,14 +26,14 @@ public sealed class FileSystemTufCache : ITufCache
     /// <inheritdoc/>
     public byte[]? LoadMetadata(string role)
     {
-        var path = Path.Combine(_metadataDir, $"{role}.json");
+        var path = Path.Combine(_metadataDir, $"{EscapeRoleName(role)}.json");
         return File.Exists(path) ? File.ReadAllBytes(path) : null;
     }
 
     /// <inheritdoc/>
     public void StoreMetadata(string role, byte[] data)
     {
-        var path = Path.Combine(_metadataDir, $"{role}.json");
+        var path = Path.Combine(_metadataDir, $"{EscapeRoleName(role)}.json");
         File.WriteAllBytes(path, data);
     }
 
@@ -53,4 +53,6 @@ public sealed class FileSystemTufCache : ITufCache
             Directory.CreateDirectory(dir);
         File.WriteAllBytes(path, data);
     }
+
+    private static string EscapeRoleName(string role) => Uri.EscapeDataString(role);
 }

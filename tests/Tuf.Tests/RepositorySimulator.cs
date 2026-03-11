@@ -13,6 +13,17 @@ namespace Tuf.Tests;
 /// </summary>
 internal sealed class RepositorySimulator : ITufRepository
 {
+    private sealed class DelegatedTargetsRole
+    {
+        public required ECDsa Key { get; init; }
+        public required string KeyId { get; init; }
+        public required List<string> Paths { get; init; }
+        public required Dictionary<string, byte[]> Targets { get; init; }
+        public bool Terminating { get; init; }
+        public int Version { get; set; } = 1;
+        public DateTimeOffset Expiry { get; set; } = DateTimeOffset.UtcNow.AddDays(30);
+    }
+
     private readonly ECDsa _rootKey;
     private readonly ECDsa _targetsKey;
     private readonly ECDsa _snapshotKey;
@@ -25,6 +36,8 @@ internal sealed class RepositorySimulator : ITufRepository
 
     private readonly Dictionary<string, byte[]> _metadata = new();
     private readonly Dictionary<string, byte[]> _targets = new();
+    private readonly Dictionary<string, byte[]> _topLevelTargets = new();
+    private readonly Dictionary<string, DelegatedTargetsRole> _delegatedRoles = new(StringComparer.Ordinal);
     private readonly List<string> _requestLog = new();
 
     public int RootVersion { get; set; } = 1;
@@ -86,6 +99,30 @@ internal sealed class RepositorySimulator : ITufRepository
     public void AddTarget(string path, byte[] content)
     {
         _targets[path] = content;
+        _topLevelTargets[path] = content;
+    }
+
+    /// <summary>
+    /// Adds a delegated target file and creates the delegated role if needed.
+    /// </summary>
+    public void AddDelegatedTarget(string roleName, IEnumerable<string> paths, string targetPath, byte[] content, bool terminating = false)
+    {
+        if (!_delegatedRoles.TryGetValue(roleName, out var role))
+        {
+            var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            role = new DelegatedTargetsRole
+            {
+                Key = key,
+                KeyId = ComputeKeyId(key),
+                Paths = paths.ToList(),
+                Targets = new Dictionary<string, byte[]>(StringComparer.Ordinal),
+                Terminating = terminating
+            };
+            _delegatedRoles[roleName] = role;
+        }
+
+        role.Targets[targetPath] = content;
+        _targets[targetPath] = content;
     }
 
     /// <summary>
@@ -95,6 +132,7 @@ internal sealed class RepositorySimulator : ITufRepository
     {
         PublishRoot();
         PublishTargets();
+        PublishDelegatedTargets();
         PublishSnapshot();
         PublishTimestamp();
     }
@@ -117,6 +155,7 @@ internal sealed class RepositorySimulator : ITufRepository
         SnapshotVersion++;
         TimestampVersion++;
         PublishTargets();
+        PublishDelegatedTargets();
         PublishSnapshot();
         PublishTimestamp();
     }
@@ -145,7 +184,7 @@ internal sealed class RepositorySimulator : ITufRepository
     private void PublishTargets()
     {
         var targetsDict = new Dictionary<string, object>();
-        foreach (var (path, content) in _targets)
+        foreach (var (path, content) in _topLevelTargets)
         {
             targetsDict[path] = new Dictionary<string, object>
             {
@@ -168,10 +207,48 @@ internal sealed class RepositorySimulator : ITufRepository
             ["targets"] = targetsDict
         };
 
+        if (_delegatedRoles.Count > 0)
+        {
+            signed["delegations"] = BuildDelegations();
+        }
+
         var envelope = SignEnvelope(signed, UnsignedRoles.Contains("targets") ? null : _targetsKey);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope);
         _metadata[$"{TargetsVersion}.targets.json"] = bytes;
         _metadata["targets.json"] = bytes;
+    }
+
+    private void PublishDelegatedTargets()
+    {
+        foreach (var (roleName, role) in _delegatedRoles)
+        {
+            var targetsDict = new Dictionary<string, object>();
+            foreach (var (path, content) in role.Targets)
+            {
+                targetsDict[path] = new Dictionary<string, object>
+                {
+                    ["length"] = content.Length,
+                    ["hashes"] = new Dictionary<string, string>
+                    {
+                        ["sha256"] = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant()
+                    }
+                };
+            }
+
+            var signed = new Dictionary<string, object>
+            {
+                ["_type"] = "targets",
+                ["spec_version"] = "1.0",
+                ["version"] = role.Version,
+                ["expires"] = role.Expiry.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["targets"] = targetsDict
+            };
+
+            var envelope = SignEnvelope(signed, role.Key);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope);
+            _metadata[$"{role.Version}.{roleName}.json"] = bytes;
+            _metadata[$"{roleName}.json"] = bytes;
+        }
     }
 
     private void PublishSnapshot()
@@ -183,6 +260,14 @@ internal sealed class RepositorySimulator : ITufRepository
                 ["version"] = TargetsVersion
             }
         };
+
+        foreach (var (roleName, role) in _delegatedRoles)
+        {
+            meta[$"{roleName}.json"] = new Dictionary<string, object>
+            {
+                ["version"] = role.Version
+            };
+        }
 
         var signed = new Dictionary<string, object>
         {
@@ -233,6 +318,31 @@ internal sealed class RepositorySimulator : ITufRepository
         var envelope = SignEnvelope(signed, UnsignedRoles.Contains("timestamp") ? null : _timestampKey);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope);
         _metadata["timestamp.json"] = bytes;
+    }
+
+    private Dictionary<string, object> BuildDelegations()
+    {
+        var keys = new Dictionary<string, object>();
+        var roles = new List<object>();
+
+        foreach (var (roleName, role) in _delegatedRoles)
+        {
+            keys[role.KeyId] = BuildKeyEntry(role.Key);
+            roles.Add(new Dictionary<string, object>
+            {
+                ["name"] = roleName,
+                ["keyids"] = new[] { role.KeyId },
+                ["threshold"] = 1,
+                ["terminating"] = role.Terminating,
+                ["paths"] = role.Paths.Cast<object>().ToList()
+            });
+        }
+
+        return new Dictionary<string, object>
+        {
+            ["keys"] = keys,
+            ["roles"] = roles
+        };
     }
 
     private Dictionary<string, object> BuildKeysDict()

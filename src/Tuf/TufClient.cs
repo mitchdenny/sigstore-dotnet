@@ -20,6 +20,7 @@ public sealed class TufClient : IDisposable
     private SignedMetadata<TimestampMetadata>? _trustedTimestamp;
     private SignedMetadata<SnapshotMetadata>? _trustedSnapshot;
     private SignedMetadata<TargetsMetadata>? _trustedTargets;
+    private readonly Dictionary<string, SignedMetadata<TargetsMetadata>> _trustedDelegatedTargets = new(StringComparer.Ordinal);
     private bool _refreshed;
 
     /// <summary>
@@ -87,11 +88,11 @@ public sealed class TufClient : IDisposable
         if (!_refreshed)
             await RefreshAsync(cancellationToken);
 
-        // §5.6: Fetch target
         if (_trustedTargets == null)
             throw new TufException("No trusted targets metadata available.");
 
-        if (!_trustedTargets.Signed.Targets.TryGetValue(targetPath, out var targetInfo))
+        var targetInfo = await FindTargetInfoAsync(targetPath, cancellationToken);
+        if (targetInfo == null)
             throw new TufException($"Target '{targetPath}' not found in targets metadata.");
 
         // Check cache first
@@ -133,6 +134,12 @@ public sealed class TufClient : IDisposable
     {
         var rootBytes = _cache.LoadMetadata("root")
             ?? throw new TufException("No trusted root metadata in cache.");
+
+        _trustedTimestamp = null;
+        _trustedSnapshot = null;
+        _trustedTargets = null;
+        _trustedDelegatedTargets.Clear();
+
         try
         {
             _trustedRoot = TufMetadataParser.ParseRoot(rootBytes);
@@ -152,7 +159,11 @@ public sealed class TufClient : IDisposable
         if (snapBytes != null) _trustedSnapshot = TufMetadataParser.ParseSnapshot(snapBytes);
 
         var targetsBytes = _cache.LoadMetadata("targets");
-        if (targetsBytes != null) _trustedTargets = TufMetadataParser.ParseTargets(targetsBytes);
+        if (targetsBytes != null)
+        {
+            _trustedTargets = TufMetadataParser.ParseTargets(targetsBytes);
+            _trustedDelegatedTargets["targets"] = _trustedTargets;
+        }
     }
 
     private static void ValidateTrustedRoot(SignedMetadata<RootMetadata> trustedRoot)
@@ -358,44 +369,166 @@ public sealed class TufClient : IDisposable
         var targetsBytes = await _repository.FetchMetadataAsync("targets", fetchVersion, cancellationToken)
             ?? throw new TufException("Failed to fetch targets.json from repository.");
 
-        // §5.5.3: Verify hashes (if present in snapshot)
-        if (targetsMeta.Hashes != null)
+        var newTargets = TufMetadataParser.ParseTargets(targetsBytes);
+        VerifyTargetsMetadata("targets", "root", targetsBytes, newTargets);
+
+        _trustedTargets = newTargets;
+        _trustedDelegatedTargets.Clear();
+        _trustedDelegatedTargets["targets"] = newTargets;
+        _cache.StoreMetadata("targets", targetsBytes);
+    }
+
+    private async Task<TargetFileInfo?> FindTargetInfoAsync(string targetPath, CancellationToken cancellationToken)
+    {
+        var rolesToVisit = new List<(string Role, string Parent)>
         {
-            VerifyMetaHashes(targetsBytes, targetsMeta.Hashes, "targets");
+            ("targets", "root")
+        };
+        var visitedRoles = new HashSet<string>(StringComparer.Ordinal);
+
+        while (visitedRoles.Count <= _options.MaxDelegations && rolesToVisit.Count > 0)
+        {
+            var current = rolesToVisit[^1];
+            rolesToVisit.RemoveAt(rolesToVisit.Count - 1);
+
+            if (visitedRoles.Contains(current.Role))
+            {
+                continue;
+            }
+
+            var targets = await LoadTargetsRoleAsync(current.Role, current.Parent, cancellationToken);
+
+            if (targets.Signed.Targets.TryGetValue(targetPath, out var targetInfo))
+            {
+                return targetInfo;
+            }
+
+            visitedRoles.Add(current.Role);
+
+            if (targets.Signed.Delegations == null)
+            {
+                continue;
+            }
+
+            var childRolesToVisit = new List<(string Role, string Parent)>();
+            foreach (var childRole in targets.Signed.Delegations.GetRolesForTarget(targetPath))
+            {
+                childRolesToVisit.Add((childRole.Name, current.Role));
+                if (childRole.Terminating)
+                {
+                    rolesToVisit.Clear();
+                    break;
+                }
+            }
+
+            childRolesToVisit.Reverse();
+            rolesToVisit.AddRange(childRolesToVisit);
         }
 
-        // Verify length
+        return null;
+    }
+
+    private async Task<SignedMetadata<TargetsMetadata>> LoadTargetsRoleAsync(
+        string roleName,
+        string parentRoleName,
+        CancellationToken cancellationToken)
+    {
+        if (_trustedDelegatedTargets.TryGetValue(roleName, out var existing))
+        {
+            return existing;
+        }
+
+        if (!_trustedSnapshot!.Signed.Meta.TryGetValue($"{roleName}.json", out _))
+        {
+            throw new TufException($"Role {roleName} was delegated but is not part of snapshot.");
+        }
+
+        var meta = _trustedSnapshot.Signed.Meta[$"{roleName}.json"];
+        int? fetchVersion = _trustedRoot!.Signed.ConsistentSnapshot ? meta.Version : null;
+        var targetsBytes = await _repository.FetchMetadataAsync(roleName, fetchVersion, cancellationToken)
+            ?? throw new TufException($"Failed to fetch {roleName}.json from repository.");
+        var targets = TufMetadataParser.ParseTargets(targetsBytes);
+
+        VerifyTargetsMetadata(roleName, parentRoleName, targetsBytes, targets);
+
+        _trustedDelegatedTargets[roleName] = targets;
+        _cache.StoreMetadata(roleName, targetsBytes);
+        return targets;
+    }
+
+    private void VerifyTargetsMetadata(
+        string roleName,
+        string parentRoleName,
+        byte[] targetsBytes,
+        SignedMetadata<TargetsMetadata> targets)
+    {
+        if (!_trustedSnapshot!.Signed.Meta.TryGetValue($"{roleName}.json", out var targetsMeta))
+        {
+            throw new TufException($"Role {roleName} was delegated but is not part of snapshot.");
+        }
+
+        if (targetsMeta.Hashes != null)
+        {
+            VerifyMetaHashes(targetsBytes, targetsMeta.Hashes, roleName);
+        }
+
         if (targetsMeta.Length.HasValue && targetsBytes.Length > targetsMeta.Length.Value)
         {
             throw new TufException(
-                $"Targets size {targetsBytes.Length} exceeds expected {targetsMeta.Length.Value}.");
+                $"{roleName} size {targetsBytes.Length} exceeds expected {targetsMeta.Length.Value}.");
         }
 
-        var newTargets = TufMetadataParser.ParseTargets(targetsBytes);
+        TufRole signingRole;
+        Dictionary<string, TufKey> signingKeys;
 
-        // §5.5.4: Verify targets signatures using keys from root
-        var targetsRole = _trustedRoot.Signed.Roles["targets"];
-        if (!TufMetadataVerifier.VerifyThreshold(
-                newTargets.Signatures, newTargets.SignedBytes, targetsRole, _trustedRoot.Signed.Keys))
+        if (parentRoleName == "root")
         {
-            throw new TufException("Targets signature verification failed.");
+            signingRole = _trustedRoot!.Signed.Roles[roleName];
+            signingKeys = _trustedRoot.Signed.Keys;
+        }
+        else
+        {
+            if (!_trustedDelegatedTargets.TryGetValue(parentRoleName, out var parentTargets))
+            {
+                throw new TufException($"Delegating role '{parentRoleName}' is not loaded.");
+            }
+
+            var parentDelegations = parentTargets.Signed.Delegations
+                ?? throw new TufException($"Delegating role '{parentRoleName}' has no delegations.");
+
+            if (!parentDelegations.TryGetRole(roleName, out var delegatedRole))
+            {
+                throw new TufException($"Role '{roleName}' is not delegated by '{parentRoleName}'.");
+            }
+
+            signingRole = new TufRole
+            {
+                KeyIds = delegatedRole.KeyIds,
+                Threshold = delegatedRole.Threshold
+            };
+            signingKeys = parentDelegations.Keys;
         }
 
-        // §5.5.5: Check version matches snapshot reference
-        if (newTargets.Signed.Version != targetsMeta.Version)
+        if (!TufMetadataVerifier.VerifyThreshold(
+                targets.Signatures,
+                targets.SignedBytes,
+                signingRole,
+                signingKeys))
+        {
+            var displayName = roleName == "targets" ? "Targets" : $"Targets role '{roleName}'";
+            throw new TufException($"{displayName} signature verification failed.");
+        }
+
+        if (targets.Signed.Version != targetsMeta.Version)
         {
             throw new TufException(
-                $"Targets version {newTargets.Signed.Version} doesn't match snapshot reference {targetsMeta.Version}.");
+                $"{roleName} version {targets.Signed.Version} doesn't match snapshot reference {targetsMeta.Version}.");
         }
 
-        // §5.5.6: Check expiry
-        if (newTargets.Signed.Expires < DateTimeOffset.UtcNow)
+        if (targets.Signed.Expires < DateTimeOffset.UtcNow)
         {
-            throw new TufExpiredException("targets", newTargets.Signed.Expires);
+            throw new TufExpiredException(roleName, targets.Signed.Expires);
         }
-
-        _trustedTargets = newTargets;
-        _cache.StoreMetadata("targets", targetsBytes);
     }
 
     private static void VerifyMetaHashes(byte[] data, Dictionary<string, string> expectedHashes, string roleName)

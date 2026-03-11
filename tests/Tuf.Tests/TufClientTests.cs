@@ -86,6 +86,20 @@ public class TufClientTests : IDisposable
     }
 
     [Fact]
+    public async Task DownloadTarget_DelegatedRole_Succeeds()
+    {
+        var content = "delegated target"u8.ToArray();
+        _repo.AddDelegatedTarget("delegated-role", ["*.txt"], "delegated.txt", content);
+        _repo.BumpNonRootVersions();
+        var client = CreateClient();
+
+        var result = await client.DownloadTargetAsync("delegated.txt");
+
+        Assert.Equal(content, result);
+        Assert.Contains("delegated-role.json", _repo.RequestLog);
+    }
+
+    [Fact]
     public async Task DownloadTarget_CachesContent()
     {
         var content = "cached"u8.ToArray();
