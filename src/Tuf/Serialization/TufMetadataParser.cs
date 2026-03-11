@@ -153,6 +153,7 @@ internal static class TufMetadataParser
                   ?? throw new JsonException("Failed to deserialize root metadata.");
 
         ValidateType(dto.Type, "root");
+        ValidateVersion(dto.Version, "root");
 
         var keys = dto.Keys?.ToDictionary(
             kvp => kvp.Key,
@@ -328,6 +329,12 @@ internal static class TufMetadataParser
     {
         if (type != expected)
             throw new JsonException($"Expected metadata type '{expected}' but got '{type}'.");
+    }
+
+    private static void ValidateVersion(int version, string type)
+    {
+        if (version <= 0)
+            throw new JsonException($"Metadata type '{type}' is missing a valid version.");
     }
 
     private static DateTimeOffset ParseExpires(string? expires) =>

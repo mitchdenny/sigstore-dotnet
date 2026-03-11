@@ -1,3 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Reflection;
+using Tuf.Metadata;
+
 namespace Tuf.Tests;
 
 public class TufClientTests : IDisposable
@@ -10,9 +15,9 @@ public class TufClientTests : IDisposable
         _repo = new RepositorySimulator();
     }
 
-    private TufClient CreateClient(byte[]? trustedRoot = null)
+    private TufClient CreateClient(byte[]? trustedRoot = null, ITufCache? cache = null)
     {
-        var cache = new InMemoryTufCache();
+        cache ??= new InMemoryTufCache();
         _client = new TufClient(new TufClientOptions
         {
             MetadataBaseUrl = new Uri("https://example.com/metadata/"),
@@ -80,6 +85,20 @@ public class TufClientTests : IDisposable
         var ex = await Assert.ThrowsAsync<TufException>(
             () => client.DownloadTargetAsync("nonexistent.txt"));
         Assert.Contains("not found", ex.Message);
+    }
+
+    [Fact]
+    public async Task DownloadTarget_DelegatedRole_Succeeds()
+    {
+        var content = "delegated target"u8.ToArray();
+        _repo.AddDelegatedTarget("delegated-role", ["*.txt"], "delegated.txt", content);
+        _repo.BumpNonRootVersions();
+        var client = CreateClient();
+
+        var result = await client.DownloadTargetAsync("delegated.txt");
+
+        Assert.Equal(content, result);
+        Assert.Contains("delegated-role.json", _repo.RequestLog);
     }
 
     [Fact]
@@ -229,6 +248,32 @@ public class TufClientTests : IDisposable
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Refresh_TargetsRollbackWithHashedSnapshotMetadata_Throws()
+    {
+        _repo.ConsistentSnapshot = true;
+        _repo.PublishAll();
+
+        var trustedRoot = _repo.GetInitialRoot();
+        var cache = new InMemoryTufCache();
+
+        _repo.ComputeMetafileHashesAndLength = true;
+        _repo.BumpNonRootVersions();
+
+        var client = CreateClient(trustedRoot, cache);
+        await client.RefreshAsync();
+
+        _repo.TargetsVersion = 1;
+        _repo.SnapshotVersion = 3;
+        _repo.TimestampVersion = 3;
+        _repo.PublishAll();
+
+        client = CreateClient(trustedRoot, cache);
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---- Target Hash Verification ----
 
     [Fact]
@@ -249,5 +294,67 @@ public class TufClientTests : IDisposable
         var ex = await Assert.ThrowsAsync<TufException>(
             () => client.DownloadTargetAsync("file.txt"));
         Assert.Contains("hash verification failed", ex.Message);
+    }
+
+    [Fact]
+    public void VerifyTargetHashes_UnknownAlgorithmsOnly_ReturnsFalse()
+    {
+        var verifyMethod = typeof(TufClient).GetMethod(
+            "VerifyTargetHashes",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var result = (bool)verifyMethod!.Invoke(null, [
+            "data"u8.ToArray(),
+            new TargetFileInfo
+            {
+                Length = 4,
+                Hashes = new Dictionary<string, string>
+                {
+                    ["unknown-hash"] = "deadbeef"
+                }
+            }
+        ])!;
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task Refresh_InvalidTrustedRoot_ThrowsBeforeAnyRequests()
+    {
+        var invalidRoot = ModifyJson(_repo.GetInitialRoot(), root =>
+        {
+            root["signed"]!.AsObject().Remove("version");
+        });
+
+        var client = CreateClient(invalidRoot);
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("Trusted root metadata is invalid", ex.Message);
+        Assert.Empty(_repo.RequestLog);
+    }
+
+    [Fact]
+    public async Task Refresh_UnsignedTrustedRoot_ThrowsBeforeAnyRequests()
+    {
+        var unsignedRoot = ModifyJson(_repo.GetInitialRoot(), root =>
+        {
+            root["signatures"]!.AsArray()[0]!["sig"] = "00";
+        });
+
+        var client = CreateClient(unsignedRoot);
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("Trusted root signature verification failed", ex.Message);
+        Assert.Empty(_repo.RequestLog);
+    }
+
+    private static byte[] ModifyJson(byte[] json, Action<JsonObject> mutate)
+    {
+        var root = JsonNode.Parse(json)?.AsObject()
+            ?? throw new InvalidOperationException("Failed to parse test JSON.");
+        mutate(root);
+        return JsonSerializer.SerializeToUtf8Bytes(root);
     }
 }

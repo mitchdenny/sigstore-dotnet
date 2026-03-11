@@ -183,6 +183,26 @@ public class TufMetadataParserTests
     }
 
     [Fact]
+    public void ParseRoot_MissingVersion_ThrowsJsonException()
+    {
+        var json = """
+        {
+            "signatures": [],
+            "signed": {
+                "_type": "root",
+                "spec_version": "1.0",
+                "expires": "2030-01-01T00:00:00Z",
+                "consistent_snapshot": false,
+                "keys": {},
+                "roles": {}
+            }
+        }
+        """u8.ToArray();
+
+        Assert.Throws<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
+    }
+
+    [Fact]
     public void ParseRoot_UnrecognizedFields_AreIgnored()
     {
         var json = """
@@ -204,6 +224,44 @@ public class TufMetadataParserTests
 
         var result = TufMetadataParser.ParseRoot(json);
         Assert.Equal(1, result.Signed.Version);
+    }
+
+    [Fact]
+    public void ParseRoot_DeprecatedKeyIdHashAlgorithms_IsIgnored()
+    {
+        var json = """
+        {
+            "signatures": [],
+            "signed": {
+                "_type": "root",
+                "spec_version": "1.0",
+                "version": 1,
+                "expires": "2030-01-01T00:00:00Z",
+                "consistent_snapshot": false,
+                "keys": {
+                    "keyid": {
+                        "keytype": "ed25519",
+                        "scheme": "ed25519",
+                        "keyval": {
+                            "public": "test"
+                        },
+                        "keyid_hash_algorithms": "md5"
+                    }
+                },
+                "roles": {
+                    "root": {
+                        "keyids": ["keyid"],
+                        "threshold": 1
+                    }
+                }
+            }
+        }
+        """u8.ToArray();
+
+        var result = TufMetadataParser.ParseRoot(json);
+
+        Assert.Single(result.Signed.Keys);
+        Assert.Equal("ed25519", result.Signed.Keys["keyid"].KeyType);
     }
 
     [Fact]

@@ -32,7 +32,8 @@ public sealed class HttpTufRepository : ITufRepository, IDisposable
     /// <inheritdoc/>
     public async Task<byte[]?> FetchMetadataAsync(string role, int? version = null, CancellationToken cancellationToken = default)
     {
-        var fileName = version.HasValue ? $"{version}.{role}.json" : $"{role}.json";
+        var escapedRole = Uri.EscapeDataString(role);
+        var fileName = version.HasValue ? $"{version}.{escapedRole}.json" : $"{escapedRole}.json";
         var url = new Uri(_metadataBaseUrl, fileName);
 
         try

@@ -39,4 +39,11 @@ public sealed class TufClientOptions
     /// Protects against endless root rotation loops. Default is 1024.
     /// </summary>
     public int MaxRootRotations { get; init; } = 1024;
+
+    /// <summary>
+    /// Maximum delegated roles to walk while searching for a target.
+    /// Protects against delegation cycles and excessively deep graphs.
+    /// Default is 32, matching the common TUF client default.
+    /// </summary>
+    public int MaxDelegations { get; init; } = 32;
 }

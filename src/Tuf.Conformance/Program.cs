@@ -93,6 +93,16 @@ public static class Program
         var dir = Path.GetDirectoryName(targetPath);
         if (dir != null)
             Directory.CreateDirectory(dir);
+
+        if (File.Exists(targetPath))
+        {
+            var existingBytes = await File.ReadAllBytesAsync(targetPath, cancellationToken);
+            if (existingBytes.AsSpan().SequenceEqual(targetBytes))
+            {
+                return;
+            }
+        }
+
         await File.WriteAllBytesAsync(targetPath, targetBytes, cancellationToken);
     }
 

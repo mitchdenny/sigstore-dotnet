@@ -26,16 +26,20 @@ public static class TufMetadataVerifier
         if (role.Threshold <= 0)
             return false;
 
+        var seenKeyIds = new HashSet<string>();
+        foreach (var sig in signatures)
+        {
+            if (!seenKeyIds.Add(sig.KeyId))
+                return false;
+        }
+
         var validKeyIds = new HashSet<string>();
 
         foreach (var sig in signatures)
         {
+
             // Only consider signatures from keys authorized for this role
             if (!role.KeyIds.Contains(sig.KeyId))
-                continue;
-
-            // Don't count the same key twice
-            if (validKeyIds.Contains(sig.KeyId))
                 continue;
 
             // Skip empty signatures
@@ -97,19 +101,11 @@ public static class TufMetadataVerifier
         return ecdsa.VerifyData(data, signature, hashAlgorithm, DSASignatureFormat.Rfc3279DerSequence);
     }
 
-    private static bool VerifyEd25519(byte[] data, byte[] signature, string pem)
+    private static bool VerifyEd25519(byte[] data, byte[] signature, string publicKeyValue)
     {
-        // .NET 10 doesn't have built-in Ed25519 via ImportFromPem.
-        // Use NSec.Cryptography for Ed25519 verification.
-        var pemBytes = Encoding.ASCII.GetBytes(pem);
-        var derBytes = ExtractDerFromPem(pemBytes);
-
-        // Ed25519 SPKI DER: 30 2a 30 05 06 03 2b 65 70 03 21 00 <32 bytes>
-        // The actual public key is the last 32 bytes
-        if (derBytes.Length < 44 || signature.Length != 64)
+        if (signature.Length != 64 || !TryDecodeEd25519PublicKey(publicKeyValue, out var publicKeyRaw))
             return false;
 
-        var publicKeyRaw = derBytes[^32..];
         var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
         var publicKey = NSec.Cryptography.PublicKey.Import(algorithm, publicKeyRaw,
             NSec.Cryptography.KeyBlobFormat.RawPublicKey);
@@ -132,5 +128,53 @@ public static class TufMetadataVerifier
             .Select(l => l.Trim());
         var base64 = string.Join("", lines);
         return Convert.FromBase64String(base64);
+    }
+
+    private static bool TryDecodeEd25519PublicKey(string publicKeyValue, out byte[] publicKeyRaw)
+    {
+        if (TryDecodeEd25519RawKey(publicKeyValue, out publicKeyRaw))
+            return true;
+
+        if (TryDecodeEd25519PemKey(publicKeyValue, out publicKeyRaw))
+            return true;
+
+        publicKeyRaw = [];
+        return false;
+    }
+
+    private static bool TryDecodeEd25519RawKey(string publicKeyValue, out byte[] publicKeyRaw)
+    {
+        try
+        {
+            publicKeyRaw = Convert.FromHexString(publicKeyValue);
+            return publicKeyRaw.Length == 32;
+        }
+        catch (FormatException)
+        {
+            publicKeyRaw = [];
+            return false;
+        }
+    }
+
+    private static bool TryDecodeEd25519PemKey(string publicKeyValue, out byte[] publicKeyRaw)
+    {
+        try
+        {
+            var pemBytes = Encoding.ASCII.GetBytes(publicKeyValue);
+            var derBytes = ExtractDerFromPem(pemBytes);
+            if (derBytes.Length != 44)
+            {
+                publicKeyRaw = [];
+                return false;
+            }
+
+            publicKeyRaw = derBytes[^32..];
+            return true;
+        }
+        catch (FormatException)
+        {
+            publicKeyRaw = [];
+            return false;
+        }
     }
 }

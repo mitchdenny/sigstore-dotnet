@@ -1,3 +1,4 @@
+using NSec.Cryptography;
 using Tuf.Serialization;
 
 namespace Tuf.Tests;
@@ -216,5 +217,70 @@ public class TufSignatureVerificationTests
             root.Signed.Keys);
 
         Assert.False(result, "Signatures from unauthorized keys should not count.");
+    }
+
+    [Fact]
+    public void VerifyThreshold_DuplicateSignatureKeyIds_Fails()
+    {
+        var rootJson = LoadFixture("root.json");
+        var root = TufMetadataParser.ParseRoot(rootJson);
+
+        var signature = root.Signatures.First(signature => !string.IsNullOrEmpty(signature.Sig));
+        var duplicateSignatures = new List<Tuf.Metadata.TufSignature> { signature, signature };
+        var rootRole = new Tuf.Metadata.TufRole
+        {
+            KeyIds = [signature.KeyId],
+            Threshold = 1
+        };
+
+        var result = TufMetadataVerifier.VerifyThreshold(
+            duplicateSignatures,
+            root.SignedBytes,
+            rootRole,
+            root.Signed.Keys);
+
+        Assert.False(result, "Duplicate keyids in signatures should invalidate the metadata.");
+    }
+
+    [Fact]
+    public void VerifyThreshold_Ed25519RawHexPublicKey_ThresholdMet()
+    {
+        var algorithm = SignatureAlgorithm.Ed25519;
+        using var signingKey = Key.Create(algorithm);
+        var data = "hello tuf ed25519"u8.ToArray();
+        var signature = algorithm.Sign(signingKey, data);
+        var rawPublicKey = signingKey.Export(KeyBlobFormat.RawPublicKey);
+
+        var role = new Tuf.Metadata.TufRole
+        {
+            KeyIds = ["ed25519-key"],
+            Threshold = 1
+        };
+
+        var keys = new Dictionary<string, Tuf.Metadata.TufKey>
+        {
+            ["ed25519-key"] = new()
+            {
+                KeyType = "ed25519",
+                Scheme = "ed25519",
+                KeyVal = new Dictionary<string, string>
+                {
+                    ["public"] = Convert.ToHexString(rawPublicKey).ToLowerInvariant()
+                }
+            }
+        };
+
+        var signatures = new List<Tuf.Metadata.TufSignature>
+        {
+            new()
+            {
+                KeyId = "ed25519-key",
+                Sig = Convert.ToHexString(signature).ToLowerInvariant()
+            }
+        };
+
+        var result = TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys);
+
+        Assert.True(result, "Ed25519 raw-hex public keys should verify successfully.");
     }
 }
