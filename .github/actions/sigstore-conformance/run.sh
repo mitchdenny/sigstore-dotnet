@@ -42,25 +42,51 @@ if "GHA_SIGSTORE_CONFORMANCE_IDENTITY_TOKEN" not in text:
 
 client_path = Path("sigstore-conformance-action/test/client.py")
 client_text = client_path.read_text()
-client_default = '''CERTIFICATE_IDENTITY = (
-    "https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/"
-    "workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main"
-)
+sign_snippet = '''        if getattr(materials, "signing_config", None) is not None:
+            args.extend(["--signing-config", materials.signing_config])
+
+        self.run(*args, artifact)
 '''
-client_override = '''CERTIFICATE_IDENTITY = os.getenv(
-    "GHA_SIGSTORE_CONFORMANCE_CERTIFICATE_IDENTITY",
-    (
-        "https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/"
-        "workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main"
-    ),
-)
+sign_override = '''        if getattr(materials, "signing_config", None) is not None:
+            args.extend(["--signing-config", materials.signing_config])
+
+        materials.certificate_identity = os.getenv(
+            "GHA_SIGSTORE_CONFORMANCE_CERTIFICATE_IDENTITY",
+            CERTIFICATE_IDENTITY,
+        )
+        self.run(*args, artifact)
+'''
+
+verify_snippet = '''        else:
+            args.extend(
+                [
+                    "--certificate-identity",
+                    CERTIFICATE_IDENTITY,
+                    "--certificate-oidc-issuer",
+                    CERTIFICATE_OIDC_ISSUER,
+                ]
+            )
+'''
+verify_override = '''        else:
+            expected_identity = getattr(materials, "certificate_identity", CERTIFICATE_IDENTITY)
+            args.extend(
+                [
+                    "--certificate-identity",
+                    expected_identity,
+                    "--certificate-oidc-issuer",
+                    CERTIFICATE_OIDC_ISSUER,
+                ]
+            )
 '''
 
 if "GHA_SIGSTORE_CONFORMANCE_CERTIFICATE_IDENTITY" not in client_text:
-    if client_default not in client_text:
-        raise SystemExit("Failed to find default certificate identity in sigstore-conformance client.py")
+    if sign_snippet not in client_text:
+        raise SystemExit("Failed to find sign path in sigstore-conformance client.py")
+    if verify_snippet not in client_text:
+        raise SystemExit("Failed to find verify path in sigstore-conformance client.py")
 
-    client_text = client_text.replace(client_default, client_override, 1)
+    client_text = client_text.replace(sign_snippet, sign_override, 1)
+    client_text = client_text.replace(verify_snippet, verify_override, 1)
     client_path.write_text(client_text)
 PY
 
