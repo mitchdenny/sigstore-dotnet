@@ -15,9 +15,9 @@ public class TufClientTests : IDisposable
         _repo = new RepositorySimulator();
     }
 
-    private TufClient CreateClient(byte[]? trustedRoot = null)
+    private TufClient CreateClient(byte[]? trustedRoot = null, ITufCache? cache = null)
     {
-        var cache = new InMemoryTufCache();
+        cache ??= new InMemoryTufCache();
         _client = new TufClient(new TufClientOptions
         {
             MetadataBaseUrl = new Uri("https://example.com/metadata/"),
@@ -244,6 +244,32 @@ public class TufClientTests : IDisposable
 
         // Create a new client with the same cache that remembers the old timestamp
         // Actually, RefreshAsync on the same client should detect rollback
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Refresh_TargetsRollbackWithHashedSnapshotMetadata_Throws()
+    {
+        _repo.ConsistentSnapshot = true;
+        _repo.PublishAll();
+
+        var trustedRoot = _repo.GetInitialRoot();
+        var cache = new InMemoryTufCache();
+
+        _repo.ComputeMetafileHashesAndLength = true;
+        _repo.BumpNonRootVersions();
+
+        var client = CreateClient(trustedRoot, cache);
+        await client.RefreshAsync();
+
+        _repo.TargetsVersion = 1;
+        _repo.SnapshotVersion = 3;
+        _repo.TimestampVersion = 3;
+        _repo.PublishAll();
+
+        client = CreateClient(trustedRoot, cache);
+
         var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

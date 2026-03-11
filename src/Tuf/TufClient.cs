@@ -618,7 +618,7 @@ public sealed class TufClient : IDisposable
             VerifyMetaHashes(snapshotBytes, snapshotMeta.Hashes, "snapshot");
         }
 
-        if (snapshotMeta.Length.HasValue && snapshotBytes.Length > snapshotMeta.Length.Value)
+        if (!trustedLocalSnapshot && snapshotMeta.Length.HasValue && snapshotBytes.Length > snapshotMeta.Length.Value)
         {
             throw new TufException(
                 $"Snapshot size {snapshotBytes.Length} exceeds expected {snapshotMeta.Length.Value}.");

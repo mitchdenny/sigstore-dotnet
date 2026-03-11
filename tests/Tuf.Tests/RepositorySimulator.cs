@@ -45,6 +45,7 @@ internal sealed class RepositorySimulator : ITufRepository
     public int SnapshotVersion { get; set; } = 1;
     public int TargetsVersion { get; set; } = 1;
     public bool ConsistentSnapshot { get; set; }
+    public bool ComputeMetafileHashesAndLength { get; set; }
     public DateTimeOffset RootExpiry { get; set; } = DateTimeOffset.UtcNow.AddYears(1);
     public DateTimeOffset TimestampExpiry { get; set; } = DateTimeOffset.UtcNow.AddDays(1);
     public DateTimeOffset SnapshotExpiry { get; set; } = DateTimeOffset.UtcNow.AddDays(7);
@@ -255,18 +256,12 @@ internal sealed class RepositorySimulator : ITufRepository
     {
         var meta = new Dictionary<string, object>
         {
-            ["targets.json"] = new Dictionary<string, object>
-            {
-                ["version"] = TargetsVersion
-            }
+            ["targets.json"] = BuildSnapshotMetaEntry("targets.json", TargetsVersion)
         };
 
         foreach (var (roleName, role) in _delegatedRoles)
         {
-            meta[$"{roleName}.json"] = new Dictionary<string, object>
-            {
-                ["version"] = role.Version
-            };
+            meta[$"{roleName}.json"] = BuildSnapshotMetaEntry($"{roleName}.json", role.Version);
         }
 
         var signed = new Dictionary<string, object>
@@ -284,6 +279,28 @@ internal sealed class RepositorySimulator : ITufRepository
         var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope);
         _metadata[$"{SnapshotVersion}.snapshot.json"] = bytes;
         _metadata["snapshot.json"] = bytes;
+    }
+
+    private Dictionary<string, object> BuildSnapshotMetaEntry(string metadataName, int version)
+    {
+        var entry = new Dictionary<string, object>
+        {
+            ["version"] = version
+        };
+
+        if (!ComputeMetafileHashesAndLength)
+        {
+            return entry;
+        }
+
+        var metadataBytes = _metadata[metadataName];
+        entry["length"] = metadataBytes.Length;
+        entry["hashes"] = new Dictionary<string, string>
+        {
+            ["sha256"] = Convert.ToHexString(SHA256.HashData(metadataBytes)).ToLowerInvariant()
+        };
+
+        return entry;
     }
 
     private void PublishTimestamp()
