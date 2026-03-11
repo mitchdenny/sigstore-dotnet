@@ -27,12 +27,16 @@ public static class TufMetadataVerifier
             return false;
 
         var seenKeyIds = new HashSet<string>();
-        var validKeyIds = new HashSet<string>();
-
         foreach (var sig in signatures)
         {
             if (!seenKeyIds.Add(sig.KeyId))
                 return false;
+        }
+
+        var validKeyIds = new HashSet<string>();
+
+        foreach (var sig in signatures)
+        {
 
             // Only consider signatures from keys authorized for this role
             if (!role.KeyIds.Contains(sig.KeyId))

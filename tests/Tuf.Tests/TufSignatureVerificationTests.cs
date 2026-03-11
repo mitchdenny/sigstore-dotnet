@@ -225,13 +225,13 @@ public class TufSignatureVerificationTests
         var rootJson = LoadFixture("root.json");
         var root = TufMetadataParser.ParseRoot(rootJson);
 
-        var duplicateSignatures = root.Signatures
-            .Where(signature => !string.IsNullOrEmpty(signature.Sig))
-            .Take(1)
-            .Concat(root.Signatures.Where(signature => !string.IsNullOrEmpty(signature.Sig)).Take(1))
-            .ToList();
-
-        var rootRole = root.Signed.Roles["root"];
+        var signature = root.Signatures.First(signature => !string.IsNullOrEmpty(signature.Sig));
+        var duplicateSignatures = new List<Tuf.Metadata.TufSignature> { signature, signature };
+        var rootRole = new Tuf.Metadata.TufRole
+        {
+            KeyIds = [signature.KeyId],
+            Threshold = 1
+        };
 
         var result = TufMetadataVerifier.VerifyThreshold(
             duplicateSignatures,
