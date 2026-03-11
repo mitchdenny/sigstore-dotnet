@@ -72,7 +72,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Checkout
@@ -95,7 +94,7 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (production)
-        uses: ./.github/actions/sigstore-conformance
+        uses: sigstore/sigstore-conformance@9611941d54398f2e3f6383b6f744442a56d2fb2a # v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: production
@@ -106,7 +105,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Checkout
@@ -129,7 +127,7 @@ jobs:
           chmod +x sigstore-conformance-client
 
       - name: Run conformance tests (staging)
-        uses: ./.github/actions/sigstore-conformance
+        uses: sigstore/sigstore-conformance@9611941d54398f2e3f6383b6f744442a56d2fb2a # v0.0.26
         with:
           entrypoint: ${{ github.workspace }}/sigstore-conformance-client
           environment: staging
