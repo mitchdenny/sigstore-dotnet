@@ -32,6 +32,10 @@ jobs:
       checks: write
 
     steps:
+      - name: Disable CRLF conversion
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
