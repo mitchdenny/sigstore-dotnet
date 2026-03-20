@@ -22,7 +22,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     permissions:
       contents: read
       checks: write
@@ -45,17 +49,13 @@ jobs:
         run: dotnet build Sigstore.slnx --no-restore
 
       - name: Test
-        run: |
-          dotnet test Sigstore.slnx \
-            --no-build \
-            --logger "trx;LogFileName=test-results.trx" \
-            --results-directory ./TestResults
+        run: dotnet test Sigstore.slnx --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
-          name: Test Results
+          name: Test Results (${{ matrix.os }})
           path: ./TestResults/*.trx
           reporter: dotnet-trx
 
@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: ./TestResults/
 
   conformance-production:
