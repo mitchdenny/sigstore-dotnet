@@ -1,0 +1,4 @@
+# Ensure conformance test assets are checked out with exact byte content.
+# Line-ending conversion would change file hashes and break digest verification.
+tests/sigstore-conformance/test/assets/** binary
+samples/data/** binary

@@ -96,49 +96,8 @@ internal class DefaultSigningCertificateValidator : ISigningCertificateValidator
             }
         }
 
-        // Extract SAN from the leaf certificate
-        string? san = null;
-        foreach (var ext in leafCertificate.Extensions)
-        {
-            if (ext.Oid?.Value == "2.5.29.17") // Subject Alternative Name
-            {
-                // Parse the SAN extension formatted string
-                var formatted = ext.Format(false);
-                // Try to extract email, URI, or DNS from the formatted string
-                // Format varies by platform but typically: "RFC822 Name=user@example.com" or "email:user@example.com"
-                // or "URI:https://..." or "DNS Name=host"
-                foreach (var part in formatted.Split(',', StringSplitOptions.TrimEntries))
-                {
-                    if (part.Contains("RFC822", StringComparison.OrdinalIgnoreCase) ||
-                        part.Contains("email", StringComparison.OrdinalIgnoreCase))
-                    {
-                        san = part.Split('=', ':').Last().Trim();
-                        break;
-                    }
-                    if (part.Contains("URI", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // URI might be formatted as "URI:https://..." or "Uniform Resource Identifier=https://..."
-                        var idx = part.IndexOf("URI:", StringComparison.OrdinalIgnoreCase);
-                        if (idx >= 0)
-                            san = part.Substring(idx + 4).Trim();
-                        else
-                            san = part.Split('=').Last().Trim();
-                        break;
-                    }
-                }
-                if (san == null)
-                {
-                    // Fall back to DNS names
-                    var sanExt = (X509SubjectAlternativeNameExtension)ext;
-                    foreach (var dns in sanExt.EnumerateDnsNames())
-                    {
-                        san = dns;
-                        break;
-                    }
-                }
-                break;
-            }
-        }
+        // Extract SAN from the leaf certificate using platform-independent ASN.1 parsing
+        var san = SanParser.ExtractSan(leafCertificate);
 
         return new SigningCertificateValidationResult
         {

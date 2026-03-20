@@ -949,34 +949,7 @@ public sealed class SigstoreVerifier
 
     private static string? ExtractSan(X509Certificate2 cert)
     {
-        foreach (var ext in cert.Extensions)
-        {
-            if (ext.Oid?.Value != "2.5.29.17")
-                continue;
-
-            var formatted = ext.Format(false);
-            foreach (var part in formatted.Split(',', StringSplitOptions.TrimEntries))
-            {
-                if (part.Contains("RFC822", StringComparison.OrdinalIgnoreCase) ||
-                    part.Contains("email", StringComparison.OrdinalIgnoreCase))
-                {
-                    return part.Split('=', ':').Last().Trim();
-                }
-                if (part.Contains("URI", StringComparison.OrdinalIgnoreCase))
-                {
-                    var idx = part.IndexOf("URI:", StringComparison.OrdinalIgnoreCase);
-                    if (idx >= 0)
-                        return part.Substring(idx + 4).Trim();
-                    return part.Split('=').Last().Trim();
-                }
-            }
-
-            // Fall back to DNS names
-            var sanExt = (X509SubjectAlternativeNameExtension)ext;
-            foreach (var dns in sanExt.EnumerateDnsNames())
-                return dns;
-        }
-        return null;
+        return SanParser.ExtractSan(cert);
     }
 
     private static string? ExtractOidcIssuer(X509Certificate2 cert)
