@@ -1,0 +1,52 @@
+name: Conformance Drift
+
+on:
+  schedule:
+    - cron: '30 9 * * 1' # Every Monday at 9:30 UTC
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    uses: ./.github/workflows/conformance.yml
+    permissions:
+      contents: read
+
+  file-issue:
+    runs-on: ubuntu-latest
+    needs: [conformance]
+    if: ${{ failure() }}
+    permissions:
+      issues: write
+
+    steps:
+      - name: File issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label "conformance-drift" \
+            --state open \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+
+          body=$(cat <<EOF
+          The weekly conformance-drift workflow detected failures.
+
+          **Workflow run:** ${RUN_URL}
+          EOF
+          )
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" \
+              --repo "${{ github.repository }}" \
+              --body "$body"
+          else
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "Conformance drift detected" \
+              --label "conformance-drift" \
+              --body "$body"
+          fi
