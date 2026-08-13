@@ -1318,7 +1318,7 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public void ResolveIssuerCandidates_CasShareSubjectName_PrefersAuthorityKeyIdentifierMatch()
+    public void ResolveIssuerCandidates_CasShareSubjectName_SelectsAuthorityKeyIdentifierMatch()
     {
         using var oldCa = CreateTestCa(out var oldKey);
         using var newCa = CreateTestCa(out var newKey);
@@ -1335,8 +1335,43 @@ public class SigstoreVerifierTests
             {
                 var candidates = SigstoreVerifier.ResolveIssuerCandidates(leaf, null, trustedRoot, owned);
 
+                // The other authority publishes a different key, so it cannot have issued the leaf.
+                Assert.Single(candidates);
                 Assert.Equal(newCa.Thumbprint, candidates[0].Thumbprint);
+            }
+            finally
+            {
+                foreach (var candidate in owned)
+                    candidate.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveIssuerCandidates_CaWithoutSubjectKeyIdentifier_IsKeptAsFallback()
+    {
+        using var namedCa = CreateTestCa(out var namedKey);
+        using (namedKey)
+        using (var anonymousKey = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+        {
+            // This authority shares the subject name but publishes no key identifier, so a mismatch
+            // with the leaf's authority key identifier cannot be established and it must be tried.
+            var request = new CertificateRequest(SharedCaSubject, anonymousKey, HashAlgorithmName.SHA256);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            using var anonymousCa = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+            using var leaf = CreateTestLeaf(namedCa, includeAuthorityKeyIdentifier: true);
+
+            var owned = new List<X509Certificate2>();
+            try
+            {
+                var candidates = SigstoreVerifier.ResolveIssuerCandidates(
+                    leaf, null, TrustedRootWith(anonymousCa, namedCa), owned);
+
                 Assert.Equal(2, candidates.Count);
+                Assert.Equal(namedCa.Thumbprint, candidates[0].Thumbprint);
+                Assert.Contains(candidates, c => c.Thumbprint == anonymousCa.Thumbprint);
             }
             finally
             {

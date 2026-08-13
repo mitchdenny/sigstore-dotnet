@@ -1,4 +1,3 @@
-using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -1034,23 +1033,13 @@ public sealed class SigstoreVerifier
         return true;
     }
 
-    // OID of the X.509 authority key identifier extension (RFC 5280 §4.2.1.1).
-    private const string AuthorityKeyIdentifierOid = "2.5.29.35";
-    // OID of the X.509 subject key identifier extension (RFC 5280 §4.2.1.2).
-    private const string SubjectKeyIdentifierOid = "2.5.29.14";
-
     /// <summary>
     /// Collects the certificates that may have issued <paramref name="leafCert"/>, most likely first.
     /// </summary>
     /// <remarks>
     /// A precertificate SCT commits to a hash of the issuing certificate's public key, so SCT
-    /// verification needs that exact certificate. Selecting it by subject name alone is not safe:
-    /// a certificate authority that rotates its key keeps its subject name, so a trusted root can
-    /// legitimately hold several distinct authorities sharing one name. Picking the first name match
-    /// then silently reconstructs the signed data with the wrong key and every SCT appears invalid.
-    /// Candidates whose subject key identifier matches the leaf's authority key identifier are
-    /// returned first, and the remaining name matches are retained as fallbacks so certificates that
-    /// omit those extensions still verify.
+    /// verification needs that exact certificate. See <see cref="IssuerCandidateIndex"/> for why the
+    /// issuer cannot be selected by subject name alone.
     /// </remarks>
     /// <param name="leafCert">The certificate whose issuer is being resolved.</param>
     /// <param name="intermediates">Intermediate certificates supplied by the bundle, if any.</param>
@@ -1066,91 +1055,7 @@ public sealed class SigstoreVerifier
         if (intermediates is { Count: > 0 })
             return [intermediates[0]];
 
-        var authorityKeyId = GetAuthorityKeyIdentifier(leafCert);
-
-        var preferred = new List<X509Certificate2>();
-        var fallback = new List<X509Certificate2>();
-
-        foreach (var ca in trustRoot.CertificateAuthorities)
-        {
-            foreach (var caCertBytes in ca.CertificateChain)
-            {
-                X509Certificate2 caCert;
-                try
-                {
-                    caCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (!leafCert.IssuerName.RawData.AsSpan().SequenceEqual(caCert.SubjectName.RawData))
-                {
-                    caCert.Dispose();
-                    continue;
-                }
-
-                owned.Add(caCert);
-
-                var subjectKeyId = GetSubjectKeyIdentifier(caCert);
-
-                if (authorityKeyId is { } akid && subjectKeyId is { } skid && akid.Span.SequenceEqual(skid.Span))
-                    preferred.Add(caCert);
-                else
-                    fallback.Add(caCert);
-            }
-        }
-
-        preferred.AddRange(fallback);
-        return preferred;
-    }
-
-    private static ReadOnlyMemory<byte>? GetAuthorityKeyIdentifier(X509Certificate2 cert)
-    {
-        var extension = cert.Extensions[AuthorityKeyIdentifierOid];
-        if (extension == null)
-            return null;
-
-        try
-        {
-            // Unlike the subject key identifier extension, this type's byte[] constructor decodes
-            // the extension rather than treating the bytes as an identifier.
-            return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical)
-                .KeyIdentifier;
-        }
-        catch (AsnContentException)
-        {
-            return null;
-        }
-        catch (CryptographicException)
-        {
-            return null;
-        }
-    }
-
-    private static ReadOnlyMemory<byte>? GetSubjectKeyIdentifier(X509Certificate2 cert)
-    {
-        var extension = cert.Extensions[SubjectKeyIdentifierOid];
-        if (extension == null)
-            return null;
-
-        try
-        {
-            // The extension value is a bare OCTET STRING (RFC 5280 §4.2.1.2). It is decoded here
-            // rather than through X509SubjectKeyIdentifierExtension, whose byte[] constructor would
-            // treat the encoded value as the identifier itself and leave its DER header in place,
-            // preventing it from ever matching an authority key identifier.
-            return new AsnReader(extension.RawData, AsnEncodingRules.DER).ReadOctetString();
-        }
-        catch (AsnContentException)
-        {
-            return null;
-        }
-        catch (CryptographicException)
-        {
-            return null;
-        }
+        return IssuerCandidateIndex.For(trustRoot).Resolve(leafCert, owned);
     }
 
 
