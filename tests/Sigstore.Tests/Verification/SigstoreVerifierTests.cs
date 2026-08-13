@@ -890,4 +890,155 @@ public class SigstoreVerifierTests
             };
         }
     }
+
+    // ---- Transparency log entry schema gating ----
+    //
+    // Cross-verification reads every field of an entry body by name. An entry whose
+    // schema is not recognised matches none of those names, so every check is skipped
+    // and the entry would otherwise be reported as verified without anything having
+    // been checked. These tests pin the fail-closed behaviour.
+
+    private static TransparencyLogEntry TlogEntryFor(string bodyJson, string? kind = null, string? kindVersion = null)
+        => new()
+        {
+            Body = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(bodyJson)),
+            Kind = kind,
+            KindVersion = kindVersion
+        };
+
+    private const string ValidHashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+
+    private static string HashedrekordV001Body(string kind = "hashedrekord", string apiVersion = "0.0.1")
+        => $$"""
+        {
+            "kind": "{{kind}}",
+            "apiVersion": "{{apiVersion}}",
+            "spec": {
+                "signature": {},
+                "data": {"hash": {"algorithm": "sha256", "value": "{{ValidHashHex}}" } }
+            }
+        }
+        """;
+
+    [Fact]
+    public void CrossVerifyTlogBody_SupportedSchemaWithMatchingContents_ReturnsTrue()
+    {
+        // Positive control: the gate must let a schema we do support through.
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_UnknownKind_ReturnsFalse()
+    {
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(kind: "rekord")),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_UnsupportedApiVersionOfKnownKind_ReturnsFalse()
+    {
+        // The Rekor v2 regression in miniature: a kind we handle, carrying a schema
+        // version we do not. Every v0.0.1 field lookup would miss and pass silently.
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(apiVersion: "0.0.3")),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Theory]
+    [InlineData("{\"apiVersion\": \"0.0.1\", \"spec\": {}}")]                        // no kind
+    [InlineData("{\"kind\": \"hashedrekord\", \"spec\": {}}")]                       // no apiVersion
+    [InlineData("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\"}")]          // no spec
+    [InlineData("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\", \"spec\": 1}")] // spec not an object
+    [InlineData("{\"kind\": 1, \"apiVersion\": \"0.0.1\", \"spec\": {}}")]           // kind not a string
+    public void CrossVerifyTlogBody_MalformedBody_ReturnsFalse(string bodyJson)
+    {
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(bodyJson),
+            new SigstoreBundle(),
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Theory]
+    [InlineData("intoto", "0.0.1")]
+    [InlineData("hashedrekord", "0.0.2")]
+    public void CrossVerifyTlogBody_BundleKindVersionDisagreesWithBody_ReturnsFalse(string kind, string version)
+    {
+        // The bundle states the entry's kind/version out of band. If that disagrees with
+        // the signed body, the entry is not the one the bundle claims it is.
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(), kind, version),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_DeclaredVersionWithoutMatchingShape_ReturnsFalse()
+    {
+        // Declares v0.0.2 but carries the v0.0.1 shape. Dispatching by sniffing for a
+        // shape rather than by the declared version would route this to a handler that
+        // finds none of its fields and checks nothing.
+        var body = $$"""
+        {
+            "kind": "hashedrekord",
+            "apiVersion": "0.0.2",
+            "spec": {
+                "signature": {},
+                "data": {"hash": {"algorithm": "sha256", "value": "{{ValidHashHex}}" } }
+            }
+        }
+        """;
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "hashedrekord", "0.0.2"),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_HashedrekordV001WithoutSignature_ReturnsFalse()
+    {
+        // `signature` is required by the v0.0.1 schema and carries the bindings we check.
+        var body = $$"""
+        {
+            "kind": "hashedrekord",
+            "apiVersion": "0.0.1",
+            "spec": {"data": {"hash": {"algorithm": "sha256", "value": "{{ValidHashHex}}" } } }
+        }
+        """;
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "hashedrekord", "0.0.1"),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_ArtifactHashMismatchStillRejected_ReturnsFalse()
+    {
+        // Guards against the schema gate short-circuiting the content checks behind it.
+        var bundle = CreateBundleWithDigest(
+            "1111110123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
+            bundle,
+            ReadOnlyMemory<byte>.Empty));
+    }
 }

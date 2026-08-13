@@ -1044,19 +1044,41 @@ public sealed class SigstoreVerifier
         // Cross-verify tlog entry body against the bundle contents
         if (entry.Body != null)
         {
-            if (!CrossVerifyTlogBody(entry.Body, bundle, leafCertBytes))
+            if (!CrossVerifyTlogBody(entry, bundle, leafCertBytes))
                 return false;
         }
 
         return true;
     }
 
-    private static bool CrossVerifyTlogBody(string body, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
+    /// <summary>
+    /// The <c>(kind, apiVersion)</c> transparency log entry schemas this client knows how
+    /// to cross-check against a bundle. Anything outside this set is rejected.
+    /// </summary>
+    /// <remarks>
+    /// Cross-verification is what binds the log entry to the artifact the bundle ships.
+    /// Every field in an entry body is read by name, so an entry whose schema we do not
+    /// recognise would match none of those names, skip every check, and be reported as
+    /// verified without anything having been verified — the log entry would be accepted
+    /// purely because it was well-formed JSON. Failing closed on unrecognised schemas
+    /// keeps "we checked it and it matched" distinct from "we had no idea what to check",
+    /// and matches sigstore-go, which rejects unsupported entry types outright.
+    /// </remarks>
+    private static readonly HashSet<(string Kind, string ApiVersion)> SupportedTlogEntrySchemas =
+    [
+        ("hashedrekord", "0.0.1"),
+        ("hashedrekord", "0.0.2"),
+        ("dsse", "0.0.1"),
+        ("dsse", "0.0.2"),
+        ("intoto", "0.0.2"),
+    ];
+
+    internal static bool CrossVerifyTlogBody(TransparencyLogEntry entry, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         byte[] bodyBytes;
         try
         {
-            bodyBytes = Convert.FromBase64String(body);
+            bodyBytes = Convert.FromBase64String(entry.Body!);
         }
         catch
         {
@@ -1074,54 +1096,84 @@ public sealed class SigstoreVerifier
         }
 
         var root = doc.RootElement;
-        var kind = root.GetProperty("kind").GetString();
 
-        if (kind == "hashedrekord")
+        // Read the schema identifiers defensively: a body missing either one cannot be
+        // cross-checked, so it must not count as a verified entry.
+        if (!root.TryGetProperty("kind", out var kindElem) || kindElem.ValueKind != JsonValueKind.String ||
+            !root.TryGetProperty("apiVersion", out var versionElem) || versionElem.ValueKind != JsonValueKind.String)
         {
-            return CrossVerifyHashedrekord(root.GetProperty("spec"), bundle, leafCertBytes);
-        }
-        else if (kind == "dsse" || kind == "intoto")
-        {
-            return CrossVerifyDsse(root.GetProperty("spec"), bundle, leafCertBytes);
+            return false;
         }
 
-        // Unknown kind — allow
-        return true;
+        var kind = kindElem.GetString()!;
+        var apiVersion = versionElem.GetString()!;
+
+        // The bundle advertises the entry's kind/version out of band, alongside the body.
+        // If the two disagree, the entry is not the one the bundle claims it is, and the
+        // out-of-band value could steer other logic (such as Rekor v1/v2 detection) away
+        // from what the signed body actually contains.
+        if ((entry.Kind != null && entry.Kind != kind) ||
+            (entry.KindVersion != null && entry.KindVersion != apiVersion))
+        {
+            return false;
+        }
+
+        if (!SupportedTlogEntrySchemas.Contains((kind, apiVersion)))
+            return false;
+
+        if (!root.TryGetProperty("spec", out var spec) || spec.ValueKind != JsonValueKind.Object)
+            return false;
+
+        // Dispatch on the declared version and require that version's shape to be present.
+        // Selecting the handler by sniffing for a shape instead would let an entry that
+        // declares a version it does not match fall through to a handler that checks
+        // nothing.
+        return (kind, apiVersion) switch
+        {
+            ("hashedrekord", "0.0.1") =>
+                CrossVerifyHashedrekord(spec, bundle, leafCertBytes),
+            ("hashedrekord", "0.0.2") =>
+                spec.TryGetProperty("hashedRekordV002", out var v002) &&
+                CrossVerifyHashedrekordV002(v002, bundle, leafCertBytes),
+            ("dsse", "0.0.2") =>
+                spec.TryGetProperty("dsseV002", out var dsseV002) &&
+                bundle.DsseEnvelope != null &&
+                CrossVerifyDsseV002(dsseV002, bundle, leafCertBytes),
+            ("dsse", "0.0.1") or ("intoto", "0.0.2") =>
+                CrossVerifyDsse(spec, bundle, leafCertBytes),
+            _ => false,
+        };
     }
 
+    /// <summary>
+    /// Cross-verifies a Rekor v1 <c>hashedrekord</c> (v0.0.1) entry against the bundle.
+    /// </summary>
     private static bool CrossVerifyHashedrekord(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
-        // Rekor v2 nests the entry under `hashedRekordV002` and uses a different
-        // shape to v1 (base64 digest rather than a hex `data.hash.value`, and a raw
-        // DER `verifier.x509Certificate` rather than a PEM `publicKey`).
-        if (spec.TryGetProperty("hashedRekordV002", out var v002))
+        // `signature` is required by the v0.0.1 schema and carries both bindings we
+        // cross-check, so an entry without it cannot be verified against the bundle.
+        if (!spec.TryGetProperty("signature", out var sigElem))
+            return false;
+
+        if (sigElem.TryGetProperty("content", out var sigContent))
         {
-            return CrossVerifyHashedrekordV002(v002, bundle, leafCertBytes);
+            var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
+            // DSSE bundles store signature in the envelope, not MessageSignature
+            var bundleSig = bundle.MessageSignature?.Signature
+                ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
+                ?? default(ReadOnlyMemory<byte>);
+            if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
+                return false;
         }
 
-        // Verify signature matches
-        if (spec.TryGetProperty("signature", out var sigElem))
+        // Verify certificate matches
+        if (sigElem.TryGetProperty("publicKey", out var pubKeyElem) &&
+            pubKeyElem.TryGetProperty("content", out var certContent))
         {
-            if (sigElem.TryGetProperty("content", out var sigContent))
-            {
-                var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-                // DSSE bundles store signature in the envelope, not MessageSignature
-                var bundleSig = bundle.MessageSignature?.Signature
-                    ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
-                    ?? default(ReadOnlyMemory<byte>);
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
-                    return false;
-            }
-
-            // Verify certificate matches
-            if (sigElem.TryGetProperty("publicKey", out var pubKeyElem) &&
-                pubKeyElem.TryGetProperty("content", out var certContent))
-            {
-                var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(certContent.GetString()!));
-                var expectedCertDer = ConvertPemToDer(expectedCertPem);
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
-                    return false;
-            }
+            var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(certContent.GetString()!));
+            var expectedCertDer = ConvertPemToDer(expectedCertPem);
+            if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+                return false;
         }
 
         // Verify artifact hash matches
@@ -1304,15 +1356,10 @@ public sealed class SigstoreVerifier
         if (bundle.DsseEnvelope == null)
             return false;
 
-        // Handle three formats:
-        // 1. dsseV002: spec.dsseV002.{signatures, payloadHash} (Rekor v2)
-        // 2. intoto: spec.content.{envelope, payloadHash} (Rekor v1)
-        // 3. dsse v0.0.1: spec.{signatures, payloadHash} (Rekor v1)
-
-        if (spec.TryGetProperty("dsseV002", out var dsseV002))
-        {
-            return CrossVerifyDsseV002(dsseV002, bundle, leafCertBytes);
-        }
+        // Handle the two Rekor v1 envelope shapes:
+        // 1. intoto v0.0.2: spec.content.{envelope, payloadHash}
+        // 2. dsse v0.0.1:   spec.{signatures, payloadHash}
+        // The Rekor v2 dsseV002 shape is dispatched by version in CrossVerifyTlogBody.
 
         JsonElement sigSource;
         JsonElement? payloadHashElem = null;
