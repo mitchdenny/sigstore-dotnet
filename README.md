@@ -117,6 +117,23 @@ Release branches are long-lived servicing branches and are created manually from
 Local builds use `0.0.0-local`; set `SIGSTORE_VERSION` to override it. NuGet.org
 publishing uses trusted publishing through the `production` GitHub environment.
 
+## API compatibility
+
+Packing runs [package validation](https://learn.microsoft.com/dotnet/fundamentals/apicompat/package-validation/overview)
+against the last stable release, so a build fails if it removes or changes public API that
+consumers already depend on. The baseline is pinned in a bot-managed block in
+`src/Sigstore/Sigstore.csproj` and `src/Tuf/Tuf.csproj`, and the `Bump package validation
+baseline` workflow raises a pull request moving it forward after each stable release.
+
+A deliberate break is declared by regenerating the suppression file:
+
+```bash
+dotnet pack src/Sigstore/Sigstore.csproj -c Release -p:ApiCompatGenerateSuppressionFile=true
+```
+
+The assembly version stays pinned at `1.0.0.0` because every release so far shipped that
+value; raising it is itself a breaking change and belongs to a deliberate major release.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

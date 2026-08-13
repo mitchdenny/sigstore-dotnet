@@ -303,6 +303,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -420,6 +421,20 @@ jobs:
             --target "${{ github.sha }}" \
             "artifacts/Sigstore.${PACKAGE_VERSION}.nupkg" \
             "artifacts/Tuf.${PACKAGE_VERSION}.nupkg"
+
+      # A release created with GITHUB_TOKEN does not raise release:published, so the
+      # follow-up baseline bump is dispatched explicitly. The bump is idempotent, so
+      # re-running a stable release does not open a duplicate pull request.
+      - name: Dispatch baseline bump
+        if: needs.version.outputs.kind == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh workflow run baseline-bump.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            --field version="${PACKAGE_VERSION}"
 
   deploy-docs:
     runs-on: ubuntu-latest
