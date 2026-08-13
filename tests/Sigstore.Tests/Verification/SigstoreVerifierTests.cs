@@ -804,35 +804,61 @@ public class SigstoreVerifierTests
     }
 
     [Fact]
-    public void CrossVerifyHashedrekordArtifactHash_NoDigestInBundle_ReturnsTrue()
+    public void CrossVerifyHashedrekordArtifactHash_NoDigestInBundle_ReturnsFalse()
     {
         var hashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
         var spec = CreateHashedrekordSpec(hashHex, "sha256");
-        // Bundle with no message digest — should skip check
+        // A hashedrekord entry records a message signature. With no message digest in the
+        // bundle there is nothing for the entry's hash to be bound to, so it must not pass.
         var bundle = new SigstoreBundle();
 
-        Assert.True(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
     [Fact]
-    public void CrossVerifyHashedrekordArtifactHash_NoHashInSpec_ReturnsTrue()
+    public void CrossVerifyHashedrekordArtifactHash_NoHashInSpec_ReturnsFalse()
     {
+        // data.hash.value is required by the schema; without it the entry is not bound to
+        // any artifact and must not be treated as cross-verified.
         var json = """{"signature": {"content": ""}}""";
         var doc = JsonDocument.Parse(json);
-        var bundle = CreateBundleWithDigest("abcd", HashAlgorithmType.Sha256);
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.True(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(doc.RootElement, bundle));
+        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(doc.RootElement, bundle));
     }
 
     [Fact]
-    public void CrossVerifyHashedrekordArtifactHash_DifferentAlgorithms_ReturnsTrue()
+    public void CrossVerifyHashedrekordArtifactHash_DifferentAlgorithms_ReturnsFalse()
     {
-        // Entry says sha512, bundle says sha256 — algorithms don't match, skip comparison
+        // Entry says sha512, bundle says sha256. The digests are not comparable, so the
+        // binding cannot be established — skipping the comparison would let a mismatched
+        // entry through by simply declaring a different algorithm.
         var hashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
         var spec = CreateHashedrekordSpec(hashHex, "sha512");
         var bundle = CreateBundleWithDigest("0000000000000000000000000000000000000000000000000000000000000000", HashAlgorithmType.Sha256);
 
-        Assert.True(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+    }
+
+    [Fact]
+    public void CrossVerifyHashedrekordArtifactHash_UnknownAlgorithm_ReturnsFalse()
+    {
+        var spec = CreateHashedrekordSpec(ValidHashHex, "md5");
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+    }
+
+    [Fact]
+    public void CrossVerifyHashedrekordArtifactHash_MissingAlgorithm_ReturnsFalse()
+    {
+        var json = $$"""
+        {"data": {"hash": {"value": "{{ValidHashHex}}"} } }
+        """;
+        var spec = JsonDocument.Parse(json).RootElement;
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
     private static JsonElement CreateHashedrekordSpec(string hashHex, string algorithm)
@@ -863,7 +889,7 @@ public class SigstoreVerifierTests
                     Algorithm = algorithm,
                     Digest = digestBytes
                 },
-                Signature = ReadOnlyMemory<byte>.Empty
+                Signature = FakeSignature
             }
         };
     }
@@ -908,13 +934,28 @@ public class SigstoreVerifierTests
 
     private const string ValidHashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
+    private static readonly byte[] FakeSignature = [0x11, 0x22, 0x33, 0x44];
+    private static readonly byte[] FakeCertDer = [0x30, 0x82, 0x01, 0x02, 0xDE, 0xAD, 0xBE, 0xEF];
+
+    private static string FakeCertPemBase64 => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+        $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(FakeCertDer)}\n-----END CERTIFICATE-----"));
+
+    /// <summary>
+    /// A complete, internally consistent hashedrekord v0.0.1 body matching the bundle
+    /// produced by <see cref="CreateBundleWithDigest"/> and <see cref="FakeCertDer"/>. It
+    /// is complete by default so that each negative test below fails for the reason it
+    /// names, rather than incidentally tripping over an unrelated missing field.
+    /// </summary>
     private static string HashedrekordV001Body(string kind = "hashedrekord", string apiVersion = "0.0.1")
         => $$"""
         {
             "kind": "{{kind}}",
             "apiVersion": "{{apiVersion}}",
             "spec": {
-                "signature": {},
+                "signature": {
+                    "content": "{{Convert.ToBase64String(FakeSignature)}}",
+                    "publicKey": {"content": "{{FakeCertPemBase64}}" }
+                },
                 "data": {"hash": {"algorithm": "sha256", "value": "{{ValidHashHex}}" } }
             }
         }
@@ -929,7 +970,41 @@ public class SigstoreVerifierTests
         Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_HashedrekordV001WithoutPublicKey_ReturnsFalse()
+    {
+        // The certificate binding is required: without it the entry is not tied to the
+        // identity the bundle was verified against.
+        var body = $$"""
+        {
+            "kind": "hashedrekord",
+            "apiVersion": "0.0.1",
+            "spec": {
+                "signature": {"content": "{{Convert.ToBase64String(FakeSignature)}}" },
+                "data": {"hash": {"algorithm": "sha256", "value": "{{ValidHashHex}}" } }
+            }
+        }
+        """;
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "hashedrekord", "0.0.1"),
+            bundle,
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_HashedrekordV001WithDifferentCertificate_ReturnsFalse()
+    {
+        var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
+            bundle,
+            new byte[] { 0x30, 0x82, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00 }));
     }
 
     [Fact]
@@ -940,7 +1015,7 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(kind: "rekord")),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
     }
 
     [Fact]
@@ -953,7 +1028,7 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(apiVersion: "0.0.3")),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
     }
 
     [Theory]
@@ -982,7 +1057,7 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), kind, version),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
     }
 
     [Fact]
@@ -1006,7 +1081,7 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.2"),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
     }
 
     [Fact]
@@ -1025,7 +1100,7 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.1"),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
     }
 
     [Fact]
@@ -1039,6 +1114,159 @@ public class SigstoreVerifierTests
         Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
             bundle,
-            ReadOnlyMemory<byte>.Empty));
+            FakeCertDer));
+    }
+
+    // ---- DSSE envelope entry bindings ----
+    //
+    // intoto v0.0.2 names its signature fields `sig`/`publicKey` while dsse v0.0.1 uses
+    // `signature`/`verifier`. Looking only for the dsse names meant an intoto entry's
+    // certificate binding was never checked at all, so these tests pin both shapes.
+
+    private static readonly byte[] DssePayload = System.Text.Encoding.UTF8.GetBytes("""{"_type":"https://in-toto.io/Statement/v1"}""");
+
+    private static SigstoreBundle CreateDsseBundle() => new()
+    {
+        DsseEnvelope = new DsseEnvelope
+        {
+            PayloadType = "application/vnd.in-toto+json",
+            Payload = DssePayload,
+            Signatures = [new DsseSignature { Sig = FakeSignature }]
+        }
+    };
+
+    private static string DssePayloadHashHex =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(DssePayload)).ToLowerInvariant();
+
+    private static string IntotoV002Body(string? certPemBase64 = null, string? payloadHashHex = null)
+        => $$"""
+        {
+            "kind": "intoto",
+            "apiVersion": "0.0.2",
+            "spec": {
+                "content": {
+                    "envelope": {
+                        "signatures": [{
+                            "sig": "{{Convert.ToBase64String(FakeSignature)}}",
+                            "publicKey": "{{certPemBase64 ?? FakeCertPemBase64}}"
+                        }]
+                    },
+                    "payloadHash": {"algorithm": "sha256", "value": "{{payloadHashHex ?? DssePayloadHashHex}}" }
+                }
+            }
+        }
+        """;
+
+    [Fact]
+    public void CrossVerifyTlogBody_IntotoV002WithMatchingContents_ReturnsTrue()
+    {
+        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(IntotoV002Body(), "intoto", "0.0.2"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_IntotoV002WithDifferentCertificate_ReturnsFalse()
+    {
+        // intoto stores the certificate under `publicKey`. Checking only `verifier` meant
+        // this entry — attesting to a different signer than the bundle — was accepted.
+        var otherCertPem = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+            $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(new byte[] { 0x30, 0x82, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00 })}\n-----END CERTIFICATE-----"));
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(IntotoV002Body(certPemBase64: otherCertPem), "intoto", "0.0.2"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_IntotoV002WithMismatchedPayloadHash_ReturnsFalse()
+    {
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(IntotoV002Body(payloadHashHex: ValidHashHex), "intoto", "0.0.2"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Theory]
+    // no envelope to cross-check — previously accepted outright
+    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{}}}""")]
+    // envelope present but no signatures
+    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[]},"payloadHash":{"algorithm":"sha256","value":"x"}}}}""")]
+    // no payloadHash to bind the envelope contents
+    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[{"sig":"ESIzRA==","publicKey":"eA=="}]}}}}""")]
+    public void CrossVerifyTlogBody_IntotoV002WithMissingBindings_ReturnsFalse(string bodyJson)
+    {
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(bodyJson, "intoto", "0.0.2"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_DsseV001WithMissingPayloadHash_ReturnsFalse()
+    {
+        var body = $$"""
+        {
+            "kind": "dsse",
+            "apiVersion": "0.0.1",
+            "spec": {
+                "signatures": [{
+                    "signature": "{{Convert.ToBase64String(FakeSignature)}}",
+                    "verifier": "{{FakeCertPemBase64}}"
+                }]
+            }
+        }
+        """;
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "dsse", "0.0.1"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Fact]
+    public void CrossVerifyTlogBody_DsseV001WithMatchingContents_ReturnsTrue()
+    {
+        var body = $$"""
+        {
+            "kind": "dsse",
+            "apiVersion": "0.0.1",
+            "spec": {
+                "signatures": [{
+                    "signature": "{{Convert.ToBase64String(FakeSignature)}}",
+                    "verifier": "{{FakeCertPemBase64}}"
+                }],
+                "payloadHash": {"algorithm": "sha256", "value": "{{DssePayloadHashHex}}" }
+            }
+        }
+        """;
+
+        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "dsse", "0.0.1"),
+            CreateDsseBundle(),
+            FakeCertDer));
+    }
+
+    [Theory]
+    // no data.digest to bind the signed content
+    [InlineData("""{"data":{"algorithm":"SHA2_256"},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
+    // no data.algorithm, so the digest is not interpretable
+    [InlineData("""{"data":{"digest":"3q2+7w=="},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
+    // no certificate binding
+    [InlineData("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="},"signature":{"content":"ESIzRA=="}}""")]
+    // no signature at all
+    [InlineData("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="}}""")]
+    public void CrossVerifyTlogBody_HashedrekordV002WithMissingBindings_ReturnsFalse(string v002Json)
+    {
+        var body = $$"""
+        {"kind":"hashedrekord","apiVersion":"0.0.2","spec":{"hashedRekordV002":{{v002Json}} } }
+        """;
+
+        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+            TlogEntryFor(body, "hashedrekord", "0.0.2"),
+            CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256),
+            FakeCertDer));
     }
 }

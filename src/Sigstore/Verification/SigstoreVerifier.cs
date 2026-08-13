@@ -1140,7 +1140,7 @@ public sealed class SigstoreVerifier
                 bundle.DsseEnvelope != null &&
                 CrossVerifyDsseV002(dsseV002, bundle, leafCertBytes),
             ("dsse", "0.0.1") or ("intoto", "0.0.2") =>
-                CrossVerifyDsse(spec, bundle, leafCertBytes),
+                CrossVerifyDsse(kind, spec, bundle, leafCertBytes),
             _ => false,
         };
     }
@@ -1150,37 +1150,35 @@ public sealed class SigstoreVerifier
     /// </summary>
     private static bool CrossVerifyHashedrekord(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
-        // `signature` is required by the v0.0.1 schema and carries both bindings we
-        // cross-check, so an entry without it cannot be verified against the bundle.
+        // Every field read below is required by the v0.0.1 schema. Treating an absent
+        // field as "nothing to check" would let a body opt out of the binding simply by
+        // omitting it, so a missing field is a verification failure.
         if (!spec.TryGetProperty("signature", out var sigElem))
             return false;
 
-        if (sigElem.TryGetProperty("content", out var sigContent))
-        {
-            var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-            // DSSE bundles store signature in the envelope, not MessageSignature
-            var bundleSig = bundle.MessageSignature?.Signature
-                ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
-                ?? default(ReadOnlyMemory<byte>);
-            if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
-                return false;
-        }
-
-        // Verify certificate matches
-        if (sigElem.TryGetProperty("publicKey", out var pubKeyElem) &&
-            pubKeyElem.TryGetProperty("content", out var certContent))
-        {
-            var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(certContent.GetString()!));
-            var expectedCertDer = ConvertPemToDer(expectedCertPem);
-            if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
-                return false;
-        }
-
-        // Verify artifact hash matches
-        if (!CrossVerifyHashedrekordArtifactHash(spec, bundle))
+        if (!TryGetBase64(sigElem, "content", out var expectedSig))
             return false;
 
-        return true;
+        // DSSE bundles store signature in the envelope, not MessageSignature
+        var bundleSig = bundle.MessageSignature?.Signature
+            ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
+            ?? default(ReadOnlyMemory<byte>);
+        if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
+            return false;
+
+        // Verify certificate matches
+        if (!sigElem.TryGetProperty("publicKey", out var pubKeyElem) ||
+            !TryGetBase64(pubKeyElem, "content", out var certPemBytes))
+        {
+            return false;
+        }
+
+        var expectedCertDer = ConvertPemToDer(Encoding.UTF8.GetString(certPemBytes));
+        if (expectedCertDer == null || !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+            return false;
+
+        // Verify artifact hash matches
+        return CrossVerifyHashedrekordArtifactHash(spec, bundle);
     }
 
     /// <summary>
@@ -1202,89 +1200,60 @@ public sealed class SigstoreVerifier
     /// </remarks>
     private static bool CrossVerifyHashedrekordV002(JsonElement v002, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
-        if (v002.TryGetProperty("signature", out var sigElem))
-        {
-            if (sigElem.TryGetProperty("content", out var sigContent))
-            {
-                byte[] expectedSig;
-                try
-                {
-                    expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-                }
-                catch
-                {
-                    return false;
-                }
+        // signature, data.digest and data.algorithm are all required by the v0.0.2
+        // schema; an entry that omits any of them cannot be bound to the bundle.
+        if (!v002.TryGetProperty("signature", out var sigElem))
+            return false;
 
-                var bundleSig = bundle.MessageSignature?.Signature
-                    ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
-                    ?? default(ReadOnlyMemory<byte>);
+        if (!TryGetBase64(sigElem, "content", out var expectedSig))
+            return false;
 
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
-                    return false;
-            }
+        var bundleSig = bundle.MessageSignature?.Signature
+            ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
+            ?? default(ReadOnlyMemory<byte>);
 
-            if (sigElem.TryGetProperty("verifier", out var verifier) &&
-                verifier.TryGetProperty("x509Certificate", out var x509) &&
-                x509.TryGetProperty("rawBytes", out var rawBytes))
-            {
-                byte[] expectedCertDer;
-                try
-                {
-                    expectedCertDer = Convert.FromBase64String(rawBytes.GetString()!);
-                }
-                catch
-                {
-                    return false;
-                }
+        if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
+            return false;
 
-                if (!expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
-                    return false;
-            }
-        }
-
-        if (!v002.TryGetProperty("data", out var dataElem) ||
-            !dataElem.TryGetProperty("digest", out var digestElem))
-        {
-            return true;
-        }
-
-        byte[] expectedDigest;
-        try
-        {
-            expectedDigest = Convert.FromBase64String(digestElem.GetString()!);
-        }
-        catch
+        if (!sigElem.TryGetProperty("verifier", out var verifier) ||
+            !verifier.TryGetProperty("x509Certificate", out var x509) ||
+            !TryGetBase64(x509, "rawBytes", out var expectedCertDer))
         {
             return false;
         }
 
-        var algorithm = dataElem.TryGetProperty("algorithm", out var algElem)
-            ? algElem.GetString()
-            : "SHA2_256";
-        var mapped = MapRekorV2HashAlgorithm(algorithm);
+        if (!expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+            return false;
+
+        if (!v002.TryGetProperty("data", out var dataElem) ||
+            !TryGetBase64(dataElem, "digest", out var expectedDigest))
+        {
+            return false;
+        }
+
+        var mapped = MapRekorV2HashAlgorithm(
+            dataElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : null);
+
+        if (mapped == HashAlgorithmType.Unspecified)
+            return false;
 
         if (bundle.DsseEnvelope is { } envelope)
         {
-            // Only SHA-256 PAE digests are defined for this entry type today; a
-            // different algorithm is not something we can cross-check.
-            if (mapped != HashAlgorithmType.Sha256)
-                return true;
-
-            var computed = SHA256.HashData(ComputeDssePae(envelope));
-            return computed.AsSpan().SequenceEqual(expectedDigest);
+            var computed = ComputeHash(mapped, ComputeDssePae(envelope));
+            return computed != null && computed.AsSpan().SequenceEqual(expectedDigest);
         }
 
-        if (bundle.MessageSignature?.MessageDigest is { } messageDigest &&
-            messageDigest.Algorithm != HashAlgorithmType.Unspecified)
+        if (bundle.MessageSignature?.MessageDigest is not { } messageDigest ||
+            messageDigest.Algorithm == HashAlgorithmType.Unspecified)
         {
-            if (mapped != messageDigest.Algorithm)
-                return true;
-
-            return messageDigest.Digest.Span.SequenceEqual(expectedDigest);
+            return false;
         }
 
-        return true;
+        // The digests are only comparable when they were produced by the same algorithm.
+        if (mapped != messageDigest.Algorithm)
+            return false;
+
+        return messageDigest.Digest.Span.SequenceEqual(expectedDigest);
     }
 
     private static HashAlgorithmType MapRekorV2HashAlgorithm(string? algorithm) => algorithm switch
@@ -1312,35 +1281,38 @@ public sealed class SigstoreVerifier
     }
 
     /// <summary>
-    /// Verifies the artifact hash in a hashedrekord spec against the bundle's message digest.
-    /// Returns false only if both have hash values and they don't match.
+    /// Verifies the artifact hash in a hashedrekord v0.0.1 spec against the bundle's
+    /// message digest. The hash is the entry's only binding to the artifact, so anything
+    /// that prevents the comparison from being made is a verification failure rather than
+    /// a skipped check.
     /// </summary>
     internal static bool CrossVerifyHashedrekordArtifactHash(JsonElement spec, SigstoreBundle bundle)
     {
-        if (spec.TryGetProperty("data", out var dataElem) &&
-            dataElem.TryGetProperty("hash", out var hashElem))
+        if (!spec.TryGetProperty("data", out var dataElem) ||
+            !dataElem.TryGetProperty("hash", out var hashElem) ||
+            !hashElem.TryGetProperty("value", out var hashValue) ||
+            hashValue.GetString() is not { } expectedHash)
         {
-            if (hashElem.TryGetProperty("value", out var hashValue))
-            {
-                var expectedHash = hashValue.GetString();
-                if (expectedHash != null &&
-                    bundle.MessageSignature?.MessageDigest is { } digest)
-                {
-                    var hashAlg = hashElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : "sha256";
-
-                    // Only compare if the algorithms match
-                    if (MapRekorHashAlgorithm(hashAlg) == digest.Algorithm &&
-                        digest.Algorithm != HashAlgorithmType.Unspecified)
-                    {
-                        var bundleHashHex = Convert.ToHexString(digest.Digest.Span).ToLowerInvariant();
-                        if (!string.Equals(expectedHash, bundleHashHex, StringComparison.OrdinalIgnoreCase))
-                            return false;
-                    }
-                }
-            }
+            return false;
         }
 
-        return true;
+        // hashedrekord v0.0.1 records a message signature, so the bundle must carry the
+        // matching message digest for the entry to be bound to anything at all.
+        if (bundle.MessageSignature?.MessageDigest is not { } digest ||
+            digest.Algorithm == HashAlgorithmType.Unspecified)
+        {
+            return false;
+        }
+
+        var hashAlg = hashElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : null;
+
+        // A disagreement over the algorithm means the two digests are not comparable,
+        // which is exactly the case an attacker would want treated as "no mismatch".
+        if (MapRekorHashAlgorithm(hashAlg) != digest.Algorithm)
+            return false;
+
+        var bundleHashHex = Convert.ToHexString(digest.Digest.Span).ToLowerInvariant();
+        return string.Equals(expectedHash, bundleHashHex, StringComparison.OrdinalIgnoreCase);
     }
 
     private static HashAlgorithmType MapRekorHashAlgorithm(string? algorithm) => algorithm switch
@@ -1351,101 +1323,146 @@ public sealed class SigstoreVerifier
         _ => HashAlgorithmType.Unspecified
     };
 
-    private static bool CrossVerifyDsse(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
+    /// <summary>
+    /// Reads a required base64-encoded string property, returning false when it is
+    /// absent, not a string, or not valid base64.
+    /// </summary>
+    private static bool TryGetBase64(JsonElement parent, string propertyName, out byte[] value)
+    {
+        value = [];
+        if (!parent.TryGetProperty(propertyName, out var elem) ||
+            elem.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        try
+        {
+            value = Convert.FromBase64String(elem.GetString()!);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static byte[]? ComputeHash(HashAlgorithmType algorithm, ReadOnlySpan<byte> data) => algorithm switch
+    {
+        HashAlgorithmType.Sha256 => SHA256.HashData(data),
+        HashAlgorithmType.Sha384 => SHA384.HashData(data),
+        HashAlgorithmType.Sha512 => SHA512.HashData(data),
+        _ => null
+    };
+
+    /// <summary>
+    /// Cross-verifies a Rekor v1 DSSE envelope entry — either <c>intoto</c> v0.0.2
+    /// (<c>spec.content.{envelope, payloadHash}</c>) or <c>dsse</c> v0.0.1
+    /// (<c>spec.{signatures, payloadHash}</c>) — against the bundle's envelope.
+    /// </summary>
+    /// <remarks>
+    /// The two shapes name the same fields differently: intoto uses
+    /// <c>signatures[].sig</c>/<c>signatures[].publicKey</c> while dsse uses
+    /// <c>signatures[].signature</c>/<c>signatures[].verifier</c>. The caller supplies the
+    /// declared kind so each shape is held to its own field names, rather than trying both
+    /// and silently skipping the certificate binding when neither is found.
+    /// </remarks>
+    private static bool CrossVerifyDsse(string kind, JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
         if (bundle.DsseEnvelope == null)
             return false;
 
-        // Handle the two Rekor v1 envelope shapes:
-        // 1. intoto v0.0.2: spec.content.{envelope, payloadHash}
-        // 2. dsse v0.0.1:   spec.{signatures, payloadHash}
-        // The Rekor v2 dsseV002 shape is dispatched by version in CrossVerifyTlogBody.
-
         JsonElement sigSource;
-        JsonElement? payloadHashElem = null;
+        JsonElement payloadHashElem;
+        string sigProperty;
+        string certProperty;
 
-        if (spec.TryGetProperty("content", out var content))
+        if (kind == "intoto")
         {
-            // intoto format: spec.content.{envelope, hash, payloadHash}
-            if (!content.TryGetProperty("envelope", out var envelope))
-                return true; // no envelope to cross-check
-            sigSource = envelope;
-            if (content.TryGetProperty("payloadHash", out var ph))
-                payloadHashElem = ph;
+            if (!spec.TryGetProperty("content", out var content) ||
+                !content.TryGetProperty("envelope", out sigSource))
+            {
+                return false;
+            }
+
+            if (!content.TryGetProperty("payloadHash", out payloadHashElem))
+                return false;
+
+            sigProperty = "sig";
+            certProperty = "publicKey";
         }
         else
         {
-            // dsse format: spec.{signatures, payloadHash, envelopeHash}
             sigSource = spec;
-            if (spec.TryGetProperty("payloadHash", out var ph))
-                payloadHashElem = ph;
+            if (!spec.TryGetProperty("payloadHash", out payloadHashElem))
+                return false;
+
+            sigProperty = "signature";
+            certProperty = "verifier";
         }
 
-        // Verify signature matches
-        if (sigSource.TryGetProperty("signatures", out var sigs) && sigs.GetArrayLength() > 0)
+        // The signature list is required by both schemas, and is what ties the entry to
+        // the envelope the bundle ships.
+        if (!sigSource.TryGetProperty("signatures", out var sigs) ||
+            sigs.ValueKind != JsonValueKind.Array ||
+            sigs.GetArrayLength() == 0)
         {
-            var firstSig = sigs[0];
-            if (firstSig.TryGetProperty("signature", out var sigContent) ||
-                firstSig.TryGetProperty("sig", out sigContent))
-            {
-                var sigStr = sigContent.GetString()!;
-                // The body may contain base64-of-base64 (intoto format stores
-                // the envelope JSON with base64 sigs, which then gets base64-encoded again).
-                // Try to decode and compare at the raw level.
-                byte[] expectedSig;
-                try
-                {
-                    expectedSig = Convert.FromBase64String(sigStr);
-                }
-                catch
-                {
-                    return false;
-                }
-
-                var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
-                    ? bundle.DsseEnvelope.Signatures[0].Sig
-                    : default(ReadOnlyMemory<byte>);
-
-                // Direct comparison first
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
-                {
-                    // Try one more level of base64 decode (intoto v0.0.2 double-encodes)
-                    try
-                    {
-                        var innerStr = Encoding.UTF8.GetString(expectedSig);
-                        var innerSig = Convert.FromBase64String(innerStr);
-                        if (!innerSig.AsSpan().SequenceEqual(bundleSig.Span))
-                            return false;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            // Verify certificate matches
-            if (firstSig.TryGetProperty("verifier", out var verifierContent))
-            {
-                var expectedCertPem = Encoding.UTF8.GetString(Convert.FromBase64String(verifierContent.GetString()!));
-                var expectedCertDer = ConvertPemToDer(expectedCertPem);
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
-                    return false;
-            }
+            return false;
         }
 
-        // Verify payload hash matches
-        if (payloadHashElem is JsonElement hashEl &&
-            hashEl.TryGetProperty("value", out var hashValue))
+        var firstSig = sigs[0];
+        if (!TryGetBase64(firstSig, sigProperty, out var expectedSig))
+            return false;
+
+        var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
+            ? bundle.DsseEnvelope.Signatures[0].Sig
+            : default(ReadOnlyMemory<byte>);
+
+        if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
         {
-            var expectedHash = hashValue.GetString()!;
-            var payloadBytes = bundle.DsseEnvelope.Payload;
-            var computedHash = Convert.ToHexString(SHA256.HashData(payloadBytes.Span)).ToLowerInvariant();
-            if (computedHash != expectedHash)
+            // intoto v0.0.2 stores the envelope JSON — whose signatures are already
+            // base64 — and then base64-encodes the whole field again, so the raw
+            // signature is one decode further down.
+            byte[] innerSig;
+            try
+            {
+                innerSig = Convert.FromBase64String(Encoding.UTF8.GetString(expectedSig));
+            }
+            catch (Exception ex) when (ex is FormatException or ArgumentException or DecoderFallbackException)
+            {
+                return false;
+            }
+
+            if (!innerSig.AsSpan().SequenceEqual(bundleSig.Span))
                 return false;
         }
 
-        return true;
+        // Verify certificate matches
+        if (!TryGetBase64(firstSig, certProperty, out var certPemBytes))
+            return false;
+
+        var expectedCertDer = ConvertPemToDer(Encoding.UTF8.GetString(certPemBytes));
+        if (expectedCertDer == null || !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+            return false;
+
+        // Verify payload hash matches
+        if (!payloadHashElem.TryGetProperty("value", out var hashValue) ||
+            hashValue.GetString() is not { } expectedHash)
+        {
+            return false;
+        }
+
+        var algorithm = MapRekorHashAlgorithm(
+            payloadHashElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : null);
+
+        var computed = ComputeHash(algorithm, bundle.DsseEnvelope.Payload.Span);
+        if (computed == null)
+            return false;
+
+        return string.Equals(
+            Convert.ToHexString(computed),
+            expectedHash,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CrossVerifyDsseV002(JsonElement dsseV002, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
@@ -1454,45 +1471,47 @@ public sealed class SigstoreVerifier
             return false;
 
         // Verify signature matches
-        if (dsseV002.TryGetProperty("signatures", out var sigs) && sigs.GetArrayLength() > 0)
+        if (!dsseV002.TryGetProperty("signatures", out var sigs) ||
+            sigs.ValueKind != JsonValueKind.Array ||
+            sigs.GetArrayLength() == 0)
         {
-            var firstSig = sigs[0];
-            if (firstSig.TryGetProperty("content", out var sigContent))
-            {
-                var expectedSig = Convert.FromBase64String(sigContent.GetString()!);
-                var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
-                    ? bundle.DsseEnvelope.Signatures[0].Sig
-                    : default(ReadOnlyMemory<byte>);
-                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
-                    return false;
-            }
-
-            // Verify certificate matches
-            if (firstSig.TryGetProperty("verifier", out var verifier))
-            {
-                byte[]? expectedCertDer = null;
-                if (verifier.TryGetProperty("x509Certificate", out var x509) &&
-                    x509.TryGetProperty("rawBytes", out var rawBytes))
-                {
-                    expectedCertDer = Convert.FromBase64String(rawBytes.GetString()!);
-                }
-                if (expectedCertDer != null && !expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
-                    return false;
-            }
+            return false;
         }
+
+        var firstSig = sigs[0];
+        if (!TryGetBase64(firstSig, "content", out var expectedSig))
+            return false;
+
+        var bundleSig = bundle.DsseEnvelope.Signatures.Count > 0
+            ? bundle.DsseEnvelope.Signatures[0].Sig
+            : default(ReadOnlyMemory<byte>);
+
+        if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
+            return false;
+
+        // Verify certificate matches
+        if (!firstSig.TryGetProperty("verifier", out var verifier) ||
+            !verifier.TryGetProperty("x509Certificate", out var x509) ||
+            !TryGetBase64(x509, "rawBytes", out var expectedCertDer))
+        {
+            return false;
+        }
+
+        if (!expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+            return false;
 
         // Verify payload hash matches
-        if (dsseV002.TryGetProperty("payloadHash", out var hashElem) &&
-            hashElem.TryGetProperty("digest", out var digest))
+        if (!dsseV002.TryGetProperty("payloadHash", out var hashElem) ||
+            !TryGetBase64(hashElem, "digest", out var expectedHash))
         {
-            var expectedHash = Convert.FromBase64String(digest.GetString()!);
-            var payloadBytes = bundle.DsseEnvelope.Payload;
-            var computedHash = SHA256.HashData(payloadBytes.Span);
-            if (!computedHash.AsSpan().SequenceEqual(expectedHash))
-                return false;
+            return false;
         }
 
-        return true;
+        var algorithm = MapRekorV2HashAlgorithm(
+            hashElem.TryGetProperty("algorithm", out var algElem) ? algElem.GetString() : "SHA2_256");
+
+        var computed = ComputeHash(algorithm, bundle.DsseEnvelope.Payload.Span);
+        return computed != null && computed.AsSpan().SequenceEqual(expectedHash);
     }
 
     private static byte[]? ConvertPemToDer(string pem)
