@@ -108,17 +108,43 @@ jobs:
     permissions:
       contents: read
 
+  aot:
+    name: AOT compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      # Roots the entire public surface of Sigstore and Tuf (see the harness
+      # csproj) so ILC analyses every API, not just those reachable from the
+      # harness entry point. Any IL2xxx/IL3xxx warning fails the build via the
+      # repo-wide TreatWarningsAsErrors.
+      - name: Publish AOT compatibility harness
+        run: dotnet publish tests/Sigstore.AotCompatibility/Sigstore.AotCompatibility.csproj -c Release -r linux-x64 --nologo
+
+      - name: Run published binary
+        run: ./tests/Sigstore.AotCompatibility/bin/Release/net10.0/linux-x64/publish/Sigstore.AotCompatibility
+
   package:
     runs-on: ubuntu-latest
     needs:
       - version
       - test
       - conformance
+      - aot
     if: >-
       ${{
         !cancelled()
         && needs.version.result == 'success'
         && needs.test.result == 'success'
+        && needs.aot.result == 'success'
         && (inputs.skip_conformance || needs.conformance.result == 'success')
       }}
     steps:

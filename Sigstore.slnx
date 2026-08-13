@@ -13,6 +13,7 @@
     <Project Path="src/Tuf.Conformance/Tuf.Conformance.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Sigstore.AotCompatibility/Sigstore.AotCompatibility.csproj" />
     <Project Path="tests/Sigstore.Tests/Sigstore.Tests.csproj" />
     <Project Path="tests/Tuf.Tests/Tuf.Tests.csproj" />
   </Folder>

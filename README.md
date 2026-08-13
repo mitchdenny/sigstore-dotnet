@@ -17,6 +17,7 @@ A .NET library for generating and verifying [Sigstore](https://www.sigstore.dev/
 - **RFC 3161 timestamps** — timestamp authority integration
 - **DSSE attestations** — in-toto statement signing and verification
 - **DI-friendly** — constructor injection with sensible defaults
+- **Native AOT ready** — both libraries are trim-safe and AOT-compatible
 
 ## Quick Start
 
@@ -83,6 +84,24 @@ dotnet build Sigstore.slnx
 
 ```bash
 dotnet test Sigstore.slnx
+```
+
+## Native AOT
+
+`Sigstore` and `Tuf` are both trim-safe and compatible with [native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/).
+They are marked `IsAotCompatible`, use source-generated JSON serialization
+throughout, and contain no runtime reflection.
+
+This is enforced, not assumed. The `tests/Sigstore.AotCompatibility` harness roots
+*both* libraries in full via `TrimmerRootAssembly`, so the AOT compiler analyzes
+their entire public surface rather than only the members a sample app happens to
+call. It runs on every build, and any trim or AOT warning — including one
+originating inside a dependency — fails the build.
+
+To reproduce locally:
+
+```bash
+dotnet publish tests/Sigstore.AotCompatibility -c Release -r linux-x64
 ```
 
 ## Versioning and releases
