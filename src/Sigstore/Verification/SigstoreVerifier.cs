@@ -1091,6 +1091,14 @@ public sealed class SigstoreVerifier
 
     private static bool CrossVerifyHashedrekord(JsonElement spec, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
     {
+        // Rekor v2 nests the entry under `hashedRekordV002` and uses a different
+        // shape to v1 (base64 digest rather than a hex `data.hash.value`, and a raw
+        // DER `verifier.x509Certificate` rather than a PEM `publicKey`).
+        if (spec.TryGetProperty("hashedRekordV002", out var v002))
+        {
+            return CrossVerifyHashedrekordV002(v002, bundle, leafCertBytes);
+        }
+
         // Verify signature matches
         if (spec.TryGetProperty("signature", out var sigElem))
         {
@@ -1121,6 +1129,134 @@ public sealed class SigstoreVerifier
             return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// Cross-verifies a Rekor v2 <c>hashedrekord</c> (v0.0.2) entry against the bundle.
+    /// </summary>
+    /// <remarks>
+    /// Rekor v2 logs DSSE envelopes as hashedrekord entries rather than as dedicated
+    /// dsse entries (see sigstore/architecture-docs#63). The entry binds to the signed
+    /// content in two ways, both of which must hold:
+    /// <list type="bullet">
+    ///   <item><description><c>signature.content</c> equals the bundle's signature —
+    ///   the DSSE envelope signature, or the message signature.</description></item>
+    ///   <item><description><c>data.digest</c> equals the digest of the signed content —
+    ///   for a DSSE envelope that is the SHA-256 of its PAE, otherwise it is the
+    ///   artifact digest.</description></item>
+    /// </list>
+    /// Without these checks a bundle could carry a transparency log entry that attests
+    /// to different content than the envelope it ships with.
+    /// </remarks>
+    private static bool CrossVerifyHashedrekordV002(JsonElement v002, SigstoreBundle bundle, ReadOnlyMemory<byte> leafCertBytes)
+    {
+        if (v002.TryGetProperty("signature", out var sigElem))
+        {
+            if (sigElem.TryGetProperty("content", out var sigContent))
+            {
+                byte[] expectedSig;
+                try
+                {
+                    expectedSig = Convert.FromBase64String(sigContent.GetString()!);
+                }
+                catch
+                {
+                    return false;
+                }
+
+                var bundleSig = bundle.MessageSignature?.Signature
+                    ?? bundle.DsseEnvelope?.Signatures.FirstOrDefault()?.Sig
+                    ?? default(ReadOnlyMemory<byte>);
+
+                if (!expectedSig.AsSpan().SequenceEqual(bundleSig.Span))
+                    return false;
+            }
+
+            if (sigElem.TryGetProperty("verifier", out var verifier) &&
+                verifier.TryGetProperty("x509Certificate", out var x509) &&
+                x509.TryGetProperty("rawBytes", out var rawBytes))
+            {
+                byte[] expectedCertDer;
+                try
+                {
+                    expectedCertDer = Convert.FromBase64String(rawBytes.GetString()!);
+                }
+                catch
+                {
+                    return false;
+                }
+
+                if (!expectedCertDer.AsSpan().SequenceEqual(leafCertBytes.Span))
+                    return false;
+            }
+        }
+
+        if (!v002.TryGetProperty("data", out var dataElem) ||
+            !dataElem.TryGetProperty("digest", out var digestElem))
+        {
+            return true;
+        }
+
+        byte[] expectedDigest;
+        try
+        {
+            expectedDigest = Convert.FromBase64String(digestElem.GetString()!);
+        }
+        catch
+        {
+            return false;
+        }
+
+        var algorithm = dataElem.TryGetProperty("algorithm", out var algElem)
+            ? algElem.GetString()
+            : "SHA2_256";
+        var mapped = MapRekorV2HashAlgorithm(algorithm);
+
+        if (bundle.DsseEnvelope is { } envelope)
+        {
+            // Only SHA-256 PAE digests are defined for this entry type today; a
+            // different algorithm is not something we can cross-check.
+            if (mapped != HashAlgorithmType.Sha256)
+                return true;
+
+            var computed = SHA256.HashData(ComputeDssePae(envelope));
+            return computed.AsSpan().SequenceEqual(expectedDigest);
+        }
+
+        if (bundle.MessageSignature?.MessageDigest is { } messageDigest &&
+            messageDigest.Algorithm != HashAlgorithmType.Unspecified)
+        {
+            if (mapped != messageDigest.Algorithm)
+                return true;
+
+            return messageDigest.Digest.Span.SequenceEqual(expectedDigest);
+        }
+
+        return true;
+    }
+
+    private static HashAlgorithmType MapRekorV2HashAlgorithm(string? algorithm) => algorithm switch
+    {
+        "SHA2_256" => HashAlgorithmType.Sha256,
+        "SHA2_384" => HashAlgorithmType.Sha384,
+        "SHA2_512" => HashAlgorithmType.Sha512,
+        _ => HashAlgorithmType.Unspecified
+    };
+
+    /// <summary>
+    /// Computes the DSSE Pre-Authentication Encoding (PAE) for an envelope:
+    /// <c>"DSSEv1" SP LEN(type) SP type SP LEN(body) SP body</c>.
+    /// </summary>
+    internal static byte[] ComputeDssePae(DsseEnvelope envelope)
+    {
+        var payloadType = envelope.PayloadType;
+        var payload = envelope.Payload;
+        var prefix = Encoding.UTF8.GetBytes(
+            $"DSSEv1 {payloadType.Length} {payloadType} {payload.Length} ");
+        var pae = new byte[prefix.Length + payload.Length];
+        prefix.CopyTo(pae, 0);
+        payload.Span.CopyTo(pae.AsSpan(prefix.Length));
+        return pae;
     }
 
     /// <summary>
@@ -1583,13 +1719,7 @@ public sealed class SigstoreVerifier
 
         // Compute PAE (Pre-Authentication Encoding)
         // PAE = "DSSEv1" + SP + LEN(type) + SP + type + SP + LEN(body) + SP + body
-        var payloadType = envelope.PayloadType;
-        var payload = envelope.Payload;
-        var pae = Encoding.UTF8.GetBytes(
-            $"DSSEv1 {payloadType.Length} {payloadType} {payload.Length} ");
-        var paeBytes = new byte[pae.Length + payload.Length];
-        pae.CopyTo(paeBytes, 0);
-        payload.Span.CopyTo(paeBytes.AsSpan(pae.Length));
+        var paeBytes = ComputeDssePae(envelope);
 
         var sig = envelope.Signatures[0].Sig;
         return VerifySignatureWithCert(paeBytes, sig.Span, leafCert);

@@ -24,6 +24,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # The label must exist before it can be applied; `gh issue create --label`
+          # fails outright on an unknown label, which previously caused drift to go
+          # unreported.
+          gh label create "conformance-drift" \
+            --repo "${{ github.repository }}" \
+            --description "Weekly conformance drift detection" \
+            --color "B60205" \
+            --force
+
           existing=$(gh issue list \
             --repo "${{ github.repository }}" \
             --label "conformance-drift" \
