@@ -4,11 +4,11 @@ on:
   pull_request:
     branches:
       - main
-      - "release/**"
+      - "release/*"
   push:
     branches:
       - main
-      - "release/**"
+      - "release/*"
   workflow_dispatch:
     inputs:
       release:

@@ -9,7 +9,7 @@ This project incorporates components from the projects listed below.
 - **Version:** 2.7.0
 - **License:** MIT
 - **Project:** https://github.com/bcgit/bc-csharp
-- **Copyright:** Copyright (c) 2000-2026 Legion of the Bouncy Castle Inc.
+- **Copyright:** Copyright (c) 2000-2026 The Legion of the Bouncy Castle Inc.
 
 BouncyCastle.Cryptography is used for managed Ed25519 signature verification.
 

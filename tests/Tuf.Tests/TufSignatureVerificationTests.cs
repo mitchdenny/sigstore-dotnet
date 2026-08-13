@@ -326,4 +326,59 @@ public class TufSignatureVerificationTests
 
         Assert.True(result, "Ed25519 SPKI PEM public keys should verify successfully.");
     }
+
+    [Theory]
+    // Well-formed SPKI carrying an unrecognised algorithm OID (1.2.3.4).
+    [InlineData("MCwwBwYDKgMEBQADIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==")]
+    // Structurally invalid DER.
+    [InlineData("AQIDBA==")]
+    // Ed25519 OID with a key that is not 32 bytes.
+    [InlineData("MBIwBQYDK2VwAwkAAAAAAAAAAAA=")]
+    public void VerifyThreshold_Ed25519MalformedPemPublicKey_ReturnsFalse(string base64Der)
+    {
+        var pem = $"-----BEGIN PUBLIC KEY-----\n{base64Der}\n-----END PUBLIC KEY-----";
+
+        var result = VerifyWithEd25519PemKey(pem);
+
+        Assert.False(result, "Malformed Ed25519 public keys must fail verification without throwing.");
+    }
+
+    [Fact]
+    public void VerifyThreshold_Ed25519KeyTypeWithRsaPemPublicKey_ReturnsFalse()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var pem = $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo())}\n-----END PUBLIC KEY-----";
+
+        var result = VerifyWithEd25519PemKey(pem);
+
+        Assert.False(result, "A non-Ed25519 key must not satisfy an ed25519 key entry.");
+    }
+
+    private static bool VerifyWithEd25519PemKey(string pem)
+    {
+        var role = new Tuf.Metadata.TufRole
+        {
+            KeyIds = ["ed25519-key"],
+            Threshold = 1
+        };
+        var keys = new Dictionary<string, Tuf.Metadata.TufKey>
+        {
+            ["ed25519-key"] = new()
+            {
+                KeyType = "ed25519",
+                Scheme = "ed25519",
+                KeyVal = new Dictionary<string, string> { ["public"] = pem }
+            }
+        };
+        var signatures = new List<Tuf.Metadata.TufSignature>
+        {
+            new()
+            {
+                KeyId = "ed25519-key",
+                Sig = new string('0', 128)
+            }
+        };
+
+        return TufMetadataVerifier.VerifyThreshold(signatures, [], role, keys);
+    }
 }
