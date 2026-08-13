@@ -1269,4 +1269,157 @@ public class SigstoreVerifierTests
             CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256),
             FakeCertDer));
     }
+
+    // ---- Issuer resolution for SCT verification ----
+    //
+    // A precertificate SCT commits to a hash of the issuing certificate's public key, so the
+    // wrong issuer silently produces the wrong signed data and every SCT looks invalid. A CA
+    // that rotates its key keeps its subject name, so a trusted root can hold several distinct
+    // authorities sharing one name and the issuer cannot be chosen by name alone.
+
+    private const string SharedCaSubject = "CN=shared-ca, O=sigstore-test";
+
+    private static X509Certificate2 CreateTestCa(out ECDsa key)
+    {
+        key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(SharedCaSubject, key, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        var now = DateTimeOffset.UtcNow;
+        return request.CreateSelfSigned(now.AddDays(-1), now.AddDays(1));
+    }
+
+    private static X509Certificate2 CreateTestLeaf(X509Certificate2 issuer, bool includeAuthorityKeyIdentifier)
+    {
+        using var leafKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest("CN=leaf, O=sigstore-test", leafKey, HashAlgorithmName.SHA256);
+        if (includeAuthorityKeyIdentifier)
+        {
+            request.CertificateExtensions.Add(
+                X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        return request.Create(issuer, now.AddHours(-1), now.AddHours(1), [1, 2, 3, 4]);
+    }
+
+    private static TrustedRoot TrustedRootWith(params X509Certificate2[] cas)
+    {
+        return new TrustedRoot
+        {
+            CertificateAuthorities = cas
+                .Select(ca => new CertificateAuthorityInfo
+                {
+                    Uri = new Uri("https://fulcio.example"),
+                    CertificateChain = [ca.RawData]
+                })
+                .ToList()
+        };
+    }
+
+    [Fact]
+    public void ResolveIssuerCandidates_CasShareSubjectName_PrefersAuthorityKeyIdentifierMatch()
+    {
+        using var oldCa = CreateTestCa(out var oldKey);
+        using var newCa = CreateTestCa(out var newKey);
+        using (oldKey)
+        using (newKey)
+        using (var leaf = CreateTestLeaf(newCa, includeAuthorityKeyIdentifier: true))
+        {
+            // Both authorities share a subject name, and the one that did not issue the leaf is listed first.
+            Assert.Equal(oldCa.SubjectName.RawData, newCa.SubjectName.RawData);
+            var trustedRoot = TrustedRootWith(oldCa, newCa);
+
+            var owned = new List<X509Certificate2>();
+            try
+            {
+                var candidates = SigstoreVerifier.ResolveIssuerCandidates(leaf, null, trustedRoot, owned);
+
+                Assert.Equal(newCa.Thumbprint, candidates[0].Thumbprint);
+                Assert.Equal(2, candidates.Count);
+            }
+            finally
+            {
+                foreach (var candidate in owned)
+                    candidate.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveIssuerCandidates_LeafWithoutAuthorityKeyIdentifier_ReturnsEveryNameMatch()
+    {
+        using var oldCa = CreateTestCa(out var oldKey);
+        using var newCa = CreateTestCa(out var newKey);
+        using (oldKey)
+        using (newKey)
+        using (var leaf = CreateTestLeaf(newCa, includeAuthorityKeyIdentifier: false))
+        {
+            var trustedRoot = TrustedRootWith(oldCa, newCa);
+
+            var owned = new List<X509Certificate2>();
+            try
+            {
+                var candidates = SigstoreVerifier.ResolveIssuerCandidates(leaf, null, trustedRoot, owned);
+
+                // Nothing distinguishes the authorities, so the real issuer must still be tried.
+                Assert.Equal(2, candidates.Count);
+                Assert.Contains(candidates, c => c.Thumbprint == newCa.Thumbprint);
+            }
+            finally
+            {
+                foreach (var candidate in owned)
+                    candidate.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveIssuerCandidates_NonMatchingSubjectName_IsExcluded()
+    {
+        using var ca = CreateTestCa(out var caKey);
+        using (caKey)
+        using (var leaf = CreateTestLeaf(ca, includeAuthorityKeyIdentifier: true))
+        using (var unrelatedKey = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+        {
+            var unrelatedRequest = new CertificateRequest("CN=unrelated-ca", unrelatedKey, HashAlgorithmName.SHA256);
+            unrelatedRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            using var unrelatedCa = unrelatedRequest.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+            var owned = new List<X509Certificate2>();
+            try
+            {
+                var candidates = SigstoreVerifier.ResolveIssuerCandidates(
+                    leaf, null, TrustedRootWith(unrelatedCa, ca), owned);
+
+                Assert.Single(candidates);
+                Assert.Equal(ca.Thumbprint, candidates[0].Thumbprint);
+            }
+            finally
+            {
+                foreach (var candidate in owned)
+                    candidate.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveIssuerCandidates_BundleSuppliesIntermediates_UsesThemVerbatim()
+    {
+        using var ca = CreateTestCa(out var caKey);
+        using (caKey)
+        using (var leaf = CreateTestLeaf(ca, includeAuthorityKeyIdentifier: true))
+        {
+            var intermediates = new X509Certificate2Collection(ca);
+
+            var owned = new List<X509Certificate2>();
+            var candidates = SigstoreVerifier.ResolveIssuerCandidates(
+                leaf, intermediates, TrustedRootWith(), owned);
+
+            Assert.Single(candidates);
+            Assert.Equal(ca.Thumbprint, candidates[0].Thumbprint);
+            Assert.Empty(owned);
+        }
+    }
 }

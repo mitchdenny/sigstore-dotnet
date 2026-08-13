@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -266,36 +267,18 @@ public sealed class SigstoreVerifier
             // Step 2b: Verify SCTs if CT logs are configured
             if (trustRoot.CtLogs.Count > 0)
             {
-                // Find the issuer cert from intermediates, cert chain, or trusted root CAs
-                X509Certificate2? issuerCert = null;
-                if (intermediates is { Count: > 0 })
+                var ownedIssuers = new List<X509Certificate2>();
+                try
                 {
-                    issuerCert = intermediates[0];
+                    var issuerCandidates = ResolveIssuerCandidates(leafCert, intermediates, trustRoot, ownedIssuers);
+                    if (!SctVerifier.VerifyScts(leafCert, issuerCandidates, trustRoot.CtLogs))
+                        return Fail("No valid Signed Certificate Timestamp (SCT) found for any configured CT log.");
                 }
-                else
+                finally
                 {
-                    // Try to find issuer in trusted root certificate authorities
-                    foreach (var ca in trustRoot.CertificateAuthorities)
-                    {
-                        foreach (var caCertBytes in ca.CertificateChain)
-                        {
-                            try
-                            {
-                                using var caCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
-                                if (leafCert.IssuerName.RawData.AsSpan().SequenceEqual(caCert.SubjectName.RawData))
-                                {
-                                    issuerCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                        if (issuerCert != null) break;
-                    }
+                    foreach (var issuer in ownedIssuers)
+                        issuer.Dispose();
                 }
-
-                if (!SctVerifier.VerifyScts(leafCert, issuerCert, trustRoot.CtLogs))
-                    return Fail("No valid Signed Certificate Timestamp (SCT) found for any configured CT log.");
             }
 
             // Step 3: Establish signature time
@@ -1050,6 +1033,126 @@ public sealed class SigstoreVerifier
 
         return true;
     }
+
+    // OID of the X.509 authority key identifier extension (RFC 5280 §4.2.1.1).
+    private const string AuthorityKeyIdentifierOid = "2.5.29.35";
+    // OID of the X.509 subject key identifier extension (RFC 5280 §4.2.1.2).
+    private const string SubjectKeyIdentifierOid = "2.5.29.14";
+
+    /// <summary>
+    /// Collects the certificates that may have issued <paramref name="leafCert"/>, most likely first.
+    /// </summary>
+    /// <remarks>
+    /// A precertificate SCT commits to a hash of the issuing certificate's public key, so SCT
+    /// verification needs that exact certificate. Selecting it by subject name alone is not safe:
+    /// a certificate authority that rotates its key keeps its subject name, so a trusted root can
+    /// legitimately hold several distinct authorities sharing one name. Picking the first name match
+    /// then silently reconstructs the signed data with the wrong key and every SCT appears invalid.
+    /// Candidates whose subject key identifier matches the leaf's authority key identifier are
+    /// returned first, and the remaining name matches are retained as fallbacks so certificates that
+    /// omit those extensions still verify.
+    /// </remarks>
+    /// <param name="leafCert">The certificate whose issuer is being resolved.</param>
+    /// <param name="intermediates">Intermediate certificates supplied by the bundle, if any.</param>
+    /// <param name="trustRoot">The trusted root supplying the certificate authorities to search.</param>
+    /// <param name="owned">Receives the certificates loaded here, which the caller must dispose.</param>
+    internal static List<X509Certificate2> ResolveIssuerCandidates(
+        X509Certificate2 leafCert,
+        X509Certificate2Collection? intermediates,
+        TrustedRoot trustRoot,
+        List<X509Certificate2> owned)
+    {
+        // A bundle-supplied chain names its issuer directly, so there is nothing to disambiguate.
+        if (intermediates is { Count: > 0 })
+            return [intermediates[0]];
+
+        var authorityKeyId = GetAuthorityKeyIdentifier(leafCert);
+
+        var preferred = new List<X509Certificate2>();
+        var fallback = new List<X509Certificate2>();
+
+        foreach (var ca in trustRoot.CertificateAuthorities)
+        {
+            foreach (var caCertBytes in ca.CertificateChain)
+            {
+                X509Certificate2 caCert;
+                try
+                {
+                    caCert = X509CertificateLoader.LoadCertificate(caCertBytes.Span);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!leafCert.IssuerName.RawData.AsSpan().SequenceEqual(caCert.SubjectName.RawData))
+                {
+                    caCert.Dispose();
+                    continue;
+                }
+
+                owned.Add(caCert);
+
+                var subjectKeyId = GetSubjectKeyIdentifier(caCert);
+
+                if (authorityKeyId is { } akid && subjectKeyId is { } skid && akid.Span.SequenceEqual(skid.Span))
+                    preferred.Add(caCert);
+                else
+                    fallback.Add(caCert);
+            }
+        }
+
+        preferred.AddRange(fallback);
+        return preferred;
+    }
+
+    private static ReadOnlyMemory<byte>? GetAuthorityKeyIdentifier(X509Certificate2 cert)
+    {
+        var extension = cert.Extensions[AuthorityKeyIdentifierOid];
+        if (extension == null)
+            return null;
+
+        try
+        {
+            // Unlike the subject key identifier extension, this type's byte[] constructor decodes
+            // the extension rather than treating the bytes as an identifier.
+            return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical)
+                .KeyIdentifier;
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+
+    private static ReadOnlyMemory<byte>? GetSubjectKeyIdentifier(X509Certificate2 cert)
+    {
+        var extension = cert.Extensions[SubjectKeyIdentifierOid];
+        if (extension == null)
+            return null;
+
+        try
+        {
+            // The extension value is a bare OCTET STRING (RFC 5280 §4.2.1.2). It is decoded here
+            // rather than through X509SubjectKeyIdentifierExtension, whose byte[] constructor would
+            // treat the encoded value as the identifier itself and leave its DER header in place,
+            // preventing it from ever matching an authority key identifier.
+            return new AsnReader(extension.RawData, AsnEncodingRules.DER).ReadOctetString();
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+
 
     /// <summary>
     /// The <c>(kind, apiVersion)</c> transparency log entry schemas this client knows how
