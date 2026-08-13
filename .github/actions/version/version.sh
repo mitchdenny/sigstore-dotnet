@@ -15,6 +15,11 @@ git ls-remote origin HEAD >/dev/null
 
 SHORT_SHA="${GIT_SHA:0:7}"
 
+# The 0.x series is closed. Every 0.x package shipped assembly version 1.0.0.0, so a package
+# version below 1.0.0 would derive an assembly version that goes backwards and package
+# validation rejects it (CP0003). New lines off main therefore start at 1.0.
+MINIMUM_MAJOR=1
+
 highest_release_branch_minor() {
   git ls-remote --heads origin 'refs/heads/release/*' \
     | awk '{print $2}' \
@@ -74,16 +79,23 @@ if [[ "$TARGET" == "main" ]]; then
     MAJOR="$BRANCH_MAJOR"
   fi
 
-  HIGHEST_MINOR=0
-  TAG_MINOR="$(highest_tag_minor_for_major "$MAJOR" || true)"
-  if [[ -n "$TAG_MINOR" && "$TAG_MINOR" -gt "$HIGHEST_MINOR" ]]; then
-    HIGHEST_MINOR="$TAG_MINOR"
-  fi
-  if [[ -n "$BRANCH_MINOR" && "$BRANCH_MAJOR" == "$MAJOR" && "$BRANCH_MINOR" -gt "$HIGHEST_MINOR" ]]; then
-    HIGHEST_MINOR="$BRANCH_MINOR"
+  if [[ "$MAJOR" -lt "$MINIMUM_MAJOR" ]]; then
+    # Nothing has been released or branched in the minimum major yet, so it opens at .0.
+    MAJOR="$MINIMUM_MAJOR"
+    BASE="${MAJOR}.0.0"
+  else
+    HIGHEST_MINOR=0
+    TAG_MINOR="$(highest_tag_minor_for_major "$MAJOR" || true)"
+    if [[ -n "$TAG_MINOR" && "$TAG_MINOR" -gt "$HIGHEST_MINOR" ]]; then
+      HIGHEST_MINOR="$TAG_MINOR"
+    fi
+    if [[ -n "$BRANCH_MINOR" && "$BRANCH_MAJOR" == "$MAJOR" && "$BRANCH_MINOR" -gt "$HIGHEST_MINOR" ]]; then
+      HIGHEST_MINOR="$BRANCH_MINOR"
+    fi
+
+    BASE="${MAJOR}.$((HIGHEST_MINOR + 1)).0"
   fi
 
-  BASE="${MAJOR}.$((HIGHEST_MINOR + 1)).0"
   BRANCH_KIND="alpha"
 elif [[ "$TARGET" =~ ^release/([0-9]+)\.([0-9]+)$ ]]; then
   MAJOR="${BASH_REMATCH[1]}"

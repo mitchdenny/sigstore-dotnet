@@ -6,14 +6,11 @@
     <PackageVersion>$(SigstoreVersion)</PackageVersion>
     <InformationalVersion>$(SigstoreVersion)</InformationalVersion>
     <!--
-      Every package published so far (0.2.0 through 0.5.0) shipped assembly version 1.0.0.0,
-      because the previous build did not flow the package version into the assembly. Deriving
-      the assembly version from the package version now would lower it, which breaks assembly
-      binding for existing consumers and is reported by package validation as CP0003. It stays
-      pinned until a major release deliberately raises it; FileVersion and InformationalVersion
-      carry the real version.
+      AssemblyVersion tracks the package version, with the revision field fixed at zero.
+      Build-specific detail belongs in FileVersion and InformationalVersion, never here: a
+      per-build revision would mint a new assembly identity for every CI run.
     -->
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

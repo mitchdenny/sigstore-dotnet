@@ -114,8 +114,9 @@ The build workflow computes one version for both NuGet packages:
 - A manual workflow dispatch with `release` enabled on `release/X.Y` publishes the stable version, creates `vX.Y.Z`, and creates a GitHub Release.
 
 Release branches are long-lived servicing branches and are created manually from `main`.
-Local builds use `0.0.0-local`; set `SIGSTORE_VERSION` to override it. NuGet.org
-publishing uses trusted publishing through the `production` GitHub environment.
+The `0.x` series is closed, so new lines off `main` start at `1.0`. Local builds use
+`0.0.0-local`; set `SIGSTORE_VERSION` to override it. NuGet.org publishing uses trusted
+publishing through the `production` GitHub environment.
 
 ## API compatibility
 
@@ -131,8 +132,12 @@ A deliberate break is declared by regenerating the suppression file:
 dotnet pack src/Sigstore/Sigstore.csproj -c Release -p:ApiCompatGenerateSuppressionFile=true
 ```
 
-The assembly version stays pinned at `1.0.0.0` because every release so far shipped that
-value; raising it is itself a breaking change and belongs to a deliberate major release.
+The assembly version tracks the package version as `Major.Minor.Patch.0`, with prerelease
+labels stripped and the revision field always zero. Build-specific detail belongs in
+`FileVersion` and `InformationalVersion`; a per-build revision would give every CI run a
+distinct assembly identity. Because the published `0.x` packages all shipped assembly
+version `1.0.0.0`, package versions below `1.0.0` would move the assembly version backwards
+and are rejected by package validation as `CP0003` — which is why the `0.x` series is closed.
 
 ## License
 
