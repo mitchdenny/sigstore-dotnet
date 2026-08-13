@@ -164,24 +164,7 @@ public static class CheckpointVerifier
 
     private static bool VerifyEd25519(ReadOnlySpan<byte> publicKey, byte[] message, ReadOnlySpan<byte> signature)
     {
-        ReadOnlySpan<byte> rawKey;
-        if (publicKey.Length == 44)
-        {
-            // SPKI format — extract the 32-byte raw key (skip 12-byte header)
-            rawKey = publicKey.Slice(12);
-        }
-        else if (publicKey.Length == 32)
-        {
-            rawKey = publicKey;
-        }
-        else
-        {
-            return false;
-        }
-
-        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
-        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
-        return algorithm.Verify(pk, message, signature);
+        return Ed25519SignatureVerifier.Verify(publicKey, message, signature);
     }
 }
 

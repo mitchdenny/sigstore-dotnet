@@ -85,6 +85,19 @@ dotnet build Sigstore.slnx
 dotnet test Sigstore.slnx
 ```
 
+## Versioning and releases
+
+The build workflow computes one version for both NuGet packages:
+
+- Pull requests targeting `main` or `release/X.Y` produce unique `-pr.*` preview packages.
+- Pushes to `main` publish `-alpha.*` packages for the next minor line.
+- Pushes to `release/X.Y` publish `-beta.*` packages for that line's next patch.
+- A manual workflow dispatch with `release` enabled on `release/X.Y` publishes the stable version, creates `vX.Y.Z`, and creates a GitHub Release.
+
+Release branches are long-lived servicing branches and are created manually from `main`.
+Local builds use `0.0.0-local`; set `SIGSTORE_VERSION` to override it. NuGet.org
+publishing uses trusted publishing through the `production` GitHub environment.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

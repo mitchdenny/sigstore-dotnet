@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <ProjectReference Include="..\Tuf\Tuf.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math.EC.Rfc8032;
+using Org.BouncyCastle.Security;
 using Tuf.Metadata;
 
 namespace Tuf;
@@ -106,11 +109,15 @@ public static class TufMetadataVerifier
         if (signature.Length != 64 || !TryDecodeEd25519PublicKey(publicKeyValue, out var publicKeyRaw))
             return false;
 
-        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
-        var publicKey = NSec.Cryptography.PublicKey.Import(algorithm, publicKeyRaw,
-            NSec.Cryptography.KeyBlobFormat.RawPublicKey);
-
-        return algorithm.Verify(publicKey, data, signature);
+        try
+        {
+            var publicKey = new Ed25519PublicKeyParameters(publicKeyRaw);
+            return publicKey.Verify(Ed25519.Algorithm.Ed25519, null, data, signature);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static bool VerifyRsaPss(byte[] data, byte[] signature, string pem, HashAlgorithmName hashAlgorithm)
@@ -162,16 +169,26 @@ public static class TufMetadataVerifier
         {
             var pemBytes = Encoding.ASCII.GetBytes(publicKeyValue);
             var derBytes = ExtractDerFromPem(pemBytes);
-            if (derBytes.Length != 44)
+            if (PublicKeyFactory.CreateKey(derBytes) is not Ed25519PublicKeyParameters publicKey)
             {
                 publicKeyRaw = [];
                 return false;
             }
 
-            publicKeyRaw = derBytes[^32..];
+            publicKeyRaw = publicKey.GetEncoded();
             return true;
         }
         catch (FormatException)
+        {
+            publicKeyRaw = [];
+            return false;
+        }
+        catch (IOException)
+        {
+            publicKeyRaw = [];
+            return false;
+        }
+        catch (ArgumentException)
         {
             publicKeyRaw = [];
             return false;

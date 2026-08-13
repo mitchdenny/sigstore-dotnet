@@ -896,17 +896,7 @@ public sealed class SigstoreVerifier
 
     internal static bool VerifyEd25519Data(byte[] data, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeySpki)
     {
-        ReadOnlySpan<byte> rawKey;
-        if (publicKeySpki.Length == 44)
-            rawKey = publicKeySpki.Span.Slice(12);
-        else if (publicKeySpki.Length == 32)
-            rawKey = publicKeySpki.Span;
-        else
-            return false;
-
-        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
-        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
-        return algorithm.Verify(pk, data, signature);
+        return Ed25519SignatureVerifier.Verify(publicKeySpki.Span, data, signature);
     }
 
     private static (bool IsValid, string? Reason) VerifyHashWithKey(

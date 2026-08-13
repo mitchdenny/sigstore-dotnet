@@ -1,5 +1,10 @@
 <Project>
   <PropertyGroup>
+    <SigstoreVersion>$(SIGSTORE_VERSION)</SigstoreVersion>
+    <SigstoreVersion Condition="'$(SigstoreVersion)' == ''">0.0.0-local</SigstoreVersion>
+    <Version>$(SigstoreVersion)</Version>
+    <PackageVersion>$(SigstoreVersion)</PackageVersion>
+    <InformationalVersion>$(SigstoreVersion)</InformationalVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
