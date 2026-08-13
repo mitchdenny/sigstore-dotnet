@@ -1,0 +1,74 @@
+name: Bump package validation baseline
+
+# After a stable vX.Y.Z release ships, raise a pull request pinning
+# <PackageValidationBaselineVersion> in the packable projects to that release, so subsequent
+# builds compare the public API against what consumers actually have and fail on an
+# undeclared breaking change.
+#
+# Prereleases are never tagged and never create a GitHub release, so they never reach here.
+# The version input lets a maintainer re-run the bump against a known good tag if the
+# original run failed or its pull request was closed by mistake.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version to pin as the baseline (for example 0.5.0). Omit to use the highest stable tag.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test baseline bump scripts
+        run: bash .github/actions/baseline-bump/test.sh
+
+      - name: Resolve baseline version
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash .github/actions/baseline-bump/resolve.sh
+
+      - name: Configure git identity
+        if: steps.resolve.outputs.skip != 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Bump the release branch
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/actions/baseline-bump/bump.sh
+          "release/${{ steps.resolve.outputs.major }}.${{ steps.resolve.outputs.minor }}"
+          "${{ steps.resolve.outputs.version }}"
+
+      - name: Bump main
+        if: steps.resolve.outputs.skip != 'true' && steps.resolve.outputs.bump_main == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash .github/actions/baseline-bump/bump.sh
+          main
+          "${{ steps.resolve.outputs.version }}"

@@ -19,10 +19,18 @@ internal static class SctVerifier
     /// Verifies that at least one SCT in the leaf certificate is signed by a
     /// CT log key from the trusted root.
     /// </summary>
+    /// <param name="leafCert">The certificate whose embedded SCTs are verified.</param>
+    /// <param name="issuerCandidates">
+    /// Certificates that may have issued <paramref name="leafCert"/>. A precertificate SCT commits
+    /// to a hash of the issuer's public key, so the signed data can only be reconstructed with the
+    /// real issuer. Callers cannot always identify it unambiguously, so every plausible issuer is
+    /// tried before the SCT is rejected.
+    /// </param>
+    /// <param name="ctLogs">The CT logs from the trusted root.</param>
     /// <returns>True if at least one SCT verifies, or if there are no CT logs in the trusted root.</returns>
     public static bool VerifyScts(
         X509Certificate2 leafCert,
-        X509Certificate2? issuerCert,
+        IReadOnlyList<X509Certificate2> issuerCandidates,
         IReadOnlyList<TransparencyLogInfo> ctLogs)
     {
         // If no CT logs configured, SCT verification is not required
@@ -49,8 +57,18 @@ internal static class SctVerifier
             if (!ctLogsByLogId.TryGetValue(logIdHex, out var ctLog))
                 continue; // Unknown log — skip this SCT
 
-            if (VerifySctSignature(sct, ctLog, leafCert, issuerCert))
-                return true;
+            if (issuerCandidates.Count == 0)
+            {
+                if (VerifySctSignature(sct, ctLog, leafCert, null))
+                    return true;
+                continue;
+            }
+
+            foreach (var issuerCert in issuerCandidates)
+            {
+                if (VerifySctSignature(sct, ctLog, leafCert, issuerCert))
+                    return true;
+            }
         }
 
         return false; // No SCT could be verified
@@ -220,17 +238,7 @@ internal static class SctVerifier
 
     private static bool VerifyEd25519Sct(byte[] data, ReadOnlySpan<byte> signature, ReadOnlyMemory<byte> publicKeyBytes)
     {
-        ReadOnlySpan<byte> rawKey;
-        if (publicKeyBytes.Length == 44)
-            rawKey = publicKeyBytes.Span.Slice(12);
-        else if (publicKeyBytes.Length == 32)
-            rawKey = publicKeyBytes.Span;
-        else
-            return false;
-
-        var algorithm = NSec.Cryptography.SignatureAlgorithm.Ed25519;
-        var pk = NSec.Cryptography.PublicKey.Import(algorithm, rawKey, NSec.Cryptography.KeyBlobFormat.RawPublicKey);
-        return algorithm.Verify(pk, data, signature);
+        return Ed25519SignatureVerifier.Verify(publicKeyBytes.Span, data, signature);
     }
 
     /// <summary>

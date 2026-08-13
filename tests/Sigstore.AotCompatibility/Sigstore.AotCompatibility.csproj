@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Sigstore.AotCompatibility</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <PublishAot>true</PublishAot>
+    <!--
+      Report every trim/AOT warning individually instead of collapsing per-assembly
+      warnings into a single IL2104/IL3053. Combined with the repo-wide
+      TreatWarningsAsErrors, any regression fails the build.
+    -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sigstore\Sigstore.csproj" />
+    <ProjectReference Include="..\..\src\Tuf\Tuf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Root the whole of both libraries so ILC analyses their entire public surface,
+      not just the handful of members this harness happens to call. Without this the
+      trimmer would discard unreferenced APIs and never check them for AOT safety.
+    -->
+    <TrimmerRootAssembly Include="Sigstore" />
+    <TrimmerRootAssembly Include="Tuf" />
+  </ItemGroup>
+
+</Project>

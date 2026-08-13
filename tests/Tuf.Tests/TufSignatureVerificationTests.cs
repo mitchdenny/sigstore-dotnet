@@ -1,4 +1,5 @@
-using NSec.Cryptography;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math.EC.Rfc8032;
 using Tuf.Serialization;
 
 namespace Tuf.Tests;
@@ -245,11 +246,11 @@ public class TufSignatureVerificationTests
     [Fact]
     public void VerifyThreshold_Ed25519RawHexPublicKey_ThresholdMet()
     {
-        var algorithm = SignatureAlgorithm.Ed25519;
-        using var signingKey = Key.Create(algorithm);
+        var signingKey = new Ed25519PrivateKeyParameters(new byte[Ed25519PrivateKeyParameters.KeySize]);
         var data = "hello tuf ed25519"u8.ToArray();
-        var signature = algorithm.Sign(signingKey, data);
-        var rawPublicKey = signingKey.Export(KeyBlobFormat.RawPublicKey);
+        var signature = new byte[Ed25519PrivateKeyParameters.SignatureSize];
+        signingKey.Sign(Ed25519.Algorithm.Ed25519, null, data, signature);
+        var rawPublicKey = signingKey.GeneratePublicKey().GetEncoded();
 
         var role = new Tuf.Metadata.TufRole
         {
@@ -282,5 +283,102 @@ public class TufSignatureVerificationTests
         var result = TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys);
 
         Assert.True(result, "Ed25519 raw-hex public keys should verify successfully.");
+    }
+
+    [Fact]
+    public void VerifyThreshold_Ed25519PemPublicKey_Rfc8032Vector_ThresholdMet()
+    {
+        var publicKey = Convert.FromHexString(
+            "D75A980182B10AB7D54BFED3C964073A0EE172F3DAA62325AF021A68F707511A");
+        var signature = Convert.FromHexString(
+            "E5564300C360AC729086E2CC806E828A84877F1EB8E5D974D873E06522490155" +
+            "5FB8821590A33BACC61E39701CF9B46BD25BF5F0595BBE24655141438E7A100B");
+        byte[] spkiPrefix = [0x30, 0x2A, 0x30, 0x05, 0x06, 0x03, 0x2B, 0x65, 0x70, 0x03, 0x21, 0x00];
+        var spki = new byte[spkiPrefix.Length + publicKey.Length];
+        spkiPrefix.CopyTo(spki, 0);
+        publicKey.CopyTo(spki, spkiPrefix.Length);
+        var pem = $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(spki)}\n-----END PUBLIC KEY-----";
+
+        var role = new Tuf.Metadata.TufRole
+        {
+            KeyIds = ["ed25519-key"],
+            Threshold = 1
+        };
+        var keys = new Dictionary<string, Tuf.Metadata.TufKey>
+        {
+            ["ed25519-key"] = new()
+            {
+                KeyType = "ed25519",
+                Scheme = "ed25519",
+                KeyVal = new Dictionary<string, string> { ["public"] = pem }
+            }
+        };
+        var signatures = new List<Tuf.Metadata.TufSignature>
+        {
+            new()
+            {
+                KeyId = "ed25519-key",
+                Sig = Convert.ToHexString(signature).ToLowerInvariant()
+            }
+        };
+
+        var result = TufMetadataVerifier.VerifyThreshold(signatures, [], role, keys);
+
+        Assert.True(result, "Ed25519 SPKI PEM public keys should verify successfully.");
+    }
+
+    [Theory]
+    // Well-formed SPKI carrying an unrecognised algorithm OID (1.2.3.4).
+    [InlineData("MCwwBwYDKgMEBQADIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==")]
+    // Structurally invalid DER.
+    [InlineData("AQIDBA==")]
+    // Ed25519 OID with a key that is not 32 bytes.
+    [InlineData("MBIwBQYDK2VwAwkAAAAAAAAAAAA=")]
+    public void VerifyThreshold_Ed25519MalformedPemPublicKey_ReturnsFalse(string base64Der)
+    {
+        var pem = $"-----BEGIN PUBLIC KEY-----\n{base64Der}\n-----END PUBLIC KEY-----";
+
+        var result = VerifyWithEd25519PemKey(pem);
+
+        Assert.False(result, "Malformed Ed25519 public keys must fail verification without throwing.");
+    }
+
+    [Fact]
+    public void VerifyThreshold_Ed25519KeyTypeWithRsaPemPublicKey_ReturnsFalse()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var pem = $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo())}\n-----END PUBLIC KEY-----";
+
+        var result = VerifyWithEd25519PemKey(pem);
+
+        Assert.False(result, "A non-Ed25519 key must not satisfy an ed25519 key entry.");
+    }
+
+    private static bool VerifyWithEd25519PemKey(string pem)
+    {
+        var role = new Tuf.Metadata.TufRole
+        {
+            KeyIds = ["ed25519-key"],
+            Threshold = 1
+        };
+        var keys = new Dictionary<string, Tuf.Metadata.TufKey>
+        {
+            ["ed25519-key"] = new()
+            {
+                KeyType = "ed25519",
+                Scheme = "ed25519",
+                KeyVal = new Dictionary<string, string> { ["public"] = pem }
+            }
+        };
+        var signatures = new List<Tuf.Metadata.TufSignature>
+        {
+            new()
+            {
+                KeyId = "ed25519-key",
+                Sig = new string('0', 128)
+            }
+        };
+
+        return TufMetadataVerifier.VerifyThreshold(signatures, [], role, keys);
     }
 }

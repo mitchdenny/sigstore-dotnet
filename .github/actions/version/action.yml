@@ -1,102 +1,36 @@
-name: 'Generate Version'
-description: 'Generates version strings for NuGet packages based on git tags and branch context'
+name: Generate Sigstore version
+description: Compute the package version from the target branch and build context.
 
 inputs:
-  release:
-    description: 'Whether this is a GA release build (no prerelease suffix)'
+  release-flag:
+    description: Publish a final release from a release/X.Y branch.
     required: false
-    default: 'false'
+    default: "false"
 
 outputs:
   version:
-    description: 'The computed package version for this build'
-    value: ${{ steps.version.outputs.version }}
-  base_version:
-    description: 'The base X.Y.Z version (no suffix)'
-    value: ${{ steps.version.outputs.base_version }}
-  is_release:
-    description: 'Whether this is a GA release'
-    value: ${{ steps.version.outputs.is_release }}
+    description: Full NuGet package version.
+    value: ${{ steps.compute.outputs.version }}
+  kind:
+    description: alpha, beta, release, or pr.
+    value: ${{ steps.compute.outputs.kind }}
+  base:
+    description: Stable X.Y.Z version without a prerelease suffix.
+    value: ${{ steps.compute.outputs.base }}
 
 runs:
-  using: 'composite'
+  using: composite
   steps:
     - name: Compute version
-      id: version
+      id: compute
       shell: bash
-      run: |
-        set -e
-        git fetch --tags --quiet 2>/dev/null || true
-
-        BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-        EVENT="${GITHUB_EVENT_NAME}"
-        IS_RELEASE="${{ inputs.release }}"
-        SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-        RUN_ID="${GITHUB_RUN_ID}"
-        ATTEMPT="${GITHUB_RUN_ATTEMPT}"
-        PR_NUMBER="${{ github.event.pull_request.number }}"
-
-        echo "Branch: $BRANCH | Event: $EVENT | Release: $IS_RELEASE"
-
-        # Determine if we're on a release branch
-        if [[ "$BRANCH" == release/* ]]; then
-          # Extract X.Y from release/X.Y
-          RELEASE_XY="${BRANCH#release/}"
-          MAJOR=$(echo "$RELEASE_XY" | cut -d'.' -f1)
-          MINOR=$(echo "$RELEASE_XY" | cut -d'.' -f2)
-
-          # Find latest vX.Y.* release tag to determine patch
-          LATEST_PATCH_TAG=$(git tag -l "v${MAJOR}.${MINOR}.*" | { grep -v '-' || true; } | sort -V | tail -n1)
-          if [ -n "$LATEST_PATCH_TAG" ]; then
-            LATEST_PATCH=$(echo "${LATEST_PATCH_TAG#v}" | cut -d'.' -f3)
-            PATCH=$((LATEST_PATCH + 1))
-          else
-            PATCH=0
-          fi
-
-          BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-
-          if [ "$IS_RELEASE" = "true" ]; then
-            VERSION="${BASE_VERSION}"
-            echo "is_release=true" >> $GITHUB_OUTPUT
-          elif [ "$EVENT" = "pull_request" ]; then
-            VERSION="${BASE_VERSION}-pr.${PR_NUMBER}.${RUN_ID}.${SHORT_SHA}.${ATTEMPT}"
-            echo "is_release=false" >> $GITHUB_OUTPUT
-          else
-            VERSION="${BASE_VERSION}-rc.${RUN_ID}.${SHORT_SHA}.${ATTEMPT}"
-            echo "is_release=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          # Main branch (or other)
-          # Check for a dev marker tag (vX.Y.0-dev) on main
-          DEV_TAG=$(git tag -l 'v*.*.*-dev' --sort=-v:refname | head -n1)
-          if [ -n "$DEV_TAG" ]; then
-            DEV_VERSION="${DEV_TAG#v}"
-            DEV_VERSION="${DEV_VERSION%-dev}"
-            MAJOR=$(echo "$DEV_VERSION" | cut -d'.' -f1)
-            MINOR=$(echo "$DEV_VERSION" | cut -d'.' -f2)
-            BASE_VERSION="${MAJOR}.${MINOR}.0"
-          else
-            # Fall back to latest release tag and use its major.minor
-            LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -v '-' | sort -V | tail -n1)
-            if [ -n "$LATEST_TAG" ]; then
-              LATEST_VERSION="${LATEST_TAG#v}"
-              MAJOR=$(echo "$LATEST_VERSION" | cut -d'.' -f1)
-              MINOR=$(echo "$LATEST_VERSION" | cut -d'.' -f2)
-              BASE_VERSION="${MAJOR}.${MINOR}.0"
-            else
-              BASE_VERSION="0.1.0"
-            fi
-          fi
-
-          if [ "$EVENT" = "pull_request" ]; then
-            VERSION="${BASE_VERSION}-pr.${PR_NUMBER}.${RUN_ID}.${SHORT_SHA}.${ATTEMPT}"
-          else
-            VERSION="${BASE_VERSION}-dev.${RUN_ID}.${SHORT_SHA}.${ATTEMPT}"
-          fi
-          echo "is_release=false" >> $GITHUB_OUTPUT
-        fi
-
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-        echo "Computed version: $VERSION (base: $BASE_VERSION)"
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF_NAME: ${{ github.ref_name }}
+        BASE_REF: ${{ github.base_ref }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        RUN_NUMBER: ${{ github.run_number }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        GIT_SHA: ${{ github.sha }}
+        RELEASE_FLAG: ${{ inputs.release-flag }}
+      run: bash "$GITHUB_ACTION_PATH/version.sh"

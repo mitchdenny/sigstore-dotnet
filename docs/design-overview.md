@@ -337,7 +337,7 @@ public static class TimestampParser
 | Sigstore Need | .NET API |
 |---------------|----------|
 | ECDSA P-256 key generation | `ECDsa.Create(ECCurve.NamedCurves.nistP256)` |
-| Ed25519 | `System.Security.Cryptography.Ed25519` (.NET 10+) or BouncyCastle fallback |
+| Ed25519 | BouncyCastle `Ed25519PublicKeyParameters` |
 | RSA | `RSA.Create(keySize)` |
 | X.509 cert validation | `X509Chain`, `X509Certificate2` |
 | PKCS#10 CSR | `CertificateRequest` class |

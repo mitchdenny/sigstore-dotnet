@@ -1,5 +1,16 @@
 <Project>
   <PropertyGroup>
+    <SigstoreVersion>$(SIGSTORE_VERSION)</SigstoreVersion>
+    <SigstoreVersion Condition="'$(SigstoreVersion)' == ''">0.0.0-local</SigstoreVersion>
+    <Version>$(SigstoreVersion)</Version>
+    <PackageVersion>$(SigstoreVersion)</PackageVersion>
+    <InformationalVersion>$(SigstoreVersion)</InformationalVersion>
+    <!--
+      AssemblyVersion tracks the package version, with the revision field fixed at zero.
+      Build-specific detail belongs in FileVersion and InformationalVersion, never here: a
+      per-build revision would mint a new assembly identity for every CI run.
+    -->
+    <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
