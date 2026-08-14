@@ -16,4 +16,5 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)PackageValidationBaseline.props" />
 </Project>

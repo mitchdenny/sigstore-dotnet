@@ -1,7 +1,7 @@
 set -euo pipefail
 
 # Exercises resolve.sh against synthetic tag histories and rewrite.sh against synthetic
-# project files. bump.sh is not covered here because it talks to GitHub.
+# baseline files. bump.sh is not covered here because it talks to GitHub.
 
 ACTION_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_ROOT="$(mktemp -d)"
@@ -99,50 +99,47 @@ resolve_case "a patch on the newest line bumps main" release v1.0.1 "" \
 # rewrite.sh
 # ---------------------------------------------------------------------------
 
-make_project() {
+make_baseline_file() {
   cat > "$1" <<'EOF'
-<Project Sdk="Microsoft.NET.Sdk">
-
+<Project>
   <PropertyGroup>
-    <PackageId>Example</PackageId>
-    <EnablePackageValidation>true</EnablePackageValidation>
+    <ExampleBefore>true</ExampleBefore>
     <!-- BEGIN: bot-managed baseline -->
     <PackageValidationBaselineVersion>0.4.0</PackageValidationBaselineVersion>
     <!-- END: bot-managed baseline -->
-    <Description>Example</Description>
+    <ExampleAfter>true</ExampleAfter>
   </PropertyGroup>
-
 </Project>
 EOF
 }
 
-PROJECT_A="$TEST_ROOT/A.csproj"
-PROJECT_B="$TEST_ROOT/B.csproj"
-make_project "$PROJECT_A"
-make_project "$PROJECT_B"
+BASELINE_A="$TEST_ROOT/A.props"
+BASELINE_B="$TEST_ROOT/B.props"
+make_baseline_file "$BASELINE_A"
+make_baseline_file "$BASELINE_B"
 
-PREVIOUS="$(VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$PROJECT_A" "$PROJECT_B")"
+PREVIOUS="$(VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$BASELINE_A" "$BASELINE_B")"
 [[ "$PREVIOUS" == "0.4.0" ]] || fail "rewrite reports the previous baseline (got '$PREVIOUS')"
 
-grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$PROJECT_A" \
+grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$BASELINE_A" \
   || fail "rewrite pins the new version"
-grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$PROJECT_B" \
-  || fail "rewrite pins every project passed to it"
-grep -q '<Description>Example</Description>' "$PROJECT_A" \
+grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$BASELINE_B" \
+  || fail "rewrite pins every file passed to it"
+grep -q '<ExampleAfter>true</ExampleAfter>' "$BASELINE_A" \
   || fail "rewrite preserves content after the block"
-grep -q '<EnablePackageValidation>true</EnablePackageValidation>' "$PROJECT_A" \
+grep -q '<ExampleBefore>true</ExampleBefore>' "$BASELINE_A" \
   || fail "rewrite preserves content before the block"
-grep -q '^    <PackageValidationBaselineVersion>' "$PROJECT_A" \
+grep -q '^    <PackageValidationBaselineVersion>' "$BASELINE_A" \
   || fail "rewrite preserves the indentation of the block"
-[[ "$(grep -c '<PackageValidationBaselineVersion>' "$PROJECT_A")" == "1" ]] \
+[[ "$(grep -c '<PackageValidationBaselineVersion>' "$BASELINE_A")" == "1" ]] \
   || fail "rewrite leaves exactly one baseline element"
 
-cp "$PROJECT_A" "$TEST_ROOT/A.before"
-VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$PROJECT_A" >/dev/null
-cmp -s "$PROJECT_A" "$TEST_ROOT/A.before" || fail "rewrite is idempotent"
+cp "$BASELINE_A" "$TEST_ROOT/A.before"
+VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$BASELINE_A" >/dev/null
+cmp -s "$BASELINE_A" "$TEST_ROOT/A.before" || fail "rewrite is idempotent"
 
-# A block that lost its element still gets one back, so a hand-edited project recovers.
-cat > "$TEST_ROOT/empty.csproj" <<'EOF'
+# A block that lost its element still gets one back, so a hand-edited file recovers.
+cat > "$TEST_ROOT/empty.props" <<'EOF'
 <Project>
   <PropertyGroup>
     <!-- BEGIN: bot-managed baseline -->
@@ -150,9 +147,9 @@ cat > "$TEST_ROOT/empty.csproj" <<'EOF'
   </PropertyGroup>
 </Project>
 EOF
-PREVIOUS="$(VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/empty.csproj")"
+PREVIOUS="$(VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/empty.props")"
 [[ -z "$PREVIOUS" ]] || fail "rewrite reports no previous baseline for an empty block (got '$PREVIOUS')"
-grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$TEST_ROOT/empty.csproj" \
+grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$TEST_ROOT/empty.props" \
   || fail "rewrite repopulates an empty block"
 
 expect_failure() {
@@ -163,26 +160,26 @@ expect_failure() {
   fi
 }
 
-cat > "$TEST_ROOT/nomarkers.csproj" <<'EOF'
+cat > "$TEST_ROOT/nomarkers.props" <<'EOF'
 <Project>
   <PropertyGroup />
 </Project>
 EOF
-expect_failure "rewrite rejects a project without markers" \
-  env VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/nomarkers.csproj"
+expect_failure "rewrite rejects a file without markers" \
+  env VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/nomarkers.props"
 
-expect_failure "rewrite rejects a missing project" \
-  env VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/absent.csproj"
+expect_failure "rewrite rejects a missing file" \
+  env VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh" "$TEST_ROOT/absent.props"
 
 expect_failure "rewrite rejects a prerelease version" \
-  env VERSION=0.5.0-beta.1 bash "$ACTION_PATH/rewrite.sh" "$PROJECT_A"
+  env VERSION=0.5.0-beta.1 bash "$ACTION_PATH/rewrite.sh" "$BASELINE_A"
 
-expect_failure "rewrite requires at least one project" \
+expect_failure "rewrite requires at least one file" \
   env VERSION=0.5.0 bash "$ACTION_PATH/rewrite.sh"
 
-# A project that fails validation must be left untouched.
-grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$PROJECT_A" \
-  || fail "a rejected run leaves the project untouched"
+# A file that fails validation must be left untouched.
+grep -q '<PackageValidationBaselineVersion>0.5.0</PackageValidationBaselineVersion>' "$BASELINE_A" \
+  || fail "a rejected run leaves the file untouched"
 
 if [[ "$FAILURES" -gt 0 ]]; then
   echo "$FAILURES baseline bump test(s) failed."
