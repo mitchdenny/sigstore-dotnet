@@ -15,9 +15,6 @@
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <EnablePackageValidation>true</EnablePackageValidation>
-    <!-- BEGIN: bot-managed baseline -->
-    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
-    <!-- END: bot-managed baseline -->
   </PropertyGroup>
 
   <ItemGroup>

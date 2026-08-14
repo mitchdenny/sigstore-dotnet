@@ -9,6 +9,10 @@ on:
     branches:
       - main
       - "release/*"
+    # Baseline bump pull requests are validated before merge. Advancing only the comparison
+    # baseline must not publish a new alpha or beta package from the merge commit.
+    paths-ignore:
+      - PackageValidationBaseline.props
   workflow_dispatch:
     inputs:
       release:

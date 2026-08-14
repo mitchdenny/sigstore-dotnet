@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- BEGIN: bot-managed baseline -->
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
+    <!-- END: bot-managed baseline -->
+  </PropertyGroup>
+</Project>
