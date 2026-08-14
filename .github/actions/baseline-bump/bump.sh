@@ -1,8 +1,8 @@
 set -euo pipefail
 
 # Opens (or updates) a pull request that bumps the package validation baseline on BRANCH to
-# VERSION. Idempotent: if the projects on BRANCH already pin VERSION the script exits without
-# touching git or the pull request.
+# VERSION. Idempotent: if BRANCH already pins VERSION the script exits without touching git
+# or the pull request.
 #
 # Inputs:
 #   $1 BRANCH  - the base branch to target (e.g. main, release/0.5)
@@ -14,7 +14,7 @@ BRANCH="${1:?branch required}"
 VERSION="${2:?version required}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECTS=(src/Sigstore/Sigstore.csproj src/Tuf/Tuf.csproj)
+BASELINE_FILE=PackageValidationBaseline.props
 
 if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
   echo "::notice::Branch '$BRANCH' does not exist on origin; skipping."
@@ -33,17 +33,15 @@ git worktree add --detach "$WORKTREE" "origin/$BRANCH" >/dev/null
 
 pushd "$WORKTREE" >/dev/null
 
-for project in "${PROJECTS[@]}"; do
-  if [[ ! -f "$project" ]]; then
-    echo "::notice::$project is not present on $BRANCH; skipping."
-    popd >/dev/null
-    exit 0
-  fi
-done
+if [[ ! -f "$BASELINE_FILE" ]]; then
+  echo "::notice::$BASELINE_FILE is not present on $BRANCH; skipping."
+  popd >/dev/null
+  exit 0
+fi
 
-PREVIOUS="$(VERSION="$VERSION" bash "$SCRIPT_DIR/rewrite.sh" "${PROJECTS[@]}")"
+PREVIOUS="$(VERSION="$VERSION" bash "$SCRIPT_DIR/rewrite.sh" "$BASELINE_FILE")"
 
-if git diff --quiet -- "${PROJECTS[@]}"; then
+if git diff --quiet -- "$BASELINE_FILE"; then
   echo "Baseline on $BRANCH is already $VERSION; nothing to do."
   popd >/dev/null
   exit 0
@@ -68,14 +66,14 @@ else
 fi
 
 git checkout -B "$HEAD_BRANCH" --quiet
-git add "${PROJECTS[@]}"
+git add "$BASELINE_FILE"
 git commit --quiet -m "ci: pin package validation baseline to $VERSION on $BRANCH"
 git push --force-with-lease --quiet origin "$HEAD_BRANCH"
 
 TITLE="Pin package validation baseline to $VERSION on $BRANCH"
 BODY="$(cat <<EOF
-Pins \`<PackageValidationBaselineVersion>\` in \`src/Sigstore/Sigstore.csproj\` and
-\`src/Tuf/Tuf.csproj\` to **$VERSION**, following the stable release on \`$BRANCH\`.
+Pins \`<PackageValidationBaselineVersion>\` in \`PackageValidationBaseline.props\` to
+**$VERSION**, following the stable release on \`$BRANCH\`.
 
 - Previous baseline: \`${PREVIOUS:-none}\`
 - New baseline: \`$VERSION\`

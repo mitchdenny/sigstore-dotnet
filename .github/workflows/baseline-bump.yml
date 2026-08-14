@@ -1,9 +1,9 @@
 name: Bump package validation baseline
 
 # After a stable vX.Y.Z release ships, raise a pull request pinning
-# <PackageValidationBaselineVersion> in the packable projects to that release, so subsequent
-# builds compare the public API against what consumers actually have and fail on an
-# undeclared breaking change.
+# <PackageValidationBaselineVersion> in the shared baseline file to that release, so
+# subsequent builds compare the public API against what consumers actually have and fail on
+# an undeclared breaking change.
 #
 # Prereleases are never tagged and never create a GitHub release, so they never reach here.
 # The version input lets a maintainer re-run the bump against a known good tag if the

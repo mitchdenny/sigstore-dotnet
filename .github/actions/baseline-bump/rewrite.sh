@@ -1,7 +1,7 @@
 set -euo pipefail
 
-# Rewrites the bot-managed <PackageValidationBaselineVersion> block in each project file
-# passed as an argument, and prints the previous baseline of the first file that had one.
+# Rewrites the bot-managed <PackageValidationBaselineVersion> block in each file passed as an
+# argument, and prints the previous baseline of the first file that had one.
 #
 # Only the lines between the markers are touched, so hand-written package metadata around
 # the block is preserved. Rewriting is idempotent: running it twice with the same version
@@ -15,7 +15,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-  echo "::error::At least one project file is required." >&2
+  echo "::error::At least one baseline file is required." >&2
   exit 1
 fi
 
@@ -24,18 +24,18 @@ END_MARKER="<!-- END: bot-managed baseline -->"
 
 PREVIOUS=""
 
-for project in "$@"; do
-  if [[ ! -f "$project" ]]; then
-    echo "::error::$project does not exist." >&2
+for file in "$@"; do
+  if [[ ! -f "$file" ]]; then
+    echo "::error::$file does not exist." >&2
     exit 1
   fi
 
-  if ! grep -qF "$BEGIN_MARKER" "$project" || ! grep -qF "$END_MARKER" "$project"; then
-    echo "::error::bot-managed baseline block not found in $project." >&2
+  if ! grep -qF "$BEGIN_MARKER" "$file" || ! grep -qF "$END_MARKER" "$file"; then
+    echo "::error::bot-managed baseline block not found in $file." >&2
     exit 1
   fi
 
-  current="$(sed -n "/$(printf '%s' "$BEGIN_MARKER" | sed 's@[]\/$*.^[]@\\&@g')/,/$(printf '%s' "$END_MARKER" | sed 's@[]\/$*.^[]@\\&@g')/p" "$project" \
+  current="$(sed -n "/$(printf '%s' "$BEGIN_MARKER" | sed 's@[]\/$*.^[]@\\&@g')/,/$(printf '%s' "$END_MARKER" | sed 's@[]\/$*.^[]@\\&@g')/p" "$file" \
     | grep -oE '<PackageValidationBaselineVersion>[^<]+</PackageValidationBaselineVersion>' \
     | head -n1 \
     | sed -E 's@</?PackageValidationBaselineVersion>@@g' || true)"
@@ -61,9 +61,9 @@ for project in "$@"; do
     }
     inside { next }
     { print }
-  ' "$project" > "$rewritten"
+  ' "$file" > "$rewritten"
 
-  mv "$rewritten" "$project"
+  mv "$rewritten" "$file"
 done
 
 echo "$PREVIOUS"
