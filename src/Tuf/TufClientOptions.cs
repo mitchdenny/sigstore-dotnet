@@ -36,7 +36,8 @@ public sealed class TufClientOptions
 
     /// <summary>
     /// Maximum allowed root metadata rotations in a single refresh.
-    /// Protects against endless root rotation loops. Default is 1024.
+    /// Every intermediate version is still downloaded and verified sequentially; this
+    /// only bounds the work performed in one refresh. Default is 1024.
     /// </summary>
     public int MaxRootRotations { get; init; } = 1024;
 

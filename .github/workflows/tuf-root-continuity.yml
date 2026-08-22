@@ -1,0 +1,42 @@
+name: Verify TUF root continuity
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+      - "release/*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # pull_request_target deliberately uses trusted base-branch code. Never check out or
+      # execute the pull request; the verifier downloads only its two root JSON files.
+      - name: Checkout trusted base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Verify proposed root
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          dotnet run
+          --file .github/actions/tuf-root-update/tuf-root-update.cs
+          --
+          verify-pr
+          "$BASE_SHA"
+          "$HEAD_SHA"

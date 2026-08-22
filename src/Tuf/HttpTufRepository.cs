@@ -36,18 +36,11 @@ public sealed class HttpTufRepository : ITufRepository, IDisposable
         var fileName = version.HasValue ? $"{version}.{escapedRole}.json" : $"{escapedRole}.json";
         var url = new Uri(_metadataBaseUrl, fileName);
 
-        try
-        {
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                return null;
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
-        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -55,18 +48,11 @@ public sealed class HttpTufRepository : ITufRepository, IDisposable
     {
         var url = new Uri(_targetsBaseUrl, targetPath);
 
-        try
-        {
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                return null;
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        }
-        catch (HttpRequestException)
-        {
+        using var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
-        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
