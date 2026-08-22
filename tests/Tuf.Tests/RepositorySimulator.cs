@@ -95,6 +95,11 @@ internal sealed class RepositorySimulator : ITufRepository
     public byte[] GetInitialRoot() => _metadata[$"1.root.json"];
 
     /// <summary>
+    /// Gets a published root version.
+    /// </summary>
+    public byte[] GetRoot(int version) => _metadata[$"{version}.root.json"];
+
+    /// <summary>
     /// Adds a target file to the repository and publishes updated metadata.
     /// </summary>
     public void AddTarget(string path, byte[] content)

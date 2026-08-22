@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Reflection;
 using Tuf.Metadata;
+using Tuf.Serialization;
 
 namespace Tuf.Tests;
 
@@ -15,7 +16,10 @@ public class TufClientTests : IDisposable
         _repo = new RepositorySimulator();
     }
 
-    private TufClient CreateClient(byte[]? trustedRoot = null, ITufCache? cache = null)
+    private TufClient CreateClient(
+        byte[]? trustedRoot = null,
+        ITufCache? cache = null,
+        int maxRootRotations = 1024)
     {
         cache ??= new InMemoryTufCache();
         _client = new TufClient(new TufClientOptions
@@ -23,7 +27,8 @@ public class TufClientTests : IDisposable
             MetadataBaseUrl = new Uri("https://example.com/metadata/"),
             TrustedRoot = trustedRoot ?? _repo.GetInitialRoot(),
             Repository = _repo,
-            Cache = cache
+            Cache = cache,
+            MaxRootRotations = maxRootRotations
         });
         return _client;
     }
@@ -151,6 +156,68 @@ public class TufClientTests : IDisposable
         Assert.Contains("2.root.json", _repo.RequestLog);
         Assert.Contains("3.root.json", _repo.RequestLog);
         Assert.Contains("4.root.json", _repo.RequestLog); // 404
+    }
+
+    [Fact]
+    public async Task Refresh_MaxRootRotations_BoundsEachSequentialWalk()
+    {
+        var cache = new InMemoryTufCache();
+        var client = CreateClient(cache: cache, maxRootRotations: 1);
+
+        _repo.BumpRootVersion(); // v2
+        _repo.BumpRootVersion(); // v3
+        _repo.BumpNonRootVersions();
+
+        await client.RefreshAsync();
+
+        Assert.Equal(2, ParseRootVersion(cache.LoadMetadata("root")!));
+        Assert.Contains("2.root.json", _repo.RequestLog);
+        Assert.DoesNotContain("3.root.json", _repo.RequestLog);
+
+        await client.RefreshAsync();
+
+        Assert.Equal(3, ParseRootVersion(cache.LoadMetadata("root")!));
+        Assert.Contains("3.root.json", _repo.RequestLog);
+        Assert.DoesNotContain("4.root.json", _repo.RequestLog);
+    }
+
+    [Fact]
+    public async Task Refresh_MultipleRootRotations_RejectsTamperedIntermediateRoot()
+    {
+        _repo.BumpRootVersion(); // v2
+        var rootV2 = _repo.GetRoot(2);
+        _repo.BumpRootVersion(); // v3
+        _repo.BumpNonRootVersions();
+
+        _repo.TamperedRoots[2] = ModifyJson(rootV2, root =>
+        {
+            root["signatures"]!.AsArray()[0]!["sig"] = "00";
+        });
+
+        var client = CreateClient();
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("current root v1", ex.Message);
+        Assert.Contains("2.root.json", _repo.RequestLog);
+        Assert.DoesNotContain("3.root.json", _repo.RequestLog);
+    }
+
+    [Fact]
+    public async Task Refresh_RootVersionSkip_IsRejected()
+    {
+        _repo.BumpRootVersion(); // v2
+        _repo.BumpRootVersion(); // v3
+        _repo.BumpNonRootVersions();
+        _repo.TamperedRoots[2] = _repo.GetRoot(3);
+
+        var client = CreateClient();
+
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+
+        Assert.Contains("expected 2 but got 3", ex.Message);
+        Assert.Contains("2.root.json", _repo.RequestLog);
+        Assert.DoesNotContain("3.root.json", _repo.RequestLog);
     }
 
     // ---- Signature Verification Failures ----
@@ -357,4 +424,7 @@ public class TufClientTests : IDisposable
         mutate(root);
         return JsonSerializer.SerializeToUtf8Bytes(root);
     }
+
+    private static int ParseRootVersion(byte[] root) =>
+        TufMetadataParser.ParseRoot(root).Signed.Version;
 }

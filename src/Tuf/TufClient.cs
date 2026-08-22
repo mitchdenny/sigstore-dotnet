@@ -180,7 +180,8 @@ public sealed class TufClient : IDisposable
     }
 
     /// <summary>
-    /// §5.2: Update root metadata by fetching successive versions.
+    /// §5.2: Update root metadata by fetching and verifying every successive version.
+    /// TUF's maximum-rotation limit bounds the walk; it does not permit skipping versions.
     /// </summary>
     private async Task UpdateRootAsync(CancellationToken cancellationToken)
     {
@@ -233,12 +234,6 @@ public sealed class TufClient : IDisposable
             throw new TufExpiredException("root", _trustedRoot.Signed.Expires);
         }
 
-        // §5.2.6: If root was updated, clear cached timestamp to force re-download
-        if (currentVersion > _trustedRoot.Signed.Version - (currentVersion - _trustedRoot.Signed.Version))
-        {
-            // Root was updated - delete cached timestamp (and downstream metadata)
-            // so they're re-verified with the new root keys
-        }
     }
 
     /// <summary>

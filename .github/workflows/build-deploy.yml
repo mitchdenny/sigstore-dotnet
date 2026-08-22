@@ -2,6 +2,7 @@ name: Build and Release
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
       - "release/*"
@@ -81,6 +82,14 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.x
+
+      - name: Test TUF root update tool
+        if: runner.os == 'Linux'
+        run: >-
+          dotnet run
+          --file .github/actions/tuf-root-update/tuf-root-update.cs
+          --
+          self-test
 
       - name: Restore
         run: dotnet restore Sigstore.slnx

@@ -19,7 +19,7 @@ public class TufSignatureVerificationTests
         var json = LoadFixture("root.json");
         var root = TufMetadataParser.ParseRoot(json);
 
-        // Root role has threshold 3, and we have 4 valid signatures (1 empty)
+        // Verify the real root using the threshold and key set declared by that root.
         var rootRole = root.Signed.Roles["root"];
 
         var result = TufMetadataVerifier.VerifyThreshold(
