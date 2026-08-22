@@ -15,12 +15,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # pull_request_target deliberately uses trusted base-branch code. Never check out or
-      # execute the pull request; the verifier downloads only its two root JSON files.
+      # pull_request_target deliberately uses trusted code. Never check out or execute the
+      # pull request; the verifier downloads only its two root JSON files.
+      - name: Checkout trusted verifier
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: verifier
+          persist-credentials: false
+
       - name: Checkout trusted base
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
+          path: repository
           persist-credentials: false
 
       - name: Setup .NET
@@ -29,13 +37,14 @@ jobs:
           dotnet-version: 10.x
 
       - name: Verify proposed root
+        working-directory: repository
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: >-
           dotnet run
-          --file .github/actions/tuf-root-update/tuf-root-update.cs
+          --file ../verifier/.github/actions/tuf-root-update/tuf-root-update.cs
           --
           verify-pr
           "$BASE_SHA"
