@@ -1,0 +1,111 @@
+name: Update TUF root
+
+on:
+  schedule:
+    # Sigstore roots normally rotate months apart. Weekly checks match the cadence used by
+    # sigstore-python and sigstore-js while still detecting emergency rotations promptly.
+    - cron: '23 11 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuf-root-update
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      changed: ${{ steps.root.outputs.changed }}
+      current_version: ${{ steps.root.outputs.current_version }}
+      previous_version: ${{ steps.root.outputs.previous_version }}
+      sha256: ${{ steps.root.outputs.sha256 }}
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Refresh embedded root
+        id: root
+        run: >-
+          dotnet run
+          --file .github/actions/tuf-root-update/tuf-root-update.cs
+          --
+          refresh
+          https://tuf-repo-cdn.sigstore.dev/
+          src/Sigstore/TrustRoot/TufData/root.json
+          tests/Tuf.Tests/Fixtures/root.json
+
+      - name: Publish root update tool
+        if: steps.root.outputs.changed == 'true'
+        run: >-
+          dotnet publish
+          .github/actions/tuf-root-update/tuf-root-update.cs
+          -c Release
+          -o artifacts/tuf-root-update
+          --nologo
+
+      - name: Save verified root and tool
+        if: steps.root.outputs.changed == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: verified-tuf-root
+          path: |
+            artifacts/tuf-root-update/**
+            src/Sigstore/TrustRoot/TufData/root.json
+            tests/Tuf.Tests/Fixtures/root.json
+          if-no-files-found: error
+
+  open-pr:
+    if: needs.prepare.outputs.changed == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Download verified root
+        uses: actions/download-artifact@v5
+        with:
+          name: verified-tuf-root
+          path: verified-tuf-root
+
+      - name: Open update pull request
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          NEW_VERSION: ${{ needs.prepare.outputs.current_version }}
+          PREVIOUS_VERSION: ${{ needs.prepare.outputs.previous_version }}
+          REVIEWER: ${{ github.repository_owner }}
+          ROOT_SHA256: ${{ needs.prepare.outputs.sha256 }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          chmod +x verified-tuf-root/artifacts/tuf-root-update/tuf-root-update
+          verified-tuf-root/artifacts/tuf-root-update/tuf-root-update \
+            open-pr \
+            verified-tuf-root
