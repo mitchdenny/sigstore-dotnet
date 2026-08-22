@@ -27,6 +27,36 @@ public sealed class TufRepositoryTests
     }
 
     [Fact]
+    public async Task HttpTufRepository_FetchMetadata_ServerErrorThrows()
+    {
+        using var handler = new RecordingMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        using var httpClient = new HttpClient(handler);
+        using var repository = new HttpTufRepository(
+            httpClient,
+            new Uri("https://example.com/metadata/"),
+            new Uri("https://example.com/targets/"));
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => repository.FetchMetadataAsync("root", 2));
+    }
+
+    [Fact]
+    public async Task HttpTufRepository_FetchTarget_ServerErrorThrows()
+    {
+        using var handler = new RecordingMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        using var httpClient = new HttpClient(handler);
+        using var repository = new HttpTufRepository(
+            httpClient,
+            new Uri("https://example.com/metadata/"),
+            new Uri("https://example.com/targets/"));
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => repository.FetchTargetAsync("artifact.txt"));
+    }
+
+    [Fact]
     public void FileSystemTufCache_StoresEscapedRoleNames()
     {
         var basePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("n"));
