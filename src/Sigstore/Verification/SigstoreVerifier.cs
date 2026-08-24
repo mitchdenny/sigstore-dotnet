@@ -119,34 +119,85 @@ public sealed class SigstoreVerifier
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        using var stream = new MemoryStream(artifact.ToArray());
-        return await VerifyStreamAsync(stream, bundle, policy, cancellationToken);
+        var (success, result) = await TryVerifyAsync(
+            artifact,
+            bundle,
+            policy,
+            cancellationToken);
+        if (success)
+        {
+            return result!;
+        }
+
+        throw new VerificationException(
+            result?.FailureReason ?? "Verification failed.",
+            result);
     }
 
     /// <summary>
     /// Attempts to verify a Sigstore bundle against an artifact stream without throwing on failure.
     /// </summary>
-    public Task<(bool Success, VerificationResult? Result)> TryVerifyStreamAsync(
+    public async Task<(bool Success, VerificationResult? Result)> TryVerifyStreamAsync(
         Stream artifact,
         SigstoreBundle bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
         _ = artifact ?? throw new ArgumentNullException(nameof(artifact));
-        return TryVerifyCoreAsync(ArtifactInput.FromStream(artifact), bundle, policy, cancellationToken);
+        _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
+        _ = policy ?? throw new ArgumentNullException(nameof(policy));
+
+        using var operation = SigstoreInstrumentation.StartVerify(
+            "stream",
+            policy,
+            bundle);
+        try
+        {
+            return await TryVerifyCoreAsync(
+                ArtifactInput.FromStream(artifact),
+                bundle,
+                policy,
+                operation,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>
     /// Attempts to verify a Sigstore bundle using a pre-computed artifact digest without throwing on failure.
     /// </summary>
-    public Task<(bool Success, VerificationResult? Result)> TryVerifyDigestAsync(
+    public async Task<(bool Success, VerificationResult? Result)> TryVerifyDigestAsync(
         ReadOnlyMemory<byte> artifactDigest,
         HashAlgorithmType digestAlgorithm,
         SigstoreBundle bundle,
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        return TryVerifyCoreAsync(ArtifactInput.FromDigest(artifactDigest, digestAlgorithm), bundle, policy, cancellationToken);
+        _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
+        _ = policy ?? throw new ArgumentNullException(nameof(policy));
+
+        using var operation = SigstoreInstrumentation.StartVerify(
+            "digest",
+            policy,
+            bundle);
+        try
+        {
+            return await TryVerifyCoreAsync(
+                ArtifactInput.FromDigest(artifactDigest, digestAlgorithm),
+                bundle,
+                policy,
+                operation,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>
@@ -158,8 +209,28 @@ public sealed class SigstoreVerifier
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        using var stream = new MemoryStream(artifact.ToArray());
-        return await TryVerifyStreamAsync(stream, bundle, policy, cancellationToken);
+        _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
+        _ = policy ?? throw new ArgumentNullException(nameof(policy));
+
+        using var operation = SigstoreInstrumentation.StartVerify(
+            "memory",
+            policy,
+            bundle);
+        try
+        {
+            using var stream = new MemoryStream(artifact.ToArray());
+            return await TryVerifyCoreAsync(
+                ArtifactInput.FromStream(stream),
+                bundle,
+                policy,
+                operation,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>
@@ -176,9 +247,19 @@ public sealed class SigstoreVerifier
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
-        await using var stream = artifact.OpenRead();
-        return await VerifyStreamAsync(stream, sigstoreBundle, policy, cancellationToken);
+        var (success, result) = await TryVerifyFileAsync(
+            artifact,
+            bundle,
+            policy,
+            cancellationToken);
+        if (success)
+        {
+            return result!;
+        }
+
+        throw new VerificationException(
+            result?.FailureReason ?? "Verification failed.",
+            result);
     }
 
     /// <summary>
@@ -194,35 +275,85 @@ public sealed class SigstoreVerifier
         VerificationPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        var sigstoreBundle = await SigstoreBundle.LoadAsync(bundle, cancellationToken);
-        await using var stream = artifact.OpenRead();
-        return await TryVerifyStreamAsync(stream, sigstoreBundle, policy, cancellationToken);
+        _ = artifact ?? throw new ArgumentNullException(nameof(artifact));
+        _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
+        _ = policy ?? throw new ArgumentNullException(nameof(policy));
+
+        using var operation = SigstoreInstrumentation.StartVerify(
+            "file",
+            policy);
+        try
+        {
+            var sigstoreBundle = await SigstoreBundle.LoadAsync(
+                bundle,
+                cancellationToken);
+            operation.SetTag(
+                "sigstore.bundle.type",
+                SigstoreInstrumentation.GetBundleType(sigstoreBundle));
+            await using var stream = artifact.OpenRead();
+            return await TryVerifyCoreAsync(
+                ArtifactInput.FromStream(stream),
+                sigstoreBundle,
+                policy,
+                operation,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
     }
 
     private async Task<(bool Success, VerificationResult? Result)> TryVerifyCoreAsync(
         ArtifactInput artifactInput,
         SigstoreBundle bundle,
         VerificationPolicy policy,
+        SigstoreTelemetryOperation operation,
         CancellationToken cancellationToken)
     {
-        _ = bundle ?? throw new ArgumentNullException(nameof(bundle));
-        _ = policy ?? throw new ArgumentNullException(nameof(policy));
-
         try
         {
             // Step 1: Load trusted root
-            var trustRoot = await _trustRootProvider.GetTrustRootAsync(cancellationToken);
+            TrustedRoot trustRoot;
+            using (var activity =
+                   SigstoreInstrumentation.StartActivity(
+                       "sigstore.trust_root.get"))
+            {
+                try
+                {
+                    trustRoot = await _trustRootProvider.GetTrustRootAsync(
+                        cancellationToken);
+                }
+                catch (Exception exception)
+                {
+                    SigstoreInstrumentation.SetError(
+                        activity,
+                        exception,
+                        cancellationToken);
+                    throw;
+                }
+            }
 
             // Managed-key verification path: skip all certificate-based logic
             if (policy.PublicKey != null)
             {
-                return VerifyWithPublicKey(artifactInput, bundle, policy, trustRoot);
+                return VerifyWithPublicKey(
+                    artifactInput,
+                    bundle,
+                    policy,
+                    trustRoot,
+                    operation,
+                    cancellationToken);
             }
 
             // Step 2: Parse the bundle — extract certificate
             var verificationMaterial = bundle.VerificationMaterial;
             if (verificationMaterial == null)
-                return Fail("Bundle has no verification material.");
+                return Fail(
+                    operation,
+                    "bundle_invalid",
+                    "Bundle has no verification material.");
 
             ReadOnlyMemory<byte>? leafCertBytes = verificationMaterial.Certificate;
             // Fallback to first cert in chain for v0.1/v0.2 bundles
@@ -230,7 +361,10 @@ public sealed class SigstoreVerifier
                 leafCertBytes = verificationMaterial.CertificateChain[0];
 
             if (leafCertBytes == null)
-                return Fail("Bundle has no signing certificate.");
+                return Fail(
+                    operation,
+                    "bundle_invalid",
+                    "Bundle has no signing certificate.");
 
             using var leafCert = X509CertificateLoader.LoadCertificate(leafCertBytes.Value.Span);
 
@@ -249,7 +383,10 @@ public sealed class SigstoreVerifier
                             foreach (var intermediate in intermediates)
                                 intermediate.Dispose();
                         }
-                        return Fail("Bundle certificate chain contains a root certificate. Root certificates must come from the trusted root, not the bundle.");
+                        return Fail(
+                            operation,
+                            "bundle_invalid",
+                            "Bundle certificate chain contains a root certificate. Root certificates must come from the trusted root, not the bundle.");
                     }
                     if (i > 0)
                     {
@@ -266,12 +403,31 @@ public sealed class SigstoreVerifier
             // Step 2b: Verify SCTs if CT logs are configured
             if (trustRoot.CtLogs.Count > 0)
             {
+                using var sctActivity =
+                    SigstoreInstrumentation.StartActivity(
+                        "sigstore.sct.verify");
                 var ownedIssuers = new List<X509Certificate2>();
                 try
                 {
                     var issuerCandidates = ResolveIssuerCandidates(leafCert, intermediates, trustRoot, ownedIssuers);
                     if (!SctVerifier.VerifyScts(leafCert, issuerCandidates, trustRoot.CtLogs))
-                        return Fail("No valid Signed Certificate Timestamp (SCT) found for any configured CT log.");
+                    {
+                        SigstoreInstrumentation.SetError(
+                            sctActivity,
+                            "sct_verification_failed");
+                        return Fail(
+                            operation,
+                            "sct_verification_failed",
+                            "No valid Signed Certificate Timestamp (SCT) found for any configured CT log.");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    SigstoreInstrumentation.SetError(
+                        sctActivity,
+                        exception,
+                        cancellationToken);
+                    throw;
                 }
                 finally
                 {
@@ -281,103 +437,172 @@ public sealed class SigstoreVerifier
             }
 
             // Step 3: Establish signature time
+            using var timestampActivity =
+                SigstoreInstrumentation.StartActivity(
+                    "sigstore.timestamp.verify");
             var verifiedTimestamps = new List<VerifiedTimestamp>();
-
-            // 3a: Try RFC 3161 timestamps
-            foreach (var tsBytes in verificationMaterial.Rfc3161Timestamps)
+            DateTimeOffset signatureTime;
+            try
             {
-                try
+                // 3a: Try RFC 3161 timestamps
+                foreach (var tsBytes in verificationMaterial.Rfc3161Timestamps)
                 {
-                    var tsInfo = TimestampParser.Parse(tsBytes);
-
-                    ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
-                    if (trustRoot.TimestampAuthorities.Count > 0)
+                    try
                     {
-                        var (tsVerified, tsAuthorityUri) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
-                        if (tsVerified)
+                        var tsInfo = TimestampParser.Parse(tsBytes);
+
+                        ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
+                        if (trustRoot.TimestampAuthorities.Count > 0)
                         {
+                            var (tsVerified, tsAuthorityUri) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
+                            if (tsVerified)
+                            {
+                                verifiedTimestamps.Add(new VerifiedTimestamp
+                                {
+                                    Source = TimestampSource.TimestampAuthority,
+                                    Timestamp = tsInfo.Timestamp,
+                                    AuthorityUri = tsAuthorityUri
+                                });
+                            }
+                        }
+                        else
+                        {
+                            // No TSA authorities configured — accept timestamp without TSA verification
                             verifiedTimestamps.Add(new VerifiedTimestamp
                             {
                                 Source = TimestampSource.TimestampAuthority,
-                                Timestamp = tsInfo.Timestamp,
-                                AuthorityUri = tsAuthorityUri
+                                Timestamp = tsInfo.Timestamp
                             });
                         }
                     }
-                    else
+                    catch
                     {
-                        // No TSA authorities configured — accept timestamp without TSA verification
-                        verifiedTimestamps.Add(new VerifiedTimestamp
-                        {
-                            Source = TimestampSource.TimestampAuthority,
-                            Timestamp = tsInfo.Timestamp
-                        });
+                        // Skip unparseable timestamps
                     }
                 }
-                catch
-                {
-                    // Skip unparseable timestamps
-                }
-            }
 
-            // Deduplicate TSA timestamps by authority URI
-            var seenTsaAuthorities = new HashSet<Uri>();
-            var deduplicatedTimestamps = new List<VerifiedTimestamp>();
-            foreach (var ts in verifiedTimestamps)
-            {
-                if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
+                // Deduplicate TSA timestamps by authority URI
+                var seenTsaAuthorities = new HashSet<Uri>();
+                var deduplicatedTimestamps = new List<VerifiedTimestamp>();
+                foreach (var ts in verifiedTimestamps)
                 {
-                    if (!seenTsaAuthorities.Add(ts.AuthorityUri))
-                        continue; // Skip duplicate from same TSA
-                }
-                deduplicatedTimestamps.Add(ts);
-            }
-            verifiedTimestamps = deduplicatedTimestamps;
-
-            // 3b: Use integrated time from tlog entries (only if SET verifies and entry is v1)
-            foreach (var entry in verificationMaterial.TlogEntries)
-            {
-                // Only trust integrated time from Rekor v1 entries
-                // v2 entries (e.g., dsse v0.0.2) use checkpoint-based verification, not SET
-                if (!IsRekorV1Entry(entry))
-                    continue;
-
-                if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
-                {
-                    // Verify the Signed Entry Timestamp (SET) before trusting integratedTime
-                    if (VerifySignedEntryTimestamp(entry, trustRoot))
+                    if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
                     {
-                        verifiedTimestamps.Add(new VerifiedTimestamp
+                        if (!seenTsaAuthorities.Add(ts.AuthorityUri))
+                            continue; // Skip duplicate from same TSA
+                    }
+                    deduplicatedTimestamps.Add(ts);
+                }
+                verifiedTimestamps = deduplicatedTimestamps;
+
+                // 3b: Use integrated time from tlog entries (only if SET verifies and entry is v1)
+                foreach (var entry in verificationMaterial.TlogEntries)
+                {
+                    // Only trust integrated time from Rekor v1 entries
+                    // v2 entries (e.g., dsse v0.0.2) use checkpoint-based verification, not SET
+                    if (!IsRekorV1Entry(entry))
+                        continue;
+
+                    if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
+                    {
+                        // Verify the Signed Entry Timestamp (SET) before trusting integratedTime
+                        if (VerifySignedEntryTimestamp(entry, trustRoot))
                         {
-                            Source = TimestampSource.TransparencyLog,
-                            Timestamp = DateTimeOffset.FromUnixTimeSeconds(entry.IntegratedTime)
-                        });
+                            verifiedTimestamps.Add(new VerifiedTimestamp
+                            {
+                                Source = TimestampSource.TransparencyLog,
+                                Timestamp = DateTimeOffset.FromUnixTimeSeconds(entry.IntegratedTime)
+                            });
+                        }
                     }
                 }
+
+                int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
+                int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
+                int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
+
+                if (totalTimestamps == 0)
+                {
+                    SigstoreInstrumentation.SetError(
+                        timestampActivity,
+                        "timestamp_verification_failed");
+                    return Fail(
+                        operation,
+                        "timestamp_verification_failed",
+                        "No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
+                }
+
+                if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
+                {
+                    SigstoreInstrumentation.SetError(
+                        timestampActivity,
+                        "timestamp_verification_failed");
+                    return Fail(
+                        operation,
+                        "timestamp_verification_failed",
+                        $"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
+                }
+
+                // Step 3c: Verify ALL timestamps fall within signing cert validity
+                foreach (var ts in verifiedTimestamps)
+                {
+                    if (ts.Timestamp < leafCert.NotBefore || ts.Timestamp > leafCert.NotAfter)
+                    {
+                        SigstoreInstrumentation.SetError(
+                            timestampActivity,
+                            "timestamp_verification_failed");
+                        return Fail(
+                            operation,
+                            "timestamp_verification_failed",
+                            $"Verified timestamp {ts.Timestamp:O} ({ts.Source}) is outside signing certificate validity ({leafCert.NotBefore:O} to {leafCert.NotAfter:O}).");
+                    }
+                }
+
+                signatureTime = verifiedTimestamps[0].Timestamp;
             }
-
-            int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
-            int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
-            int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
-
-            if (totalTimestamps == 0)
-                return Fail("No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
-
-            if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
-                return Fail($"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
-
-            // Step 3c: Verify ALL timestamps fall within signing cert validity
-            foreach (var ts in verifiedTimestamps)
+            catch (Exception exception)
             {
-                if (ts.Timestamp < leafCert.NotBefore || ts.Timestamp > leafCert.NotAfter)
-                    return Fail($"Verified timestamp {ts.Timestamp:O} ({ts.Source}) is outside signing certificate validity ({leafCert.NotBefore:O} to {leafCert.NotAfter:O}).");
+                SigstoreInstrumentation.SetError(
+                    timestampActivity,
+                    exception,
+                    cancellationToken);
+                throw;
             }
-            var signatureTime = verifiedTimestamps[0].Timestamp;
+            timestampActivity?.Stop();
 
             // Step 4: Validate certificate chain
-            var chainResult = _certificateValidator.ValidateChain(leafCert, intermediates, trustRoot, signatureTime);
+            using var certificateActivity =
+                SigstoreInstrumentation.StartActivity(
+                    "sigstore.certificate.validate");
+            SigningCertificateValidationResult chainResult;
+            try
+            {
+                chainResult = _certificateValidator.ValidateChain(
+                    leafCert,
+                    intermediates,
+                    trustRoot,
+                    signatureTime);
+            }
+            catch (Exception exception)
+            {
+                SigstoreInstrumentation.SetError(
+                    certificateActivity,
+                    exception,
+                    cancellationToken);
+                throw;
+            }
+
             if (!chainResult.IsValid)
-                return Fail($"Certificate chain validation failed: {chainResult.FailureReason}");
+            {
+                SigstoreInstrumentation.SetError(
+                    certificateActivity,
+                    "certificate_validation_failed");
+                return Fail(
+                    operation,
+                    "certificate_validation_failed",
+                    $"Certificate chain validation failed: {chainResult.FailureReason}");
+            }
+            certificateActivity?.Stop();
 
             // Step 5: Check certificate identity against policy
             if (policy.CertificateIdentity != null)
@@ -386,27 +611,42 @@ public sealed class SigstoreVerifier
                 var issuer = ExtractOidcIssuer(leafCert);
 
                 if (san == null)
-                    return Fail("Could not extract Subject Alternative Name from certificate.");
+                    return Fail(
+                        operation,
+                        "identity_verification_failed",
+                        "Could not extract Subject Alternative Name from certificate.");
 
                 // Match SAN
                 if (policy.CertificateIdentity.SubjectAlternativeName != null)
                 {
                     if (!string.Equals(san, policy.CertificateIdentity.SubjectAlternativeName, StringComparison.Ordinal))
-                        return Fail($"Certificate SAN '{san}' does not match expected '{policy.CertificateIdentity.SubjectAlternativeName}'.");
+                        return Fail(
+                            operation,
+                            "identity_verification_failed",
+                            $"Certificate SAN '{san}' does not match expected '{policy.CertificateIdentity.SubjectAlternativeName}'.");
                 }
                 else if (policy.CertificateIdentity.SubjectAlternativeNamePattern != null)
                 {
                     if (!Regex.IsMatch(san, policy.CertificateIdentity.SubjectAlternativeNamePattern))
-                        return Fail($"Certificate SAN '{san}' does not match pattern '{policy.CertificateIdentity.SubjectAlternativeNamePattern}'.");
+                        return Fail(
+                            operation,
+                            "identity_verification_failed",
+                            $"Certificate SAN '{san}' does not match pattern '{policy.CertificateIdentity.SubjectAlternativeNamePattern}'.");
                 }
 
                 // Match issuer
                 if (policy.CertificateIdentity.Issuer != null)
                 {
                     if (issuer == null)
-                        return Fail("Could not extract OIDC issuer from certificate.");
+                        return Fail(
+                            operation,
+                            "identity_verification_failed",
+                            "Could not extract OIDC issuer from certificate.");
                     if (!string.Equals(issuer, policy.CertificateIdentity.Issuer, StringComparison.Ordinal))
-                        return Fail($"Certificate issuer '{issuer}' does not match expected '{policy.CertificateIdentity.Issuer}'.");
+                        return Fail(
+                            operation,
+                            "identity_verification_failed",
+                            $"Certificate issuer '{issuer}' does not match expected '{policy.CertificateIdentity.Issuer}'.");
                 }
 
                 // Match certificate extension policy (SourceRepositoryUri, BuildSignerUri, etc.)
@@ -415,27 +655,83 @@ public sealed class SigstoreVerifier
                     var certExtensions = FulcioCertificateExtensions.FromCertificate(leafCert);
                     var (extMatch, extReason) = policy.CertificateIdentity.Extensions.Matches(certExtensions);
                     if (!extMatch)
-                        return Fail(extReason ?? "Certificate extension policy mismatch.");
+                        return Fail(
+                            operation,
+                            "identity_verification_failed",
+                            extReason ?? "Certificate extension policy mismatch.");
                 }
 
                 // Step 6: Verify transparency log entries
                 if (policy.RequireTransparencyLog)
                 {
+                    using var transparencyLogActivity =
+                        SigstoreInstrumentation.StartActivity(
+                            "sigstore.transparency_log.verify");
                     int verifiedEntries = 0;
-                    foreach (var entry in verificationMaterial.TlogEntries)
+                    try
                     {
-                        if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
-                            verifiedEntries++;
+                        foreach (var entry in verificationMaterial.TlogEntries)
+                        {
+                            if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
+                                verifiedEntries++;
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        SigstoreInstrumentation.SetError(
+                            transparencyLogActivity,
+                            exception,
+                            cancellationToken);
+                        throw;
                     }
 
+                    transparencyLogActivity?.SetTag(
+                        "sigstore.transparency_log.entries.verified",
+                        verifiedEntries);
+
                     if (verifiedEntries < policy.TransparencyLogThreshold)
-                        return Fail($"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+                    {
+                        SigstoreInstrumentation.SetError(
+                            transparencyLogActivity,
+                            "transparency_log_verification_failed");
+                        return Fail(
+                            operation,
+                            "transparency_log_verification_failed",
+                            $"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+                    }
                 }
 
                 // Step 7: Verify the artifact signature
-                var sigVerifyResult = VerifyArtifactSignature(artifactInput, bundle, leafCert);
+                using var signatureActivity =
+                    SigstoreInstrumentation.StartActivity(
+                        "sigstore.signature.verify");
+                (bool IsValid, string? Reason) sigVerifyResult;
+                try
+                {
+                    sigVerifyResult = VerifyArtifactSignature(
+                        artifactInput,
+                        bundle,
+                        leafCert);
+                }
+                catch (Exception exception)
+                {
+                    SigstoreInstrumentation.SetError(
+                        signatureActivity,
+                        exception,
+                        cancellationToken);
+                    throw;
+                }
+
                 if (!sigVerifyResult.IsValid)
-                    return Fail($"Signature verification failed: {sigVerifyResult.Reason}");
+                {
+                    SigstoreInstrumentation.SetError(
+                        signatureActivity,
+                        "signature_verification_failed");
+                    return Fail(
+                        operation,
+                        "signature_verification_failed",
+                        $"Signature verification failed: {sigVerifyResult.Reason}");
+                }
 
                 var extensions = FulcioCertificateExtensions.FromCertificate(leafCert);
                 var statement = bundle.DsseEnvelope?.GetStatement();
@@ -456,20 +752,73 @@ public sealed class SigstoreVerifier
             // No identity policy — still verify signature
             if (policy.RequireTransparencyLog)
             {
+                using var transparencyLogActivity =
+                    SigstoreInstrumentation.StartActivity(
+                        "sigstore.transparency_log.verify");
                 int verifiedEntries = 0;
-                foreach (var entry in verificationMaterial.TlogEntries)
+                try
                 {
-                    if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
-                        verifiedEntries++;
+                    foreach (var entry in verificationMaterial.TlogEntries)
+                    {
+                        if (VerifyTlogEntry(entry, trustRoot, bundle, leafCertBytes.Value))
+                            verifiedEntries++;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    SigstoreInstrumentation.SetError(
+                        transparencyLogActivity,
+                        exception,
+                        cancellationToken);
+                    throw;
                 }
 
+                transparencyLogActivity?.SetTag(
+                    "sigstore.transparency_log.entries.verified",
+                    verifiedEntries);
+
                 if (verifiedEntries < policy.TransparencyLogThreshold)
-                    return Fail($"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+                {
+                    SigstoreInstrumentation.SetError(
+                        transparencyLogActivity,
+                        "transparency_log_verification_failed");
+                    return Fail(
+                        operation,
+                        "transparency_log_verification_failed",
+                        $"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+                }
             }
 
-            var sigResult = VerifyArtifactSignature(artifactInput, bundle, leafCert);
+            using var signatureActivityWithoutIdentity =
+                SigstoreInstrumentation.StartActivity(
+                    "sigstore.signature.verify");
+            (bool IsValid, string? Reason) sigResult;
+            try
+            {
+                sigResult = VerifyArtifactSignature(
+                    artifactInput,
+                    bundle,
+                    leafCert);
+            }
+            catch (Exception exception)
+            {
+                SigstoreInstrumentation.SetError(
+                    signatureActivityWithoutIdentity,
+                    exception,
+                    cancellationToken);
+                throw;
+            }
+
             if (!sigResult.IsValid)
-                return Fail($"Signature verification failed: {sigResult.Reason}");
+            {
+                SigstoreInstrumentation.SetError(
+                    signatureActivityWithoutIdentity,
+                    "signature_verification_failed");
+                return Fail(
+                    operation,
+                    "signature_verification_failed",
+                    $"Signature verification failed: {sigResult.Reason}");
+            }
 
             return (true, new VerificationResult
             {
@@ -478,13 +827,17 @@ public sealed class SigstoreVerifier
                 Statement = bundle.DsseEnvelope?.GetStatement()
             });
         }
-        catch (ArgumentNullException)
+        catch (ArgumentNullException exception)
         {
+            operation.SetError(exception, cancellationToken);
             throw;
         }
         catch (Exception ex)
         {
-            return Fail($"Verification error: {ex.Message}");
+            return Fail(
+                operation,
+                SigstoreInstrumentation.GetErrorType(ex, cancellationToken),
+                $"Verification error: {ex.Message}");
         }
     }
 
@@ -496,107 +849,195 @@ public sealed class SigstoreVerifier
         ArtifactInput artifactInput,
         SigstoreBundle bundle,
         VerificationPolicy policy,
-        TrustedRoot trustRoot)
+        TrustedRoot trustRoot,
+        SigstoreTelemetryOperation operation,
+        CancellationToken cancellationToken)
     {
         var verificationMaterial = bundle.VerificationMaterial;
         if (verificationMaterial == null)
-            return Fail("Bundle has no verification material.");
+            return Fail(
+                operation,
+                "bundle_invalid",
+                "Bundle has no verification material.");
 
         // Establish timestamps from tlog entries and RFC 3161 timestamps
+        using var timestampActivity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.timestamp.verify");
         var verifiedTimestamps = new List<VerifiedTimestamp>();
-
-        foreach (var tsBytes in verificationMaterial.Rfc3161Timestamps)
+        try
         {
-            try
+            foreach (var tsBytes in verificationMaterial.Rfc3161Timestamps)
             {
-                var tsInfo = TimestampParser.Parse(tsBytes);
-                ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
-                if (trustRoot.TimestampAuthorities.Count > 0)
+                try
                 {
-                    var (tsVerified2, tsAuthorityUri2) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
-                    if (tsVerified2)
+                    var tsInfo = TimestampParser.Parse(tsBytes);
+                    ReadOnlyMemory<byte> signatureToTimestamp = GetSignatureBytes(bundle);
+                    if (trustRoot.TimestampAuthorities.Count > 0)
+                    {
+                        var (tsVerified2, tsAuthorityUri2) = TimestampParser.Verify(tsInfo, signatureToTimestamp, trustRoot.TimestampAuthorities);
+                        if (tsVerified2)
+                        {
+                            verifiedTimestamps.Add(new VerifiedTimestamp
+                            {
+                                Source = TimestampSource.TimestampAuthority,
+                                Timestamp = tsInfo.Timestamp,
+                                AuthorityUri = tsAuthorityUri2
+                            });
+                        }
+                    }
+                    else
                     {
                         verifiedTimestamps.Add(new VerifiedTimestamp
                         {
                             Source = TimestampSource.TimestampAuthority,
-                            Timestamp = tsInfo.Timestamp,
-                            AuthorityUri = tsAuthorityUri2
+                            Timestamp = tsInfo.Timestamp
                         });
                     }
                 }
-                else
+                catch { }
+            }
+
+            // Deduplicate TSA timestamps by authority URI
+            var seenTsaAuthorities = new HashSet<Uri>();
+            var deduplicatedTimestamps = new List<VerifiedTimestamp>();
+            foreach (var ts in verifiedTimestamps)
+            {
+                if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
                 {
-                    verifiedTimestamps.Add(new VerifiedTimestamp
+                    if (!seenTsaAuthorities.Add(ts.AuthorityUri))
+                        continue; // Skip duplicate from same TSA
+                }
+                deduplicatedTimestamps.Add(ts);
+            }
+            verifiedTimestamps = deduplicatedTimestamps;
+
+            foreach (var entry in verificationMaterial.TlogEntries)
+            {
+                // Only trust integrated time from Rekor v1 entries
+                if (!IsRekorV1Entry(entry))
+                    continue;
+
+                if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
+                {
+                    if (VerifySignedEntryTimestamp(entry, trustRoot))
                     {
-                        Source = TimestampSource.TimestampAuthority,
-                        Timestamp = tsInfo.Timestamp
-                    });
+                        verifiedTimestamps.Add(new VerifiedTimestamp
+                        {
+                            Source = TimestampSource.TransparencyLog,
+                            Timestamp = DateTimeOffset.FromUnixTimeSeconds(entry.IntegratedTime)
+                        });
+                    }
                 }
             }
-            catch { }
-        }
 
-        // Deduplicate TSA timestamps by authority URI
-        var seenTsaAuthorities = new HashSet<Uri>();
-        var deduplicatedTimestamps = new List<VerifiedTimestamp>();
-        foreach (var ts in verifiedTimestamps)
-        {
-            if (ts.Source == TimestampSource.TimestampAuthority && ts.AuthorityUri != null)
+            int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
+            int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
+            int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
+
+            if (totalTimestamps == 0)
             {
-                if (!seenTsaAuthorities.Add(ts.AuthorityUri))
-                    continue; // Skip duplicate from same TSA
+                SigstoreInstrumentation.SetError(
+                    timestampActivity,
+                    "timestamp_verification_failed");
+                return Fail(
+                    operation,
+                    "timestamp_verification_failed",
+                    "No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
             }
-            deduplicatedTimestamps.Add(ts);
-        }
-        verifiedTimestamps = deduplicatedTimestamps;
 
-        foreach (var entry in verificationMaterial.TlogEntries)
-        {
-            // Only trust integrated time from Rekor v1 entries
-            if (!IsRekorV1Entry(entry))
-                continue;
-
-            if (entry.IntegratedTime > 0 && entry.InclusionPromise != null)
+            if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
             {
-                if (VerifySignedEntryTimestamp(entry, trustRoot))
-                {
-                    verifiedTimestamps.Add(new VerifiedTimestamp
-                    {
-                        Source = TimestampSource.TransparencyLog,
-                        Timestamp = DateTimeOffset.FromUnixTimeSeconds(entry.IntegratedTime)
-                    });
-                }
+                SigstoreInstrumentation.SetError(
+                    timestampActivity,
+                    "timestamp_verification_failed");
+                return Fail(
+                    operation,
+                    "timestamp_verification_failed",
+                    $"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
             }
         }
-
-        int tsaTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TimestampAuthority);
-        int tlogTimestampCount = verifiedTimestamps.Count(t => t.Source == TimestampSource.TransparencyLog);
-        int totalTimestamps = tsaTimestampCount + tlogTimestampCount;
-
-        if (totalTimestamps == 0)
-            return Fail("No verified timestamps found. Need at least one timestamp from TSA or transparency log.");
-
-        if (policy.RequireSignedTimestamps && tsaTimestampCount < policy.SignedTimestampThreshold)
-            return Fail($"Only {tsaTimestampCount} unique TSA timestamps verified, need {policy.SignedTimestampThreshold}.");
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                timestampActivity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+        timestampActivity?.Stop();
 
         // Verify tlog inclusion proofs (using the public key for cross-verification)
         if (policy.RequireTransparencyLog)
         {
+            using var transparencyLogActivity =
+                SigstoreInstrumentation.StartActivity(
+                    "sigstore.transparency_log.verify");
             int verifiedEntries = 0;
-            foreach (var entry in verificationMaterial.TlogEntries)
+            try
             {
-                if (VerifyTlogEntryForPublicKey(entry, trustRoot, bundle, policy.PublicKey!.Value))
-                    verifiedEntries++;
+                foreach (var entry in verificationMaterial.TlogEntries)
+                {
+                    if (VerifyTlogEntryForPublicKey(entry, trustRoot, bundle, policy.PublicKey!.Value))
+                        verifiedEntries++;
+                }
+            }
+            catch (Exception exception)
+            {
+                SigstoreInstrumentation.SetError(
+                    transparencyLogActivity,
+                    exception,
+                    cancellationToken);
+                throw;
             }
 
+            transparencyLogActivity?.SetTag(
+                "sigstore.transparency_log.entries.verified",
+                verifiedEntries);
+
             if (verifiedEntries < policy.TransparencyLogThreshold)
-                return Fail($"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+            {
+                SigstoreInstrumentation.SetError(
+                    transparencyLogActivity,
+                    "transparency_log_verification_failed");
+                return Fail(
+                    operation,
+                    "transparency_log_verification_failed",
+                    $"Only {verifiedEntries} transparency log entries verified, need {policy.TransparencyLogThreshold}.");
+            }
         }
 
         // Verify the artifact signature with the public key
-        var sigResult = VerifyArtifactSignatureWithKey(artifactInput, bundle, policy.PublicKey!.Value);
+        using var signatureActivity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.signature.verify");
+        (bool IsValid, string? Reason) sigResult;
+        try
+        {
+            sigResult = VerifyArtifactSignatureWithKey(
+                artifactInput,
+                bundle,
+                policy.PublicKey!.Value);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                signatureActivity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+
         if (!sigResult.IsValid)
-            return Fail($"Signature verification failed: {sigResult.Reason}");
+        {
+            SigstoreInstrumentation.SetError(
+                signatureActivity,
+                "signature_verification_failed");
+            return Fail(
+                operation,
+                "signature_verification_failed",
+                $"Signature verification failed: {sigResult.Reason}");
+        }
 
         return (true, new VerificationResult
         {
@@ -905,8 +1346,12 @@ public sealed class SigstoreVerifier
         return (false, "Unsupported public key algorithm.");
     }
 
-    private static (bool Success, VerificationResult? Result) Fail(string reason)
+    private static (bool Success, VerificationResult? Result) Fail(
+        SigstoreTelemetryOperation operation,
+        string errorType,
+        string reason)
     {
+        operation.SetError(errorType);
         return (false, new VerificationResult { FailureReason = reason });
     }
 

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Tuf;
 
 /// <summary>
@@ -32,28 +34,75 @@ public sealed class HttpTufRepository : ITufRepository, IDisposable
     /// <inheritdoc/>
     public async Task<byte[]?> FetchMetadataAsync(string role, int? version = null, CancellationToken cancellationToken = default)
     {
-        var escapedRole = Uri.EscapeDataString(role);
-        var fileName = version.HasValue ? $"{version}.{escapedRole}.json" : $"{escapedRole}.json";
-        var url = new Uri(_metadataBaseUrl, fileName);
+        TagList tags = default;
+        tags.Add("tuf.metadata.role", NormalizeRole(role));
+        tags.Add("tuf.repository.versioned", version.HasValue);
+        using var activity =
+            TufInstrumentation.StartActivity(
+                "tuf.repository.metadata.fetch",
+                tags);
+        try
+        {
+            var escapedRole = Uri.EscapeDataString(role);
+            var fileName = version.HasValue ? $"{version}.{escapedRole}.json" : $"{escapedRole}.json";
+            var url = new Uri(_metadataBaseUrl, fileName);
 
-        using var response = await _httpClient.GetAsync(url, cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return null;
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                activity?.SetTag("tuf.repository.found", false);
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+            activity?.SetTag("tuf.repository.found", true);
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task<byte[]?> FetchTargetAsync(string targetPath, CancellationToken cancellationToken = default)
     {
-        var url = new Uri(_targetsBaseUrl, targetPath);
+        using var activity =
+            TufInstrumentation.StartActivity(
+                "tuf.repository.target.fetch");
+        try
+        {
+            var url = new Uri(_targetsBaseUrl, targetPath);
 
-        using var response = await _httpClient.GetAsync(url, cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return null;
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                activity?.SetTag("tuf.repository.found", false);
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+            activity?.SetTag("tuf.repository.found", true);
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
+
+    private static string NormalizeRole(string role) =>
+        role is "root" or "timestamp" or "snapshot" or "targets"
+            ? role
+            : "delegated";
 
     /// <inheritdoc/>
     public void Dispose()

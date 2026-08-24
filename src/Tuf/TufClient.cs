@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Tuf.Metadata;
@@ -61,14 +62,39 @@ public sealed class TufClient : IDisposable
     public async Task<TufMetadataResult> GetTrustedMetadataAsync(
         CancellationToken cancellationToken = default)
     {
-        await _operationGate.WaitAsync(cancellationToken);
+        using var operation = TufInstrumentation.StartMetadataRefresh();
+        var queueStartedAt = Stopwatch.GetTimestamp();
+        var gateAcquired = false;
+        var queueRecorded = false;
         try
         {
+            await _operationGate.WaitAsync(cancellationToken);
+            gateAcquired = true;
+            TufInstrumentation.RecordMetadataRefreshQueue(queueStartedAt);
+            queueRecorded = true;
             return await GetTrustedMetadataCoreAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            var errorType = TufInstrumentation.GetErrorType(
+                exception,
+                cancellationToken);
+            if (!queueRecorded)
+            {
+                TufInstrumentation.RecordMetadataRefreshQueue(
+                    queueStartedAt,
+                    errorType);
+            }
+
+            operation.SetError(errorType);
+            throw;
         }
         finally
         {
-            _operationGate.Release();
+            if (gateAcquired)
+            {
+                _operationGate.Release();
+            }
         }
     }
 
@@ -86,19 +112,16 @@ public sealed class TufClient : IDisposable
         CancellationToken cancellationToken)
     {
         // §5.1: Load the trusted root metadata
-        LoadTrustedRoot();
-
-        // §5.2: Update root metadata
-        await UpdateRootAsync(cancellationToken);
+        await UpdateRootPhaseAsync(cancellationToken);
 
         // §5.3: Update timestamp metadata
-        await UpdateTimestampAsync(cancellationToken);
+        await UpdateTimestampPhaseAsync(cancellationToken);
 
         // §5.4: Update snapshot metadata
-        await UpdateSnapshotAsync(cancellationToken);
+        await UpdateSnapshotPhaseAsync(cancellationToken);
 
         // §5.5: Update targets metadata
-        await UpdateTargetsAsync(cancellationToken);
+        await UpdateTargetsPhaseAsync(cancellationToken);
 
         return CreateMetadataResult();
     }
@@ -143,14 +166,42 @@ public sealed class TufClient : IDisposable
         string targetPath,
         CancellationToken cancellationToken = default)
     {
-        await _operationGate.WaitAsync(cancellationToken);
+        using var operation = TufInstrumentation.StartTargetGet();
+        var queueStartedAt = Stopwatch.GetTimestamp();
+        var gateAcquired = false;
+        var queueRecorded = false;
         try
         {
-            return await GetTargetCoreAsync(targetPath, cancellationToken);
+            await _operationGate.WaitAsync(cancellationToken);
+            gateAcquired = true;
+            TufInstrumentation.RecordTargetGetQueue(queueStartedAt);
+            queueRecorded = true;
+            return await GetTargetCoreAsync(
+                targetPath,
+                operation,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            var errorType = TufInstrumentation.GetErrorType(
+                exception,
+                cancellationToken);
+            if (!queueRecorded)
+            {
+                TufInstrumentation.RecordTargetGetQueue(
+                    queueStartedAt,
+                    errorType);
+            }
+
+            operation.SetError(errorType);
+            throw;
         }
         finally
         {
-            _operationGate.Release();
+            if (gateAcquired)
+            {
+                _operationGate.Release();
+            }
         }
     }
 
@@ -171,16 +222,34 @@ public sealed class TufClient : IDisposable
 
     private async Task<TufTargetResult> GetTargetCoreAsync(
         string targetPath,
+        TufTelemetryOperation operation,
         CancellationToken cancellationToken)
     {
-        await GetTrustedMetadataCoreAsync(cancellationToken);
+        using (var refreshOperation =
+               TufInstrumentation.StartMetadataRefresh())
+        {
+            try
+            {
+                await GetTrustedMetadataCoreAsync(cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                refreshOperation.SetError(exception, cancellationToken);
+                throw;
+            }
+        }
 
         if (_trustedTargets == null)
             throw new TufException("No trusted targets metadata available.");
 
-        var targetInfo = await FindTargetInfoAsync(targetPath, cancellationToken);
+        var targetInfo = await FindTargetInfoPhaseAsync(
+            targetPath,
+            cancellationToken);
         if (targetInfo == null)
+        {
+            operation.SetError("target_not_found");
             throw new TufException($"Target '{targetPath}' not found in targets metadata.");
+        }
 
         // Check cache first
         var cached = _cache.LoadTarget(targetPath);
@@ -188,6 +257,8 @@ public sealed class TufClient : IDisposable
             cached.LongLength == targetInfo.Length &&
             VerifyTargetHashes(cached, targetInfo))
         {
+            operation.SetTag("tuf.target.cache_hit", true);
+            TufInstrumentation.RecordTargetSize(cached.LongLength, cacheHit: true);
             return new TufTargetResult
             {
                 Content = cached,
@@ -215,25 +286,140 @@ public sealed class TufClient : IDisposable
             }
         }
 
+        operation.SetTag("tuf.target.cache_hit", false);
         var targetBytes = await _repository.FetchTargetAsync(fetchPath, cancellationToken)
-            ?? throw new TufException(
-                $"Target '{targetPath}' not found on repository.");
+            ?? throw CreateTargetNotFoundException(operation, targetPath);
 
         // Verify length
         if (targetBytes.LongLength != targetInfo.Length)
+        {
+            operation.SetError("target_verification_failed");
             throw new TufException(
                 $"Target '{targetPath}' size {targetBytes.Length} does not match expected {targetInfo.Length}.");
+        }
 
         // Verify hashes
         if (!VerifyTargetHashes(targetBytes, targetInfo))
+        {
+            operation.SetError("target_verification_failed");
             throw new TufException($"Target '{targetPath}' hash verification failed.");
+        }
 
         _cache.StoreTarget(targetPath, targetBytes);
+        TufInstrumentation.RecordTargetSize(
+            targetBytes.LongLength,
+            cacheHit: false);
         return new TufTargetResult
         {
             Content = targetBytes,
             Metadata = CreateMetadataResult()
         };
+    }
+
+    private static TufException CreateTargetNotFoundException(
+        TufTelemetryOperation operation,
+        string targetPath)
+    {
+        operation.SetError("target_not_found");
+        return new TufException(
+            $"Target '{targetPath}' not found on repository.");
+    }
+
+    private async Task UpdateRootPhaseAsync(
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            TufInstrumentation.StartActivity("tuf.metadata.root.update");
+        try
+        {
+            LoadTrustedRoot();
+            await UpdateRootAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task UpdateTimestampPhaseAsync(
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            TufInstrumentation.StartActivity("tuf.metadata.timestamp.update");
+        try
+        {
+            await UpdateTimestampAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task UpdateSnapshotPhaseAsync(
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            TufInstrumentation.StartActivity("tuf.metadata.snapshot.update");
+        try
+        {
+            await UpdateSnapshotAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task UpdateTargetsPhaseAsync(
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            TufInstrumentation.StartActivity("tuf.metadata.targets.update");
+        try
+        {
+            await UpdateTargetsAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<TargetFileInfo?> FindTargetInfoPhaseAsync(
+        string targetPath,
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            TufInstrumentation.StartActivity("tuf.target.resolve");
+        try
+        {
+            return await FindTargetInfoAsync(targetPath, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            TufInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>

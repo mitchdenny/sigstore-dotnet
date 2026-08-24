@@ -41,25 +41,39 @@ public sealed class HttpTimestampAuthority : ITimestampAuthority, IDisposable
         ReadOnlyMemory<byte> signature,
         CancellationToken cancellationToken = default)
     {
-        var url = _baseUrl;
-
-        // Build RFC 3161 TimeStampReq
-        var hash = SHA256.HashData(signature.Span);
-        var tsReq = BuildTimestampRequest(hash);
-
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
-        httpRequest.Content = new ByteArrayContent(tsReq);
-        httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-query");
-
-        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.timestamp.request");
+        try
         {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException($"TSA request failed ({response.StatusCode}): {errorBody}");
-        }
+            var url = _baseUrl;
 
-        var tsResp = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        return new TimestampResponse { RawBytes = tsResp };
+            // Build RFC 3161 TimeStampReq
+            var hash = SHA256.HashData(signature.Span);
+            var tsReq = BuildTimestampRequest(hash);
+
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
+            httpRequest.Content = new ByteArrayContent(tsReq);
+            httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-query");
+
+            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new InvalidOperationException($"TSA request failed ({response.StatusCode}): {errorBody}");
+            }
+
+            var tsResp = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            return new TimestampResponse { RawBytes = tsResp };
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>
