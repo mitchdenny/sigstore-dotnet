@@ -31,7 +31,11 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     private const string TrustedRootTargetPath = "trusted_root.json";
 
     private readonly TufClient _tufClient;
-    private TrustedRoot? _cached;
+    private readonly TimeSpan _refreshInterval;
+    private readonly TimeSpan _refreshRetryInterval;
+    private readonly TimeProvider _timeProvider;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private ProviderState _state = ProviderState.Empty;
 
     /// <summary>
     /// Creates a TUF-based trust root provider for the given repository URL.
@@ -47,8 +51,21 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     public TufTrustRootProvider(Uri repositoryUrl, TufTrustRootProviderOptions? options = null)
     {
         options ??= new TufTrustRootProviderOptions();
+        if (options.RefreshInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(options.RefreshInterval),
+                "Refresh interval cannot be negative.");
+        if (options.RefreshRetryInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(options.RefreshRetryInterval),
+                "Refresh retry interval cannot be negative.");
+
         var trustedRoot = options.CustomTrustedRoot ?? SelectEmbeddedRoot(repositoryUrl);
         var cache = options.Cache ?? CreateDefaultCache(repositoryUrl);
+
+        _refreshInterval = options.RefreshInterval;
+        _refreshRetryInterval = options.RefreshRetryInterval;
+        _timeProvider = options.TimeProvider;
 
         var targetsUrl = new Uri(repositoryUrl, "targets/");
 
@@ -65,14 +82,95 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     /// <inheritdoc />
     public async Task<TrustedRoot> GetTrustRootAsync(CancellationToken cancellationToken = default)
     {
-        if (_cached is not null)
-            return _cached;
+        var now = _timeProvider.GetUtcNow();
+        var state = Volatile.Read(ref _state);
+        if (CanUseFreshValue(state.Cached, now) ||
+            CanUseRetryValue(state, now))
+        {
+            return state.Cached!.Root;
+        }
 
-        var targetBytes = await _tufClient.DownloadTargetAsync(TrustedRootTargetPath, cancellationToken);
-        var json = System.Text.Encoding.UTF8.GetString(targetBytes);
-        _cached = TrustedRoot.Deserialize(json);
-        return _cached;
+        await _refreshGate.WaitAsync(cancellationToken);
+        try
+        {
+            now = _timeProvider.GetUtcNow();
+            state = Volatile.Read(ref _state);
+            if (CanUseFreshValue(state.Cached, now) ||
+                CanUseRetryValue(state, now))
+            {
+                return state.Cached!.Root;
+            }
+
+            try
+            {
+                var target = await _tufClient.GetTargetAsync(
+                    TrustedRootTargetPath,
+                    cancellationToken);
+                var trustedRoot = DeserializeTrustedRoot(target.Content);
+                var completedAt = _timeProvider.GetUtcNow();
+                var metadataExpires = target.Metadata.Expires;
+
+                if (metadataExpires <= completedAt)
+                {
+                    throw new TufExpiredException("metadata", metadataExpires);
+                }
+
+                var cached = new CachedTrustRoot(trustedRoot, completedAt, metadataExpires);
+                Volatile.Write(ref _state, new ProviderState(cached, DateTimeOffset.MinValue));
+                return trustedRoot;
+            }
+            catch (Exception ex) when (IsRepositoryUnavailable(ex, cancellationToken))
+            {
+                state = Volatile.Read(ref _state);
+                now = _timeProvider.GetUtcNow();
+                var cached = state.Cached;
+                if (cached is null || cached.MetadataExpires <= now)
+                {
+                    throw;
+                }
+
+                var retryAfter = AddClamped(now, _refreshRetryInterval);
+                Volatile.Write(ref _state, new ProviderState(cached, retryAfter));
+                return cached.Root;
+            }
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
     }
+
+    private static TrustedRoot DeserializeTrustedRoot(
+        ReadOnlyMemory<byte> targetBytes)
+    {
+        var json = System.Text.Encoding.UTF8.GetString(targetBytes.Span);
+        return TrustedRoot.Deserialize(json);
+    }
+
+    private bool CanUseFreshValue(CachedTrustRoot? cached, DateTimeOffset now) =>
+        cached is not null &&
+        cached.MetadataExpires > now &&
+        IsWithinRefreshInterval(cached.RefreshedAt, now);
+
+    private static bool CanUseRetryValue(ProviderState state, DateTimeOffset now) =>
+        state.Cached is not null &&
+        state.Cached.MetadataExpires > now &&
+        state.RetryAfter > now;
+
+    private bool IsWithinRefreshInterval(DateTimeOffset refreshedAt, DateTimeOffset now) =>
+        refreshedAt <= now && now - refreshedAt < _refreshInterval;
+
+    private static DateTimeOffset AddClamped(DateTimeOffset value, TimeSpan interval)
+    {
+        var remaining = DateTimeOffset.MaxValue - value;
+        return interval >= remaining ? DateTimeOffset.MaxValue : value + interval;
+    }
+
+    private static bool IsRepositoryUnavailable(
+        Exception exception,
+        CancellationToken cancellationToken) =>
+        exception is HttpRequestException ||
+        exception is OperationCanceledException && !cancellationToken.IsCancellationRequested;
 
     /// <summary>
     /// Selects the embedded bootstrap root.json for a well-known repository URL.
@@ -106,7 +204,8 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
     }
 
     /// <summary>
-    /// Creates a default disk-based cache at <c>$HOME/.sigstore/dotnet/tuf/{url-slug}/</c>.
+    /// Creates a versioned default disk cache under
+    /// <c>$HOME/.sigstore/dotnet/{version-family}/tuf/{url-slug}/</c>.
     /// </summary>
     private static ITufCache CreateDefaultCache(Uri repositoryUrl)
     {
@@ -114,15 +213,104 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
         if (string.IsNullOrEmpty(home))
             return new InMemoryTufCache();
 
-        var urlSlug = repositoryUrl.Host.Replace(".", "-");
-        var cachePath = Path.Combine(home, ".sigstore", "dotnet", "tuf", urlSlug);
-        return new FileSystemTufCache(cachePath);
+        var assembly = typeof(TufTrustRootProvider).Assembly;
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion
+            ?? assembly.GetName().Version?.ToString()
+            ?? "unknown";
+        var cachePath = GetDefaultCachePath(home, repositoryUrl, informationalVersion);
+        var versionPath = GetDefaultCacheVersionPath(home, informationalVersion);
+        var tufPath = Path.Combine(versionPath, "tuf");
+        return TryPreparePrivateCacheDirectory(versionPath) &&
+               TryPreparePrivateCacheDirectory(tufPath)
+            ? new FileSystemTufCache(cachePath)
+            : new InMemoryTufCache();
+    }
+
+    internal static string GetDefaultCachePath(
+        string home,
+        Uri repositoryUrl,
+        string informationalVersion)
+    {
+        return Path.Combine(
+            GetDefaultCacheVersionPath(home, informationalVersion),
+            "tuf",
+            repositoryUrl.Host);
+    }
+
+    private static string GetDefaultCacheVersionPath(
+        string home,
+        string informationalVersion)
+    {
+        var separator = informationalVersion.IndexOfAny(['-', '+']);
+        var versionFamily = separator >= 0
+            ? informationalVersion[..separator]
+            : informationalVersion;
+        return Path.Combine(
+            home,
+            ".sigstore",
+            "dotnet",
+            versionFamily);
+    }
+
+    internal static bool TryPreparePrivateCacheDirectory(string path)
+    {
+        const UnixFileMode mode =
+            UnixFileMode.UserRead |
+            UnixFileMode.UserWrite |
+            UnixFileMode.UserExecute;
+
+        try
+        {
+            var directory = new DirectoryInfo(path);
+            if (!directory.Exists)
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    Directory.CreateDirectory(path);
+                }
+                else
+                {
+                    Directory.CreateDirectory(path, mode);
+                }
+                directory.Refresh();
+            }
+
+            if (directory.LinkTarget is not null ||
+                (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                return false;
+            }
+
+            return OperatingSystem.IsWindows() ||
+                   File.GetUnixFileMode(path) == mode;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
         _tufClient.Dispose();
+        _refreshGate.Dispose();
+    }
+
+    private sealed record CachedTrustRoot(
+        TrustedRoot Root,
+        DateTimeOffset RefreshedAt,
+        DateTimeOffset MetadataExpires);
+
+    private sealed record ProviderState(
+        CachedTrustRoot? Cached,
+        DateTimeOffset RetryAfter)
+    {
+        public static ProviderState Empty { get; } =
+            new(null, DateTimeOffset.MinValue);
     }
 }
 
@@ -132,6 +320,21 @@ public sealed class TufTrustRootProvider : ITrustRootProvider, IDisposable
 public sealed class TufTrustRootProviderOptions
 {
     /// <summary>
+    /// How long a successfully refreshed trusted root may be reused without
+    /// checking the TUF repository again. Signed TUF metadata expiry always
+    /// takes precedence. Set to zero to refresh on every request. Defaults to
+    /// 24 hours.
+    /// </summary>
+    public TimeSpan RefreshInterval { get; init; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// How long to wait before retrying the TUF repository after a transient
+    /// refresh failure while cached metadata remains unexpired. Defaults to
+    /// five minutes. Set to zero to retry on every request.
+    /// </summary>
+    public TimeSpan RefreshRetryInterval { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// A custom TUF root.json to use instead of the embedded bootstrap root.
     /// Required when using a custom (non-Sigstore) TUF repository URL.
     /// </summary>
@@ -139,7 +342,8 @@ public sealed class TufTrustRootProviderOptions
 
     /// <summary>
     /// Custom TUF cache implementation. Defaults to a file-system cache
-    /// at <c>$HOME/.sigstore/dotnet/tuf/{url-slug}/</c>.
+    /// under
+    /// <c>$HOME/.sigstore/dotnet/{version-family}/tuf/{url-slug}/</c>.
     /// </summary>
     public ITufCache? Cache { get; init; }
 
@@ -147,4 +351,6 @@ public sealed class TufTrustRootProviderOptions
     /// Custom TUF repository implementation. If null, <see cref="HttpTufRepository"/> is used.
     /// </summary>
     public ITufRepository? Repository { get; init; }
+
+    internal TimeProvider TimeProvider { get; init; } = TimeProvider.System;
 }

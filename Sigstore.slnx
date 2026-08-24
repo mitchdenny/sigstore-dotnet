@@ -15,6 +15,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Sigstore.AotCompatibility/Sigstore.AotCompatibility.csproj" />
     <Project Path="tests/Sigstore.Tests/Sigstore.Tests.csproj" />
+    <Project Path="tests/Tuf.CacheTestWorker/Tuf.CacheTestWorker.csproj" />
     <Project Path="tests/Tuf.Tests/Tuf.Tests.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">

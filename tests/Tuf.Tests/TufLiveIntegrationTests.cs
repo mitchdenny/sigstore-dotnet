@@ -36,7 +36,7 @@ public class TufLiveIntegrationTests : IDisposable
         });
 
         // This should succeed - fetches latest root, timestamp, snapshot, targets
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
     }
 
     [Fact]
@@ -54,13 +54,12 @@ public class TufLiveIntegrationTests : IDisposable
         });
 
         // Download trusted_root.json - this is the main target Sigstore clients need
-        var targetBytes = await client.DownloadTargetAsync("trusted_root.json");
+        var target = await client.GetTargetAsync("trusted_root.json");
 
-        Assert.NotNull(targetBytes);
-        Assert.True(targetBytes.Length > 0);
+        Assert.False(target.Content.IsEmpty);
 
         // It should be valid JSON
-        var json = System.Text.Encoding.UTF8.GetString(targetBytes);
+        var json = System.Text.Encoding.UTF8.GetString(target.Content.Span);
         Assert.Contains("certificateAuthorities", json);
     }
 
@@ -81,7 +80,7 @@ public class TufLiveIntegrationTests : IDisposable
         });
 
         // First refresh populates cache
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         // Cache should have all metadata
         Assert.NotNull(cache.LoadMetadata("root"));

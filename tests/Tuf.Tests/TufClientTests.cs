@@ -47,11 +47,14 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        await client.RefreshAsync();
+        var result = await client.GetTrustedMetadataAsync();
 
         // Should have fetched root (404 for v2), timestamp, snapshot, targets
         Assert.Contains("2.root.json", _repo.RequestLog);
         Assert.Contains("timestamp.json", _repo.RequestLog);
+        Assert.Equal(
+            _repo.TimestampExpiry.ToUnixTimeSeconds(),
+            result.Expires.ToUnixTimeSeconds());
     }
 
     [Fact]
@@ -62,9 +65,12 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        var result = await client.DownloadTargetAsync("myfile.txt");
+        var result = await client.GetTargetAsync("myfile.txt");
 
-        Assert.Equal(content, result);
+        Assert.Equal(content, result.Content.ToArray());
+        Assert.Equal(
+            _repo.TimestampExpiry.ToUnixTimeSeconds(),
+            result.Metadata.Expires.ToUnixTimeSeconds());
     }
 
     [Fact]
@@ -75,9 +81,9 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        // DownloadTargetAsync should trigger RefreshAsync automatically
-        var result = await client.DownloadTargetAsync("autofile.txt");
-        Assert.Equal(content, result);
+        // GetTargetAsync should acquire trusted metadata automatically
+        var result = await client.GetTargetAsync("autofile.txt");
+        Assert.Equal(content, result.Content.ToArray());
     }
 
     [Fact]
@@ -88,7 +94,7 @@ public class TufClientTests : IDisposable
         var client = CreateClient();
 
         var ex = await Assert.ThrowsAsync<TufException>(
-            () => client.DownloadTargetAsync("nonexistent.txt"));
+            () => client.GetTargetAsync("nonexistent.txt"));
         Assert.Contains("not found", ex.Message);
     }
 
@@ -100,9 +106,9 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        var result = await client.DownloadTargetAsync("delegated.txt");
+        var result = await client.GetTargetAsync("delegated.txt");
 
-        Assert.Equal(content, result);
+        Assert.Equal(content, result.Content.ToArray());
         Assert.Contains("delegated-role.json", _repo.RequestLog);
     }
 
@@ -114,14 +120,47 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        await client.RefreshAsync();
-        var result1 = await client.DownloadTargetAsync("cached.txt");
-        var result2 = await client.DownloadTargetAsync("cached.txt");
+        await client.GetTrustedMetadataAsync();
+        var result1 = await client.GetTargetAsync("cached.txt");
+        var result2 = await client.GetTargetAsync("cached.txt");
 
-        Assert.Equal(content, result1);
-        Assert.Equal(content, result2);
+        Assert.Equal(content, result1.Content.ToArray());
+        Assert.Equal(content, result2.Content.ToArray());
         // Only fetched from repo once
         Assert.Equal(1, _repo.RequestLog.Count(r => r == "target:cached.txt"));
+    }
+
+    [Fact]
+    public async Task DownloadTarget_ConcurrentCallsRefreshAndFetchOnce()
+    {
+        var content = "concurrent"u8.ToArray();
+        _repo.AddTarget("concurrent.txt", content);
+        _repo.BumpNonRootVersions();
+        var client = CreateClient();
+
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 20)
+                .Select(_ => client.GetTargetAsync("concurrent.txt")));
+
+        Assert.All(results, result => Assert.Equal(content, result.Content.ToArray()));
+        Assert.Equal(20, _repo.RequestLog.Count(r => r == "timestamp.json"));
+        Assert.Equal(1, _repo.RequestLog.Count(r => r == "target:concurrent.txt"));
+    }
+
+    [Fact]
+    public async Task ObsoleteMethods_ForwardToOperationOrientedApi()
+    {
+        var content = "compatibility"u8.ToArray();
+        _repo.AddTarget("compatibility.txt", content);
+        _repo.BumpNonRootVersions();
+        var client = CreateClient();
+
+#pragma warning disable CS0618
+        await client.RefreshAsync();
+        var target = await client.DownloadTargetAsync("compatibility.txt");
+#pragma warning restore CS0618
+
+        Assert.Equal(content, target);
     }
 
     // ---- Root Rotation ----
@@ -135,7 +174,7 @@ public class TufClientTests : IDisposable
         _repo.BumpRootVersion();
         _repo.BumpNonRootVersions();
 
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         // Should have fetched root v2 and v3 (404)
         Assert.Contains("2.root.json", _repo.RequestLog);
@@ -151,7 +190,7 @@ public class TufClientTests : IDisposable
         _repo.BumpRootVersion(); // v3
         _repo.BumpNonRootVersions();
 
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         Assert.Contains("2.root.json", _repo.RequestLog);
         Assert.Contains("3.root.json", _repo.RequestLog);
@@ -168,13 +207,13 @@ public class TufClientTests : IDisposable
         _repo.BumpRootVersion(); // v3
         _repo.BumpNonRootVersions();
 
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         Assert.Equal(2, ParseRootVersion(cache.LoadMetadata("root")!));
         Assert.Contains("2.root.json", _repo.RequestLog);
         Assert.DoesNotContain("3.root.json", _repo.RequestLog);
 
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         Assert.Equal(3, ParseRootVersion(cache.LoadMetadata("root")!));
         Assert.Contains("3.root.json", _repo.RequestLog);
@@ -196,7 +235,7 @@ public class TufClientTests : IDisposable
 
         var client = CreateClient();
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
 
         Assert.Contains("current root v1", ex.Message);
         Assert.Contains("2.root.json", _repo.RequestLog);
@@ -213,7 +252,7 @@ public class TufClientTests : IDisposable
 
         var client = CreateClient();
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
 
         Assert.Contains("expected 2 but got 3", ex.Message);
         Assert.Contains("2.root.json", _repo.RequestLog);
@@ -229,7 +268,7 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
         Assert.Contains("Timestamp signature verification failed", ex.Message);
     }
 
@@ -240,7 +279,7 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
         Assert.Contains("Snapshot signature verification failed", ex.Message);
     }
 
@@ -251,7 +290,7 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
         var client = CreateClient();
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
         Assert.Contains("Targets signature verification failed", ex.Message);
     }
 
@@ -264,7 +303,7 @@ public class TufClientTests : IDisposable
         _repo.PublishAll();
         var client = CreateClient();
 
-        await Assert.ThrowsAsync<TufExpiredException>(() => client.RefreshAsync());
+        await Assert.ThrowsAsync<TufExpiredException>(() => client.GetTrustedMetadataAsync());
     }
 
     [Fact]
@@ -274,7 +313,7 @@ public class TufClientTests : IDisposable
         _repo.PublishAll();
         var client = CreateClient();
 
-        await Assert.ThrowsAsync<TufExpiredException>(() => client.RefreshAsync());
+        await Assert.ThrowsAsync<TufExpiredException>(() => client.GetTrustedMetadataAsync());
     }
 
     [Fact]
@@ -284,7 +323,7 @@ public class TufClientTests : IDisposable
         _repo.PublishAll();
         var client = CreateClient();
 
-        await Assert.ThrowsAsync<TufExpiredException>(() => client.RefreshAsync());
+        await Assert.ThrowsAsync<TufExpiredException>(() => client.GetTrustedMetadataAsync());
     }
 
     [Fact]
@@ -294,7 +333,7 @@ public class TufClientTests : IDisposable
         _repo.PublishAll();
         var client = CreateClient();
 
-        await Assert.ThrowsAsync<TufExpiredException>(() => client.RefreshAsync());
+        await Assert.ThrowsAsync<TufExpiredException>(() => client.GetTrustedMetadataAsync());
     }
 
     // ---- Rollback Attack ----
@@ -303,15 +342,15 @@ public class TufClientTests : IDisposable
     public async Task Refresh_TimestampRollback_Throws()
     {
         var client = CreateClient();
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         // Simulate rollback: reduce timestamp version
         _repo.TimestampVersion = 0;
         _repo.PublishAll();
 
         // Create a new client with the same cache that remembers the old timestamp
-        // Actually, RefreshAsync on the same client should detect rollback
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        // A second metadata acquisition on the same client should detect rollback
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -328,7 +367,7 @@ public class TufClientTests : IDisposable
         _repo.BumpNonRootVersions();
 
         var client = CreateClient(trustedRoot, cache);
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         _repo.TargetsVersion = 1;
         _repo.SnapshotVersion = 3;
@@ -337,7 +376,7 @@ public class TufClientTests : IDisposable
 
         client = CreateClient(trustedRoot, cache);
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -349,7 +388,7 @@ public class TufClientTests : IDisposable
         _repo.AddTarget("file.txt", "original"u8.ToArray());
         _repo.BumpNonRootVersions();
         var client = CreateClient();
-        await client.RefreshAsync();
+        await client.GetTrustedMetadataAsync();
 
         // Now tamper with the target content on the repo
         // We need to modify the repo's stored target after metadata is published
@@ -359,7 +398,7 @@ public class TufClientTests : IDisposable
         targets["file.txt"] = "tampered"u8.ToArray();
 
         var ex = await Assert.ThrowsAsync<TufException>(
-            () => client.DownloadTargetAsync("file.txt"));
+            () => client.GetTargetAsync("file.txt"));
         Assert.Contains("hash verification failed", ex.Message);
     }
 
@@ -395,7 +434,7 @@ public class TufClientTests : IDisposable
 
         var client = CreateClient(invalidRoot);
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
 
         Assert.Contains("Trusted root metadata is invalid", ex.Message);
         Assert.Empty(_repo.RequestLog);
@@ -411,7 +450,7 @@ public class TufClientTests : IDisposable
 
         var client = CreateClient(unsignedRoot);
 
-        var ex = await Assert.ThrowsAsync<TufException>(() => client.RefreshAsync());
+        var ex = await Assert.ThrowsAsync<TufException>(() => client.GetTrustedMetadataAsync());
 
         Assert.Contains("Trusted root signature verification failed", ex.Message);
         Assert.Empty(_repo.RequestLog);

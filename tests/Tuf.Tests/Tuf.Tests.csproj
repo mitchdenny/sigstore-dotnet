@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tuf\Tuf.csproj" />
+    <ProjectReference Include="..\Tuf.CacheTestWorker\Tuf.CacheTestWorker.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

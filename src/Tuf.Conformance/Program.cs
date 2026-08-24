@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.CommandLine;
 using Tuf;
 
@@ -79,14 +81,14 @@ public static class Program
     private static async Task RefreshAsync(string metadataDir, string metadataUrl, CancellationToken cancellationToken)
     {
         using var client = CreateTufClient(metadataDir, metadataUrl, targetBaseUrl: null);
-        await client.RefreshAsync(cancellationToken);
+        await client.GetTrustedMetadataAsync(cancellationToken);
     }
 
     private static async Task DownloadAsync(string metadataDir, string metadataUrl,
         string targetName, string targetBaseUrl, string targetDir, CancellationToken cancellationToken)
     {
         using var client = CreateTufClient(metadataDir, metadataUrl, targetBaseUrl);
-        var targetBytes = await client.DownloadTargetAsync(targetName, cancellationToken);
+        var target = await client.GetTargetAsync(targetName, cancellationToken);
 
         Directory.CreateDirectory(targetDir);
         var targetPath = Path.Combine(targetDir, targetName);
@@ -97,13 +99,13 @@ public static class Program
         if (File.Exists(targetPath))
         {
             var existingBytes = await File.ReadAllBytesAsync(targetPath, cancellationToken);
-            if (existingBytes.AsSpan().SequenceEqual(targetBytes))
+            if (existingBytes.AsSpan().SequenceEqual(target.Content.Span))
             {
                 return;
             }
         }
 
-        await File.WriteAllBytesAsync(targetPath, targetBytes, cancellationToken);
+        await File.WriteAllBytesAsync(targetPath, target.Content, cancellationToken);
     }
 
     private static TufClient CreateTufClient(string metadataDir, string metadataUrl, string? targetBaseUrl)
@@ -120,10 +122,52 @@ public static class Program
         {
             MetadataBaseUrl = metadataUri,
             TrustedRoot = trustedRoot,
-            Cache = new FileSystemTufCache(metadataDir),
+            Cache = new ConformanceCache(metadataDir),
             TargetsBaseUrl = targetsUri,
         };
 
         return new TufClient(options);
+    }
+
+    private sealed class ConformanceCache : ITufCache
+    {
+        private readonly string _metadataDir;
+        private readonly string _targetsDir;
+
+        public ConformanceCache(string metadataDir)
+        {
+            _metadataDir = metadataDir;
+            _targetsDir = Path.Combine(metadataDir, "targets");
+            Directory.CreateDirectory(_metadataDir);
+            Directory.CreateDirectory(_targetsDir);
+        }
+
+        public byte[]? LoadMetadata(string role)
+        {
+            var path = GetMetadataPath(role);
+            return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        }
+
+        public void StoreMetadata(string role, byte[] data) =>
+            File.WriteAllBytes(GetMetadataPath(role), data);
+
+        public byte[]? LoadTarget(string targetPath)
+        {
+            var path = GetTargetPath(targetPath);
+            return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        }
+
+        public void StoreTarget(string targetPath, byte[] data) =>
+            File.WriteAllBytes(GetTargetPath(targetPath), data);
+
+        private string GetMetadataPath(string role) =>
+            Path.Combine(_metadataDir, $"{Uri.EscapeDataString(role)}.json");
+
+        private string GetTargetPath(string targetPath)
+        {
+            var hash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(targetPath)));
+            return Path.Combine(_targetsDir, hash);
+        }
     }
 }

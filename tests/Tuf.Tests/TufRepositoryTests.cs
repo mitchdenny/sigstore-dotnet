@@ -56,30 +56,6 @@ public sealed class TufRepositoryTests
             () => repository.FetchTargetAsync("artifact.txt"));
     }
 
-    [Fact]
-    public void FileSystemTufCache_StoresEscapedRoleNames()
-    {
-        var basePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("n"));
-
-        try
-        {
-            var cache = new FileSystemTufCache(basePath);
-            var data = "metadata"u8.ToArray();
-
-            cache.StoreMetadata("../delegatedrole", data);
-
-            Assert.Equal(data, cache.LoadMetadata("../delegatedrole"));
-            Assert.True(File.Exists(Path.Combine(basePath, "..%2Fdelegatedrole.json")));
-        }
-        finally
-        {
-            if (Directory.Exists(basePath))
-            {
-                Directory.Delete(basePath, recursive: true);
-            }
-        }
-    }
-
     private sealed class RecordingMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handleRequest;

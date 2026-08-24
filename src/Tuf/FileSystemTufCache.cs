@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
 namespace Tuf;
 
 /// <summary>
@@ -9,6 +13,7 @@ public sealed class FileSystemTufCache : ITufCache
 {
     private readonly string _metadataDir;
     private readonly string _targetsDir;
+    private readonly FileSystemCacheStorage _storage;
 
     /// <summary>
     /// Creates a file-system cache rooted at the given directory.
@@ -17,42 +22,74 @@ public sealed class FileSystemTufCache : ITufCache
     /// </summary>
     public FileSystemTufCache(string basePath)
     {
-        _metadataDir = basePath;
-        _targetsDir = Path.Combine(basePath, "targets");
-        Directory.CreateDirectory(_metadataDir);
-        Directory.CreateDirectory(_targetsDir);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
+
+        _metadataDir = Path.GetFullPath(basePath);
+        _targetsDir = Path.Combine(_metadataDir, "targets");
+        _storage = new FileSystemCacheStorage(_metadataDir, _targetsDir);
     }
 
     /// <inheritdoc/>
-    public byte[]? LoadMetadata(string role)
-    {
-        var path = Path.Combine(_metadataDir, $"{EscapeRoleName(role)}.json");
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
-    }
+    public byte[]? LoadMetadata(string role) =>
+        _storage.Read(GetMetadataPath(role));
 
     /// <inheritdoc/>
     public void StoreMetadata(string role, byte[] data)
     {
-        var path = Path.Combine(_metadataDir, $"{EscapeRoleName(role)}.json");
-        File.WriteAllBytes(path, data);
+        ArgumentNullException.ThrowIfNull(data);
+        _storage.Write(
+            GetMetadataPath(role),
+            data,
+            existing => ShouldReplaceMetadata(existing, data));
     }
 
     /// <inheritdoc/>
-    public byte[]? LoadTarget(string targetPath)
-    {
-        var path = Path.Combine(_targetsDir, targetPath);
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
-    }
+    public byte[]? LoadTarget(string targetPath) =>
+        _storage.Read(GetTargetPath(targetPath));
 
     /// <inheritdoc/>
     public void StoreTarget(string targetPath, byte[] data)
     {
-        var path = Path.Combine(_targetsDir, targetPath);
-        var dir = Path.GetDirectoryName(path);
-        if (dir != null)
-            Directory.CreateDirectory(dir);
-        File.WriteAllBytes(path, data);
+        ArgumentNullException.ThrowIfNull(data);
+        _storage.Write(GetTargetPath(targetPath), data);
     }
 
-    private static string EscapeRoleName(string role) => Uri.EscapeDataString(role);
+    private string GetMetadataPath(string role) =>
+        Path.Combine(_metadataDir, GetHashedFileName("metadata", role, ".json"));
+
+    private string GetTargetPath(string targetPath) =>
+        Path.Combine(_targetsDir, GetHashedFileName("target", targetPath, ".bin"));
+
+    private static string GetHashedFileName(string kind, string key, string extension)
+    {
+        var keyBytes = Encoding.UTF8.GetBytes($"{kind}\0{key}");
+        var hash = Convert.ToHexString(SHA256.HashData(keyBytes)).ToLowerInvariant();
+        return $"{kind}-{hash}{extension}";
+    }
+
+    private static bool ShouldReplaceMetadata(byte[] existing, byte[] incoming)
+    {
+        var existingVersion = TryGetMetadataVersion(existing);
+        var incomingVersion = TryGetMetadataVersion(incoming);
+        return existingVersion is null ||
+               incomingVersion is null ||
+               incomingVersion.Value >= existingVersion.Value;
+    }
+
+    private static int? TryGetMetadataVersion(byte[] data)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(data);
+            return document.RootElement
+                .GetProperty("signed")
+                .GetProperty("version")
+                .GetInt32();
+        }
+        catch (Exception exception) when (
+            exception is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return null;
+        }
+    }
 }
