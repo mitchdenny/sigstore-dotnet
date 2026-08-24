@@ -23,14 +23,16 @@ using Tuf;
 // Create a TUF client with HTTP repository and file-system cache
 var options = new TufClientOptions
 {
-    RepositoryUri = new Uri("https://tuf-repo-cdn.sigstore.dev"),
+    MetadataBaseUrl = new Uri("https://tuf-repo-cdn.sigstore.dev/"),
+    TargetsBaseUrl = new Uri("https://tuf-repo-cdn.sigstore.dev/targets/"),
+    TrustedRoot = await File.ReadAllBytesAsync("root.json"),
     Cache = new FileSystemTufCache("/path/to/cache")
 };
 
 var client = new TufClient(options);
 
-// Refresh metadata (downloads and verifies latest metadata)
-await client.RefreshAsync();
+// Get and verify the current trusted metadata
+var metadata = await client.GetTrustedMetadataAsync();
 ```
 
 ## Documentation

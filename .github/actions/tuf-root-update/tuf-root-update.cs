@@ -144,7 +144,7 @@ internal static partial class TufRootUpdateApp
                 Cache = cache
             });
 
-            await client.RefreshAsync(cancellationToken);
+            await client.GetTrustedMetadataAsync(cancellationToken);
             var verifiedRoot = cache.LoadMetadata("root")
                 ?? throw new InvalidOperationException("The TUF refresh did not produce trusted root metadata.");
 

@@ -81,6 +81,33 @@ var trustRoot = TrustedRoot.Deserialize(File.ReadAllText("custom-trusted-root.js
 var verifier = new SigstoreVerifier(new InMemoryTrustRootProvider(trustRoot));
 ```
 
+### Trust Root Caching
+
+The default verifier stores TUF metadata and targets under
+`$HOME/.sigstore/dotnet/{major.minor.patch}/tuf/{repository-hostname}/`.
+Prerelease and release builds with the same semantic-version core share a
+compatible cache. A successfully refreshed trust root is reused from memory for
+24 hours without touching disk or the network. Signed TUF metadata expiry
+always takes precedence.
+
+To choose a different refresh cadence:
+
+```csharp
+using var trustRootProvider = new TufTrustRootProvider(
+    TufTrustRootProvider.ProductionUrl,
+    new TufTrustRootProviderOptions
+    {
+        RefreshInterval = TimeSpan.FromHours(6),
+        RefreshRetryInterval = TimeSpan.FromMinutes(5)
+    });
+
+var verifier = new SigstoreVerifier(trustRootProvider);
+```
+
+After a transient repository failure, unexpired cached metadata remains usable
+and another refresh is attempted after `RefreshRetryInterval`. Cryptographic,
+rollback, and expiry failures are never treated as cache misses.
+
 ### Try-Pattern (No Exceptions)
 
 If you prefer to handle failures without exceptions:

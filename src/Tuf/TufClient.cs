@@ -14,14 +14,15 @@ public sealed class TufClient : IDisposable
     private readonly TufClientOptions _options;
     private readonly ITufRepository _repository;
     private readonly ITufCache _cache;
+    private readonly byte[] _bootstrapRoot;
     private readonly bool _ownsRepository;
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
 
     private SignedMetadata<RootMetadata>? _trustedRoot;
     private SignedMetadata<TimestampMetadata>? _trustedTimestamp;
     private SignedMetadata<SnapshotMetadata>? _trustedSnapshot;
     private SignedMetadata<TargetsMetadata>? _trustedTargets;
     private readonly Dictionary<string, SignedMetadata<TargetsMetadata>> _trustedDelegatedTargets = new(StringComparer.Ordinal);
-    private bool _refreshed;
 
     /// <summary>
     /// Creates a new TUF client with the specified options.
@@ -30,6 +31,7 @@ public sealed class TufClient : IDisposable
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _cache = options.Cache ?? new InMemoryTufCache();
+        _bootstrapRoot = options.TrustedRoot ?? throw new ArgumentNullException(nameof(options.TrustedRoot));
 
         if (options.Repository != null)
         {
@@ -53,10 +55,35 @@ public sealed class TufClient : IDisposable
     }
 
     /// <summary>
-    /// Refreshes local metadata from the TUF repository.
+    /// Gets the current trusted metadata from the TUF repository.
     /// Implements the TUF client update workflow (spec §5.1-5.6).
     /// </summary>
+    public async Task<TufMetadataResult> GetTrustedMetadataAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _operationGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await GetTrustedMetadataCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes local metadata from the TUF repository.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [Obsolete("Use GetTrustedMetadataAsync instead.")]
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        await GetTrustedMetadataAsync(cancellationToken);
+    }
+
+    private async Task<TufMetadataResult> GetTrustedMetadataCoreAsync(
+        CancellationToken cancellationToken)
     {
         // §5.1: Load the trusted root metadata
         LoadTrustedRoot();
@@ -73,20 +100,80 @@ public sealed class TufClient : IDisposable
         // §5.5: Update targets metadata
         await UpdateTargetsAsync(cancellationToken);
 
-        _refreshed = true;
+        return CreateMetadataResult();
+    }
+
+    private TufMetadataResult CreateMetadataResult()
+    {
+        if (_trustedRoot is null ||
+            _trustedTimestamp is null ||
+            _trustedSnapshot is null ||
+            _trustedTargets is null)
+        {
+            throw new TufException(
+                "The TUF operation did not produce complete trusted metadata.");
+        }
+
+        var expires = new[]
+        {
+            _trustedRoot.Signed.Expires,
+            _trustedTimestamp.Signed.Expires,
+            _trustedSnapshot.Signed.Expires,
+            _trustedTargets.Signed.Expires
+        }.Min();
+
+        foreach (var delegatedTargets in _trustedDelegatedTargets.Values)
+        {
+            if (delegatedTargets.Signed.Expires < expires)
+            {
+                expires = delegatedTargets.Signed.Expires;
+            }
+        }
+
+        return new TufMetadataResult { Expires = expires };
     }
 
     /// <summary>
-    /// Downloads a target file, verifying its hash and length against targets metadata.
-    /// Automatically refreshes metadata if needed.
+    /// Gets a target file, verifying its hash and length against current trusted metadata.
     /// </summary>
     /// <param name="targetPath">The target path as specified in targets metadata.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The verified target file contents.</returns>
-    public async Task<byte[]> DownloadTargetAsync(string targetPath, CancellationToken cancellationToken = default)
+    /// <returns>The verified target and the metadata that authorized it.</returns>
+    public async Task<TufTargetResult> GetTargetAsync(
+        string targetPath,
+        CancellationToken cancellationToken = default)
     {
-        if (!_refreshed)
-            await RefreshAsync(cancellationToken);
+        await _operationGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await GetTargetCoreAsync(targetPath, cancellationToken);
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Downloads a target file and returns its verified contents.
+    /// </summary>
+    /// <param name="targetPath">The target path as specified in targets metadata.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The verified target contents.</returns>
+    [Obsolete("Use GetTargetAsync instead.")]
+    public async Task<byte[]> DownloadTargetAsync(
+        string targetPath,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await GetTargetAsync(targetPath, cancellationToken);
+        return result.Content.ToArray();
+    }
+
+    private async Task<TufTargetResult> GetTargetCoreAsync(
+        string targetPath,
+        CancellationToken cancellationToken)
+    {
+        await GetTrustedMetadataCoreAsync(cancellationToken);
 
         if (_trustedTargets == null)
             throw new TufException("No trusted targets metadata available.");
@@ -97,8 +184,16 @@ public sealed class TufClient : IDisposable
 
         // Check cache first
         var cached = _cache.LoadTarget(targetPath);
-        if (cached != null && VerifyTargetHashes(cached, targetInfo))
-            return cached;
+        if (cached != null &&
+            cached.LongLength == targetInfo.Length &&
+            VerifyTargetHashes(cached, targetInfo))
+        {
+            return new TufTargetResult
+            {
+                Content = cached,
+                Metadata = CreateMetadataResult()
+            };
+        }
 
         // For consistent snapshots, prefix target filename with hash
         var fetchPath = targetPath;
@@ -121,19 +216,24 @@ public sealed class TufClient : IDisposable
         }
 
         var targetBytes = await _repository.FetchTargetAsync(fetchPath, cancellationToken)
-            ?? throw new TufException($"Target '{targetPath}' not found on repository.");
+            ?? throw new TufException(
+                $"Target '{targetPath}' not found on repository.");
 
         // Verify length
-        if (targetBytes.Length > targetInfo.Length)
+        if (targetBytes.LongLength != targetInfo.Length)
             throw new TufException(
-                $"Target '{targetPath}' size {targetBytes.Length} exceeds expected {targetInfo.Length}.");
+                $"Target '{targetPath}' size {targetBytes.Length} does not match expected {targetInfo.Length}.");
 
         // Verify hashes
         if (!VerifyTargetHashes(targetBytes, targetInfo))
             throw new TufException($"Target '{targetPath}' hash verification failed.");
 
         _cache.StoreTarget(targetPath, targetBytes);
-        return targetBytes;
+        return new TufTargetResult
+        {
+            Content = targetBytes,
+            Metadata = CreateMetadataResult()
+        };
     }
 
     /// <summary>
@@ -141,25 +241,34 @@ public sealed class TufClient : IDisposable
     /// </summary>
     private void LoadTrustedRoot()
     {
-        var rootBytes = _cache.LoadMetadata("root")
-            ?? throw new TufException("No trusted root metadata in cache.");
+        var rootBytes = _cache.LoadMetadata("root") ?? _bootstrapRoot;
 
-        _trustedTimestamp = null;
-        _trustedSnapshot = null;
-        _trustedTargets = null;
-        _trustedDelegatedTargets.Clear();
+        ResetTrustedMetadata();
+        _trustedRoot = ParseAndValidateTrustedRoot(rootBytes);
+    }
 
+    private static SignedMetadata<RootMetadata> ParseAndValidateTrustedRoot(byte[] rootBytes)
+    {
+        SignedMetadata<RootMetadata> trustedRoot;
         try
         {
-            _trustedRoot = TufMetadataParser.ParseRoot(rootBytes);
+            trustedRoot = TufMetadataParser.ParseRoot(rootBytes);
         }
         catch (JsonException ex)
         {
             throw new TufException("Trusted root metadata is invalid.", ex);
         }
 
-        ValidateTrustedRoot(_trustedRoot);
+        ValidateTrustedRoot(trustedRoot);
+        return trustedRoot;
+    }
 
+    private void ResetTrustedMetadata()
+    {
+        _trustedTimestamp = null;
+        _trustedSnapshot = null;
+        _trustedTargets = null;
+        _trustedDelegatedTargets.Clear();
     }
 
     private static void ValidateTrustedRoot(SignedMetadata<RootMetadata> trustedRoot)
@@ -229,11 +338,16 @@ public sealed class TufClient : IDisposable
         }
 
         // §5.2.5: Check root expiry (after all rotations)
-        if (_trustedRoot.Signed.Expires < DateTimeOffset.UtcNow)
+        EnsureFinalRootValid();
+
+    }
+
+    private void EnsureFinalRootValid()
+    {
+        if (_trustedRoot!.Signed.Expires < DateTimeOffset.UtcNow)
         {
             throw new TufExpiredException("root", _trustedRoot.Signed.Expires);
         }
-
     }
 
     /// <summary>
@@ -245,7 +359,8 @@ public sealed class TufClient : IDisposable
 
         // §5.3.1: Fetch timestamp.json (always unversioned)
         var timestampBytes = await _repository.FetchMetadataAsync("timestamp", cancellationToken: cancellationToken)
-            ?? throw new TufException("Failed to fetch timestamp.json from repository.");
+            ?? throw new TufException(
+                "Failed to fetch timestamp.json from repository.");
 
         var newTimestamp = TufMetadataParser.ParseTimestamp(timestampBytes);
 
@@ -283,7 +398,7 @@ public sealed class TufClient : IDisposable
     {
         EnsureFinalTimestampValid();
 
-        if (TryLoadLocalSnapshot())
+        if (TryLoadLocalSnapshot(requireCurrentTimestamp: false))
         {
             return;
         }
@@ -293,10 +408,11 @@ public sealed class TufClient : IDisposable
         // §5.4.1: Fetch snapshot.json (versioned if consistent_snapshot)
         int? fetchVersion = _trustedRoot!.Signed.ConsistentSnapshot ? snapshotMeta.Version : null;
         var snapshotBytes = await _repository.FetchMetadataAsync("snapshot", fetchVersion, cancellationToken)
-            ?? throw new TufException("Failed to fetch snapshot.json from repository.");
+            ?? throw new TufException(
+                "Failed to fetch snapshot.json from repository.");
 
         var newSnapshot = TufMetadataParser.ParseSnapshot(snapshotBytes);
-        VerifySnapshotMetadata(snapshotBytes, newSnapshot, trustedLocalSnapshot: false);
+        VerifySnapshotMetadata(snapshotBytes, newSnapshot, verifyTimestampReference: true);
 
         _trustedSnapshot = newSnapshot;
         EnsureFinalSnapshotValid();
@@ -320,7 +436,8 @@ public sealed class TufClient : IDisposable
         // §5.5.2: Fetch targets.json (versioned if consistent_snapshot)
         int? fetchVersion = _trustedRoot!.Signed.ConsistentSnapshot ? targetsMeta.Version : null;
         var targetsBytes = await _repository.FetchMetadataAsync("targets", fetchVersion, cancellationToken)
-            ?? throw new TufException("Failed to fetch targets.json from repository.");
+            ?? throw new TufException(
+                "Failed to fetch targets.json from repository.");
 
         var newTargets = TufMetadataParser.ParseTargets(targetsBytes);
         VerifyTargetsMetadata("targets", "root", targetsBytes, newTargets);
@@ -361,7 +478,7 @@ public sealed class TufClient : IDisposable
         }
     }
 
-    private bool TryLoadLocalSnapshot()
+    private bool TryLoadLocalSnapshot(bool requireCurrentTimestamp)
     {
         if (_trustedSnapshot != null)
         {
@@ -385,7 +502,13 @@ public sealed class TufClient : IDisposable
         try
         {
             var snapshot = TufMetadataParser.ParseSnapshot(snapshotBytes);
-            VerifySnapshotMetadata(snapshotBytes, snapshot, trustedLocalSnapshot: true);
+            var matchesCurrentTimestamp =
+                snapshot.Signed.Version ==
+                _trustedTimestamp!.Signed.SnapshotMeta.Version;
+            VerifySnapshotMetadata(
+                snapshotBytes,
+                snapshot,
+                requireCurrentTimestamp || matchesCurrentTimestamp);
             _trustedSnapshot = snapshot;
             EnsureFinalSnapshotValid();
             return true;
@@ -503,7 +626,8 @@ public sealed class TufClient : IDisposable
         var meta = _trustedSnapshot.Signed.Meta[$"{roleName}.json"];
         int? fetchVersion = _trustedRoot!.Signed.ConsistentSnapshot ? meta.Version : null;
         var targetsBytes = await _repository.FetchMetadataAsync(roleName, fetchVersion, cancellationToken)
-            ?? throw new TufException($"Failed to fetch {roleName}.json from repository.");
+            ?? throw new TufException(
+                $"Failed to fetch {roleName}.json from repository.");
         var targets = TufMetadataParser.ParseTargets(targetsBytes);
 
         VerifyTargetsMetadata(roleName, parentRoleName, targetsBytes, targets);
@@ -529,10 +653,11 @@ public sealed class TufClient : IDisposable
             VerifyMetaHashes(targetsBytes, targetsMeta.Hashes, roleName);
         }
 
-        if (targetsMeta.Length.HasValue && targetsBytes.Length > targetsMeta.Length.Value)
+        if (targetsMeta.Length.HasValue &&
+            targetsBytes.LongLength != targetsMeta.Length.Value)
         {
             throw new TufException(
-                $"{roleName} size {targetsBytes.Length} exceeds expected {targetsMeta.Length.Value}.");
+                $"{roleName} size {targetsBytes.Length} does not match expected {targetsMeta.Length.Value}.");
         }
 
         TufRole signingRole;
@@ -604,19 +729,21 @@ public sealed class TufClient : IDisposable
     private void VerifySnapshotMetadata(
         byte[] snapshotBytes,
         SignedMetadata<SnapshotMetadata> snapshot,
-        bool trustedLocalSnapshot)
+        bool verifyTimestampReference)
     {
         var snapshotMeta = _trustedTimestamp!.Signed.SnapshotMeta;
 
-        if (!trustedLocalSnapshot && snapshotMeta.Hashes != null)
+        if (verifyTimestampReference && snapshotMeta.Hashes != null)
         {
             VerifyMetaHashes(snapshotBytes, snapshotMeta.Hashes, "snapshot");
         }
 
-        if (!trustedLocalSnapshot && snapshotMeta.Length.HasValue && snapshotBytes.Length > snapshotMeta.Length.Value)
+        if (verifyTimestampReference &&
+            snapshotMeta.Length.HasValue &&
+            snapshotBytes.LongLength != snapshotMeta.Length.Value)
         {
             throw new TufException(
-                $"Snapshot size {snapshotBytes.Length} exceeds expected {snapshotMeta.Length.Value}.");
+                $"Snapshot size {snapshotBytes.Length} does not match expected {snapshotMeta.Length.Value}.");
         }
 
         var snapshotRole = _trustedRoot!.Signed.Roles["snapshot"];
@@ -731,5 +858,7 @@ public sealed class TufClient : IDisposable
         {
             disposable.Dispose();
         }
+
+        _operationGate.Dispose();
     }
 }

@@ -23,4 +23,9 @@
     <ProjectReference Include="..\..\src\Sigstore\Sigstore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Tuf.Tests\RepositorySimulator.cs"
+             Link="TestUtilities\RepositorySimulator.cs" />
+  </ItemGroup>
+
 </Project>

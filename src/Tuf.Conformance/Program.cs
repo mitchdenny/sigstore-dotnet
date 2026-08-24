@@ -79,14 +79,14 @@ public static class Program
     private static async Task RefreshAsync(string metadataDir, string metadataUrl, CancellationToken cancellationToken)
     {
         using var client = CreateTufClient(metadataDir, metadataUrl, targetBaseUrl: null);
-        await client.RefreshAsync(cancellationToken);
+        await client.GetTrustedMetadataAsync(cancellationToken);
     }
 
     private static async Task DownloadAsync(string metadataDir, string metadataUrl,
         string targetName, string targetBaseUrl, string targetDir, CancellationToken cancellationToken)
     {
         using var client = CreateTufClient(metadataDir, metadataUrl, targetBaseUrl);
-        var targetBytes = await client.DownloadTargetAsync(targetName, cancellationToken);
+        var target = await client.GetTargetAsync(targetName, cancellationToken);
 
         Directory.CreateDirectory(targetDir);
         var targetPath = Path.Combine(targetDir, targetName);
@@ -97,13 +97,13 @@ public static class Program
         if (File.Exists(targetPath))
         {
             var existingBytes = await File.ReadAllBytesAsync(targetPath, cancellationToken);
-            if (existingBytes.AsSpan().SequenceEqual(targetBytes))
+            if (existingBytes.AsSpan().SequenceEqual(target.Content.Span))
             {
                 return;
             }
         }
 
-        await File.WriteAllBytesAsync(targetPath, targetBytes, cancellationToken);
+        await File.WriteAllBytesAsync(targetPath, target.Content, cancellationToken);
     }
 
     private static TufClient CreateTufClient(string metadataDir, string metadataUrl, string? targetBaseUrl)
