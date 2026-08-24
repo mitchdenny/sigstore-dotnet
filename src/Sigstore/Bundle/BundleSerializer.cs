@@ -133,28 +133,84 @@ internal static class BundleSerializer
 {
     public static SigstoreBundle Deserialize(string json)
     {
-        var dto = JsonSerializer.Deserialize(json, BundleJsonReadContext.Default.BundleJson)
-                  ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
-        return FromDto(dto);
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.bundle.deserialize");
+        try
+        {
+            var dto = JsonSerializer.Deserialize(json, BundleJsonReadContext.Default.BundleJson)
+                      ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
+            return FromDto(dto);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
     }
 
     public static SigstoreBundle Deserialize(Stream stream)
     {
-        var dto = JsonSerializer.Deserialize(stream, BundleJsonReadContext.Default.BundleJson)
-                  ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
-        return FromDto(dto);
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.bundle.deserialize");
+        try
+        {
+            var dto = JsonSerializer.Deserialize(stream, BundleJsonReadContext.Default.BundleJson)
+                      ?? throw new JsonException("Failed to deserialize Sigstore bundle.");
+            return FromDto(dto);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
     }
 
     public static string Serialize(SigstoreBundle bundle)
     {
-        var dto = ToDto(bundle);
-        return JsonSerializer.Serialize(dto, BundleJsonContext.Default.BundleJson);
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.bundle.serialize");
+        try
+        {
+            var dto = ToDto(bundle);
+            return JsonSerializer.Serialize(dto, BundleJsonContext.Default.BundleJson);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
     }
 
     public static void Serialize(SigstoreBundle bundle, Stream stream)
     {
-        var dto = ToDto(bundle);
-        JsonSerializer.Serialize(stream, dto, BundleJsonContext.Default.BundleJson);
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.bundle.serialize");
+        try
+        {
+            var dto = ToDto(bundle);
+            JsonSerializer.Serialize(stream, dto, BundleJsonContext.Default.BundleJson);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
     }
 
     private static SigstoreBundle FromDto(BundleJson dto)

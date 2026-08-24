@@ -72,8 +72,24 @@ public sealed class SigstoreSigner
     {
         _ = artifact ?? throw new ArgumentNullException(nameof(artifact));
 
+        using var operation = SigstoreInstrumentation.StartSign();
+        try
+        {
+            return await SignCoreAsync(artifact, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<SigstoreBundle> SignCoreAsync(
+        Stream artifact,
+        CancellationToken cancellationToken)
+    {
         // 1. Get OIDC token
-        var oidcToken = await _tokenProvider.GetTokenAsync(cancellationToken);
+        var oidcToken = await GetOidcTokenAsync(cancellationToken);
 
         using var keyPair = new EphemeralKeyPair();
 
@@ -88,10 +104,10 @@ public sealed class SigstoreSigner
             cancellationToken);
 
         // 4. Hash the artifact
-        var hash = await SHA256.HashDataAsync(artifact, cancellationToken);
+        var hash = await HashArtifactAsync(artifact, cancellationToken);
 
         // 5. Sign the hash
-        var signature = keyPair.SignHash(hash);
+        var signature = SignHash(keyPair, hash);
 
         // 6. Get timestamp
         var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
@@ -142,8 +158,19 @@ public sealed class SigstoreSigner
         FileInfo file,
         CancellationToken cancellationToken = default)
     {
-        await using var stream = file.OpenRead();
-        return await SignAsync(stream, cancellationToken);
+        _ = file ?? throw new ArgumentNullException(nameof(file));
+
+        using var operation = SigstoreInstrumentation.StartSign();
+        try
+        {
+            await using var stream = file.OpenRead();
+            return await SignCoreAsync(stream, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>
@@ -158,11 +185,27 @@ public sealed class SigstoreSigner
     {
         _ = inTotoStatement ?? throw new ArgumentNullException(nameof(inTotoStatement));
 
+        using var operation = SigstoreInstrumentation.StartAttest();
+        try
+        {
+            return await AttestCoreAsync(inTotoStatement, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            operation.SetError(exception, cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<SigstoreBundle> AttestCoreAsync(
+        string inTotoStatement,
+        CancellationToken cancellationToken)
+    {
         const string payloadType = "application/vnd.in-toto+json";
         var payloadBytes = Encoding.UTF8.GetBytes(inTotoStatement);
 
         // 1. Get OIDC token
-        var oidcToken = await _tokenProvider.GetTokenAsync(cancellationToken);
+        var oidcToken = await GetOidcTokenAsync(cancellationToken);
 
         using var keyPair = new EphemeralKeyPair();
 
@@ -180,7 +223,7 @@ public sealed class SigstoreSigner
         var pae = ComputePae(payloadType, payloadBytes);
 
         // 5. Sign the PAE
-        var signature = keyPair.Sign(pae);
+        var signature = SignData(keyPair, pae);
 
         // 6. Get timestamp
         var timestampResponse = await _timestampAuthority.GetTimestampAsync(signature, cancellationToken);
@@ -223,6 +266,87 @@ public sealed class SigstoreSigner
                 ]
             }
         };
+    }
+
+    private async Task<OidcToken> GetOidcTokenAsync(
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            SigstoreInstrumentation.StartActivity("sigstore.oidc.token.get");
+        try
+        {
+            return await _tokenProvider.GetTokenAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task<byte[]> HashArtifactAsync(
+        Stream artifact,
+        CancellationToken cancellationToken)
+    {
+        using var activity =
+            SigstoreInstrumentation.StartActivity("sigstore.artifact.hash");
+        try
+        {
+            return await SHA256.HashDataAsync(artifact, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
+    }
+
+    private static byte[] SignHash(
+        EphemeralKeyPair keyPair,
+        byte[] hash)
+    {
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.signature.create");
+        try
+        {
+            return keyPair.SignHash(hash);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
+    }
+
+    private static byte[] SignData(
+        EphemeralKeyPair keyPair,
+        byte[] data)
+    {
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.signature.create");
+        try
+        {
+            return keyPair.Sign(data);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                CancellationToken.None);
+            throw;
+        }
     }
 
     /// <summary>

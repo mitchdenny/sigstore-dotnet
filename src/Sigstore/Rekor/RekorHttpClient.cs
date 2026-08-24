@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -44,10 +45,28 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         RekorEntry entry,
         CancellationToken cancellationToken = default)
     {
-        if (_majorApiVersion >= 2)
-            return await SubmitEntryV2Async(entry, cancellationToken);
+        TagList tags = default;
+        tags.Add("sigstore.rekor.api_version", _majorApiVersion >= 2 ? "2" : "1");
+        tags.Add("sigstore.rekor.entry_type", "hashedrekord");
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.rekor.entry.submit",
+                tags);
+        try
+        {
+            if (_majorApiVersion >= 2)
+                return await SubmitEntryV2Async(entry, cancellationToken);
 
-        return await SubmitEntryV1Async(entry, cancellationToken);
+            return await SubmitEntryV1Async(entry, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
 
     private async Task<TransparencyLogEntry> SubmitEntryV1Async(
@@ -138,9 +157,27 @@ public sealed class RekorHttpClient : IRekorClient, IDisposable
         RekorDsseEntry entry,
         CancellationToken cancellationToken = default)
     {
-        if (_majorApiVersion >= 2)
-            return await SubmitDsseEntryV2Async(entry, cancellationToken);
-        return await SubmitDsseEntryV1Async(entry, cancellationToken);
+        TagList tags = default;
+        tags.Add("sigstore.rekor.api_version", _majorApiVersion >= 2 ? "2" : "1");
+        tags.Add("sigstore.rekor.entry_type", "dsse");
+        using var activity =
+            SigstoreInstrumentation.StartActivity(
+                "sigstore.rekor.entry.submit",
+                tags);
+        try
+        {
+            if (_majorApiVersion >= 2)
+                return await SubmitDsseEntryV2Async(entry, cancellationToken);
+            return await SubmitDsseEntryV1Async(entry, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SigstoreInstrumentation.SetError(
+                activity,
+                exception,
+                cancellationToken);
+            throw;
+        }
     }
 
     private async Task<TransparencyLogEntry> SubmitDsseEntryV1Async(

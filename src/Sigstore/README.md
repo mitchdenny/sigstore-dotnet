@@ -16,6 +16,7 @@ A .NET library for generating and verifying [Sigstore](https://www.sigstore.dev/
 - **DSSE attestations** — in-toto statement signing and verification
 - **DI-friendly** — constructor injection with sensible defaults
 - **AOT-compatible** — fully trimmer and NativeAOT safe
+- **OpenTelemetry-ready** — emits native .NET activities and metrics without an exporter dependency
 
 ## Quick Start
 
@@ -51,6 +52,40 @@ string json = bundle.Serialize();
 SigstoreBundle bundle = SigstoreBundle.Deserialize(json);
 string json = bundle.Serialize();
 ```
+
+## Telemetry
+
+The package emits diagnostics through the built-in `System.Diagnostics`
+APIs. Applications choose how to collect and export them; the package does not
+initialize OpenTelemetry or install an exporter.
+
+```csharp
+services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource(SigstoreTelemetry.ActivitySourceName)
+        .AddSource(TufTelemetry.ActivitySourceName))
+    .WithMetrics(metrics => metrics
+        .AddMeter(SigstoreTelemetry.MeterName)
+        .AddMeter(TufTelemetry.MeterName));
+```
+
+The `Sigstore` activity source emits top-level `sigstore.sign`,
+`sigstore.attest`, and `sigstore.verify` activities, with child activities for
+OIDC, Fulcio, Rekor, timestamp, trust-root, certificate, transparency-log, and
+signature work. Its principal metrics are:
+
+- `sigstore.sign.duration` and `sigstore.sign.active`
+- `sigstore.attest.duration` and `sigstore.attest.active`
+- `sigstore.verify.duration` and `sigstore.verify.active`
+
+Duration instruments use seconds. Failed operations include the standard
+`error.type` attribute. The package does not emit identities, tokens,
+certificates, signatures, artifact digests, file paths, or service response
+bodies as telemetry attributes.
+
+Enable the standard .NET HTTP client instrumentation alongside these sources
+to observe individual network requests without duplicate Sigstore HTTP
+metrics.
 
 ## Documentation
 
