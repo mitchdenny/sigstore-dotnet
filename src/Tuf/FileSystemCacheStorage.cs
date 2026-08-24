@@ -58,7 +58,7 @@ internal sealed class FileSystemCacheStorage
                 path,
                 System.IO.FileMode.Open,
                 FileAccess.Read,
-                FileShare.Read | FileShare.Delete);
+                FileShare.ReadWrite | FileShare.Delete);
             if (stream.Length > int.MaxValue)
             {
                 return null;

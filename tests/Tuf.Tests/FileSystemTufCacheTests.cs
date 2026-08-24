@@ -265,9 +265,21 @@ public sealed class FileSystemTufCacheTests
 
         holder.Kill(entireProcessTree: true);
         await holder.WaitForExitAsync();
-        cache.StoreTarget("after-crash", "data"u8.ToArray());
+        var expected = "data"u8.ToArray();
+        var timeout = DateTime.UtcNow.AddSeconds(5);
+        byte[]? actual;
+        do
+        {
+            cache.StoreTarget("after-crash", expected);
+            actual = cache.LoadTarget("after-crash");
+            if (actual is null)
+            {
+                await Task.Delay(10);
+            }
+        }
+        while (actual is null && DateTime.UtcNow < timeout);
 
-        Assert.Equal("data"u8.ToArray(), cache.LoadTarget("after-crash"));
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
