@@ -103,8 +103,10 @@ internal sealed class FileSystemCacheStorage
                 }
             }
 
-            File.Move(tempPath, destinationPath, overwrite: true);
-            tempPath = "";
+            if (TryReplace(tempPath, destinationPath))
+            {
+                tempPath = "";
+            }
         }
         finally
         {
@@ -169,6 +171,19 @@ internal sealed class FileSystemCacheStorage
         catch (Exception ex) when (
             ex is FileNotFoundException or DirectoryNotFoundException)
         {
+        }
+    }
+
+    private static bool TryReplace(string sourcePath, string destinationPath)
+    {
+        try
+        {
+            File.Move(sourcePath, destinationPath, overwrite: true);
+            return true;
+        }
+        catch (Exception exception) when (IsFileSystemFailure(exception))
+        {
+            return false;
         }
     }
 
