@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Sigstore.Tests.Timestamp;
 
+[TestClass]
 public class TimestampParserVerifyTests
 {
     /// <summary>
@@ -30,7 +31,7 @@ public class TimestampParserVerifyTests
             .CopyWithPrivateKey(key);
     }
 
-    [Fact]
+    [TestMethod]
     public void Verify_WithChainedIntermediateCert_Succeeds()
     {
         // Arrange: build root CA -> intermediate chain
@@ -61,11 +62,11 @@ public class TimestampParserVerifyTests
         var (verified, authorityUri) = TimestampParser.Verify(info, signature, new[] { tsaAuthority });
 
         // Assert
-        Assert.True(verified);
-        Assert.Equal(new Uri("https://tsa.example.com"), authorityUri);
+        Assert.IsTrue(verified);
+        Assert.AreEqual(new Uri("https://tsa.example.com"), authorityUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void Verify_WithUnrelatedIntermediateCert_Fails()
     {
         // Arrange: root CA and an unrelated intermediate (signed by a different root)
@@ -97,11 +98,11 @@ public class TimestampParserVerifyTests
         var (verified, authorityUri) = TimestampParser.Verify(info, signature, new[] { tsaAuthority });
 
         // Assert
-        Assert.False(verified);
-        Assert.Null(authorityUri);
+        Assert.IsFalse(verified);
+        Assert.IsNull(authorityUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void Verify_ReturnsMatchedAuthorityUri()
     {
         // Arrange: two TSAs, only the second one matches
@@ -143,7 +144,7 @@ public class TimestampParserVerifyTests
         var (verified, authorityUri) = TimestampParser.Verify(info, signature, tsaAuthorities);
 
         // Assert
-        Assert.True(verified);
-        Assert.Equal(new Uri("https://tsa2.example.com"), authorityUri);
+        Assert.IsTrue(verified);
+        Assert.AreEqual(new Uri("https://tsa2.example.com"), authorityUri);
     }
 }

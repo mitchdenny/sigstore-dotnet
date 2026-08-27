@@ -98,7 +98,17 @@ jobs:
         run: dotnet build Sigstore.slnx -c Release --no-restore --nologo
 
       - name: Test
-        run: dotnet test Sigstore.slnx -c Release --no-build --nologo --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
+        # Microsoft.Testing.Platform (see global.json) replaces the VSTest CLI surface:
+        # TRX and results-directory options are MTP-native and must follow the `--`
+        # separator. `--nologo` is deliberately absent — MTP does not accept it and the
+        # run silently discovers zero tests, exiting 5.
+        # {asm} keeps each test project's TRX distinct so they don't overwrite each other.
+        run: >-
+          dotnet test Sigstore.slnx -c Release --no-build
+          --
+          --report-trx
+          --report-trx-filename "test-results-{asm}.trx"
+          --results-directory ./TestResults
 
       - name: Publish test results
         uses: dorny/test-reporter@v1

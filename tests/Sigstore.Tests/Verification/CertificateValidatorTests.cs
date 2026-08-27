@@ -4,6 +4,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class CertificateValidatorTests
 {
     private static (X509Certificate2 root, X509Certificate2 leaf) CreateTestCertificates(
@@ -62,7 +63,7 @@ public class CertificateValidatorTests
         };
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_ValidCertAtSignatureTime_Succeeds()
     {
         var now = DateTimeOffset.UtcNow;
@@ -74,10 +75,10 @@ public class CertificateValidatorTests
 
         var result = validator.ValidateChain(leaf, null, trustRoot, now);
 
-        Assert.True(result.IsValid, result.FailureReason);
+        Assert.IsTrue(result.IsValid, result.FailureReason);
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_CertNotYetValid_Fails()
     {
         var now = DateTimeOffset.UtcNow;
@@ -90,11 +91,11 @@ public class CertificateValidatorTests
         // Signature time is before cert validity period
         var result = validator.ValidateChain(leaf, null, trustRoot, now);
 
-        Assert.False(result.IsValid);
-        Assert.NotNull(result.FailureReason);
+        Assert.IsFalse(result.IsValid);
+        Assert.IsNotNull(result.FailureReason);
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_CertExpired_Fails()
     {
         var now = DateTimeOffset.UtcNow;
@@ -107,10 +108,10 @@ public class CertificateValidatorTests
         // Signature time is after cert has expired
         var result = validator.ValidateChain(leaf, null, trustRoot, now);
 
-        Assert.False(result.IsValid);
+        Assert.IsFalse(result.IsValid);
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_HybridTimeModel_ValidatesAtSignatureTime()
     {
         var now = DateTimeOffset.UtcNow;
@@ -125,10 +126,10 @@ public class CertificateValidatorTests
         var signatureTime = now.AddDays(-30);
         var result = validator.ValidateChain(leaf, null, trustRoot, signatureTime);
 
-        Assert.True(result.IsValid, result.FailureReason);
+        Assert.IsTrue(result.IsValid, result.FailureReason);
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_ExtractsSanFromLeaf()
     {
         var now = DateTimeOffset.UtcNow;
@@ -140,11 +141,11 @@ public class CertificateValidatorTests
 
         var result = validator.ValidateChain(leaf, null, trustRoot, now);
 
-        Assert.True(result.IsValid, result.FailureReason);
-        Assert.Equal("myapp.example.com", result.SubjectAlternativeName);
+        Assert.IsTrue(result.IsValid, result.FailureReason);
+        Assert.AreEqual("myapp.example.com", result.SubjectAlternativeName);
     }
 
-    [Fact]
+    [TestMethod]
     public void ValidateChain_UntrustedRoot_Fails()
     {
         var now = DateTimeOffset.UtcNow;
@@ -167,7 +168,7 @@ public class CertificateValidatorTests
 
         var result = validator.ValidateChain(leaf, null, trustRoot, now);
 
-        Assert.False(result.IsValid);
+        Assert.IsFalse(result.IsValid);
     }
 
     /// <summary>

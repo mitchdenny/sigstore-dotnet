@@ -4,9 +4,10 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class Ed25519VerificationTests
 {
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_ValidSignature_WithRawKey()
     {
         var key = CreateKey();
@@ -16,10 +17,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, signature, rawPublicKey);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_ValidSignature_WithSpkiKey()
     {
         var key = CreateKey();
@@ -36,10 +37,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, signature, spki);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_InvalidSignature_ReturnsFalse()
     {
         var key = CreateKey();
@@ -53,10 +54,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, badSig, rawPublicKey);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_WrongKeyLength_ReturnsFalse()
     {
         var data = "hello"u8.ToArray();
@@ -65,10 +66,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, signature, badKey);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_WrongKey_ReturnsFalse()
     {
         var signingKey = CreateKey();
@@ -79,10 +80,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, signature, wrongPublicKey);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_Rfc8032TestVector_ReturnsTrue()
     {
         var publicKey = Convert.FromHexString(
@@ -93,10 +94,10 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data([], signature, publicKey);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyEd25519Data_InvalidSpkiPrefix_ReturnsFalse()
     {
         var key = CreateKey();
@@ -107,7 +108,7 @@ public class Ed25519VerificationTests
 
         var result = SigstoreVerifier.VerifyEd25519Data(data, signature, invalidSpki);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
     private static Ed25519PrivateKeyParameters CreateKey(byte seedValue = 0)

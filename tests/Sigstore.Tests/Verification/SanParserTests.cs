@@ -4,69 +4,70 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class SanParserTests
 {
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithUriSan_ReturnsUri()
     {
         using var cert = CreateCertWithUri("https://github.com/myorg/myrepo/.github/workflows/ci.yml@refs/heads/main");
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("https://github.com/myorg/myrepo/.github/workflows/ci.yml@refs/heads/main", san);
+        Assert.AreEqual("https://github.com/myorg/myrepo/.github/workflows/ci.yml@refs/heads/main", san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithEmailSan_ReturnsEmail()
     {
         using var cert = CreateCertWithEmail("user@example.com");
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("user@example.com", san);
+        Assert.AreEqual("user@example.com", san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithDnsSan_ReturnsDns()
     {
         using var cert = CreateCertWithDns("myapp.example.com");
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("myapp.example.com", san);
+        Assert.AreEqual("myapp.example.com", san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithNoSanExtension_ReturnsNull()
     {
         using var cert = CreateCertWithoutSan();
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Null(san);
+        Assert.IsNull(san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithEmailAndUri_PrefersEmail()
     {
         using var cert = CreateCertWithEmailAndUri("user@example.com", "https://example.com");
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("user@example.com", san);
+        Assert.AreEqual("user@example.com", san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithUriAndDns_PrefersUri()
     {
         using var cert = CreateCertWithUriAndDns("https://example.com/path", "example.com");
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("https://example.com/path", san);
+        Assert.AreEqual("https://example.com/path", san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithGitHubActionsUri_ReturnsFullWorkflowUri()
     {
         var workflowUri = "https://github.com/microsoft/playwright-cli/.github/workflows/publish.yml@refs/tags/v0.1.1";
@@ -74,10 +75,10 @@ public class SanParserTests
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal(workflowUri, san);
+        Assert.AreEqual(workflowUri, san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithMalformedRawData_Throws()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -86,10 +87,10 @@ public class SanParserTests
             new X509Extension(new Oid("2.5.29.17"), [0xFF, 0xFE, 0xFD], false));
         using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
 
-        Assert.ThrowsAny<AsnContentException>(() => SanParser.ExtractSan(cert));
+        Assert.Throws<AsnContentException>(() => SanParser.ExtractSan(cert));
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithTruncatedData_Throws()
     {
         // A SEQUENCE tag (0x30) with length 10 but only 2 bytes of content
@@ -99,10 +100,10 @@ public class SanParserTests
         req.CertificateExtensions.Add(new X509Extension(new Oid("2.5.29.17"), truncated, false));
         using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
 
-        Assert.ThrowsAny<AsnContentException>(() => SanParser.ExtractSan(cert));
+        Assert.Throws<AsnContentException>(() => SanParser.ExtractSan(cert));
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithEmptySequence_ReturnsNull()
     {
         // Valid DER: SEQUENCE with zero content
@@ -114,10 +115,10 @@ public class SanParserTests
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Null(san);
+        Assert.IsNull(san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithOnlyIpAddress_ReturnsNull()
     {
         // SAN with only an iPAddress [7] entry — not a type we extract
@@ -130,10 +131,10 @@ public class SanParserTests
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Null(san);
+        Assert.IsNull(san);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExtractSan_WithMultipleUris_ReturnsFirst()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -146,7 +147,7 @@ public class SanParserTests
 
         var san = SanParser.ExtractSan(cert);
 
-        Assert.Equal("https://first.example.com/path", san);
+        Assert.AreEqual("https://first.example.com/path", san);
     }
 
     private static X509Certificate2 CreateCertWithUri(string uri)

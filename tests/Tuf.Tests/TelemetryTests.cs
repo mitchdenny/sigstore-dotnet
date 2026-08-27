@@ -4,13 +4,10 @@ using System.Diagnostics.Metrics;
 
 namespace Tuf.Tests;
 
-[CollectionDefinition("Telemetry", DisableParallelization = true)]
-public sealed class TelemetryTestCollection;
-
-[Collection("Telemetry")]
+[TestClass]
 public sealed class TelemetryTests
 {
-    [Fact]
+    [TestMethod]
     public async Task TargetGetEmitsActivitiesAndMetricsForCacheMissAndHit()
     {
         using var activityListener = CreateActivityListener(out var activities);
@@ -43,71 +40,71 @@ public sealed class TelemetryTests
         var targetGets = traceActivities
             .Where(activity => activity.OperationName == "tuf.target.get")
             .ToList();
-        Assert.Equal(2, targetGets.Count);
+        Assert.AreEqual(2, targetGets.Count);
         Assert.Contains(
-            targetGets,
             activity => Equals(
                 activity.GetTagItem("tuf.target.cache_hit"),
-                false));
+                false),
+            targetGets);
         Assert.Contains(
-            targetGets,
             activity => Equals(
                 activity.GetTagItem("tuf.target.cache_hit"),
-                true));
+                true),
+            targetGets);
 
         var refreshes = traceActivities
             .Where(activity =>
                 activity.OperationName == "tuf.metadata.refresh")
             .ToList();
-        Assert.Equal(2, refreshes.Count);
-        Assert.All(
+        Assert.AreEqual(2, refreshes.Count);
+        TestSeq.All(
             refreshes,
             refresh => Assert.Contains(
-                targetGets,
-                target => target.SpanId == refresh.ParentSpanId));
+                target => target.SpanId == refresh.ParentSpanId,
+                targetGets));
         Assert.Contains(
-            traceActivities,
-            activity => activity.OperationName == "tuf.metadata.root.update");
+            activity => activity.OperationName == "tuf.metadata.root.update",
+            traceActivities);
         Assert.Contains(
-            traceActivities,
-            activity => activity.OperationName == "tuf.target.resolve");
+            activity => activity.OperationName == "tuf.target.resolve",
+            traceActivities);
 
         var targetDurations = measurements
             .Where(measurement =>
                 measurement.Name == "tuf.target.get.duration")
             .ToList();
         Assert.Contains(
-            targetDurations,
             measurement => Equals(
                 measurement.Tags["tuf.target.cache_hit"],
-                false));
+                false),
+            targetDurations);
         Assert.Contains(
-            targetDurations,
             measurement => Equals(
                 measurement.Tags["tuf.target.cache_hit"],
-                true));
-        Assert.True(
+                true),
+            targetDurations);
+        Assert.IsTrue(
             measurements.Count(measurement =>
                 measurement.Name == "tuf.metadata.refresh.duration") >= 2);
-        Assert.True(
+        Assert.IsTrue(
             measurements.Count(measurement =>
                 measurement.Name == "tuf.target.get.queue.duration") >= 2);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "tuf.target.size" &&
                 measurement.Value == content.Length &&
                 Equals(
                     measurement.Tags["tuf.target.cache_hit"],
-                    false));
+                    false),
+            measurements);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "tuf.target.size" &&
                 measurement.Value == content.Length &&
                 Equals(
                     measurement.Tags["tuf.target.cache_hit"],
-                    true));
+                    true),
+            measurements);
 
         Assert.Contains("tuf.metadata.refresh.duration", instruments);
         Assert.Contains("tuf.metadata.refresh.active", instruments);
@@ -115,13 +112,13 @@ public sealed class TelemetryTests
         Assert.Contains("tuf.target.get.active", instruments);
         Assert.Contains("tuf.target.size", instruments);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "tuf.target.get.active" &&
-                measurement.Value == 0);
+                measurement.Value == 0,
+            measurements);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task ExpiredMetadataSetsErrorType()
     {
         using var activityListener = CreateActivityListener(out var activities);
@@ -142,21 +139,21 @@ public sealed class TelemetryTests
             Repository = repository
         });
 
-        await Assert.ThrowsAsync<TufExpiredException>(
+        await Assert.ThrowsExactlyAsync<TufExpiredException>(
             () => client.GetTrustedMetadataAsync());
 
-        var refresh = Assert.Single(
+        var refresh = TestSeq.Single(
             activities,
             activity =>
                 activity.TraceId == parent.TraceId &&
                 activity.OperationName == "tuf.metadata.refresh");
-        Assert.Equal(ActivityStatusCode.Error, refresh.Status);
-        Assert.Equal("expired", refresh.GetTagItem("error.type"));
+        Assert.AreEqual(ActivityStatusCode.Error, refresh.Status);
+        Assert.AreEqual("expired", refresh.GetTagItem("error.type"));
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "tuf.metadata.refresh.duration" &&
-                Equals(measurement.Tags["error.type"], "expired"));
+                Equals(measurement.Tags["error.type"], "expired"),
+            measurements);
     }
 
     private static ActivityListener CreateActivityListener(

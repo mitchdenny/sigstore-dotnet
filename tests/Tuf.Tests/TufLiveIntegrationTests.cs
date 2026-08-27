@@ -1,10 +1,11 @@
 namespace Tuf.Tests;
 
+[TestClass]
 /// <summary>
 /// Integration tests that exercise the TUF client against the real Sigstore TUF repository.
 /// These tests require network access and may fail if the Sigstore infrastructure is down.
 /// </summary>
-[Trait("Category", "Integration")]
+[TestCategory("Integration")]
 public class TufLiveIntegrationTests : IDisposable
 {
     private static readonly Uri SigstoreMetadataUrl = new("https://tuf-repo-cdn.sigstore.dev/");
@@ -21,7 +22,7 @@ public class TufLiveIntegrationTests : IDisposable
         return await File.ReadAllBytesAsync(Path.Combine("Fixtures", "root.json"));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Refresh_SigstorePublicGood_Succeeds()
     {
         var trustedRoot = await FetchInitialRootAsync();
@@ -39,7 +40,7 @@ public class TufLiveIntegrationTests : IDisposable
         await client.GetTrustedMetadataAsync();
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadTarget_TrustedRoot_Succeeds()
     {
         var trustedRoot = await FetchInitialRootAsync();
@@ -56,14 +57,14 @@ public class TufLiveIntegrationTests : IDisposable
         // Download trusted_root.json - this is the main target Sigstore clients need
         var target = await client.GetTargetAsync("trusted_root.json");
 
-        Assert.False(target.Content.IsEmpty);
+        Assert.IsFalse(target.Content.IsEmpty);
 
         // It should be valid JSON
         var json = System.Text.Encoding.UTF8.GetString(target.Content.Span);
         Assert.Contains("certificateAuthorities", json);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task Refresh_WithCaching_SecondRefreshFaster()
     {
         var trustedRoot = await FetchInitialRootAsync();
@@ -83,9 +84,9 @@ public class TufLiveIntegrationTests : IDisposable
         await client.GetTrustedMetadataAsync();
 
         // Cache should have all metadata
-        Assert.NotNull(cache.LoadMetadata("root"));
-        Assert.NotNull(cache.LoadMetadata("timestamp"));
-        Assert.NotNull(cache.LoadMetadata("snapshot"));
-        Assert.NotNull(cache.LoadMetadata("targets"));
+        Assert.IsNotNull(cache.LoadMetadata("root"));
+        Assert.IsNotNull(cache.LoadMetadata("timestamp"));
+        Assert.IsNotNull(cache.LoadMetadata("snapshot"));
+        Assert.IsNotNull(cache.LoadMetadata("targets"));
     }
 }

@@ -2,56 +2,57 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class CertificateIdentityTests
 {
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_SetsDefaultIssuer()
     {
         var identity = CertificateIdentity.ForGitHubActions("owner", "repo");
 
-        Assert.Equal("https://token.actions.githubusercontent.com", identity.Issuer);
+        Assert.AreEqual("https://token.actions.githubusercontent.com", identity.Issuer);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_SetsRepositoryPattern()
     {
         var identity = CertificateIdentity.ForGitHubActions("sigstore", "sigstore-dotnet");
 
-        Assert.NotNull(identity.SubjectAlternativeNamePattern);
+        Assert.IsNotNull(identity.SubjectAlternativeNamePattern);
         Assert.Contains("sigstore/sigstore-dotnet", identity.SubjectAlternativeNamePattern);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_WithCustomIssuer()
     {
         var identity = CertificateIdentity.ForGitHubActions(
             "owner", "repo",
             issuer: "https://custom-issuer.example.com");
 
-        Assert.Equal("https://custom-issuer.example.com", identity.Issuer);
+        Assert.AreEqual("https://custom-issuer.example.com", identity.Issuer);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_WithWorkflowRef_IncludesRefInPattern()
     {
         var identity = CertificateIdentity.ForGitHubActions(
             "owner", "repo",
             workflowRef: "refs/heads/main");
 
-        Assert.NotNull(identity.SubjectAlternativeNamePattern);
+        Assert.IsNotNull(identity.SubjectAlternativeNamePattern);
         Assert.Contains("refs/heads/main", identity.SubjectAlternativeNamePattern);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_WithoutWorkflowRef_UsesWildcardPattern()
     {
         var identity = CertificateIdentity.ForGitHubActions("owner", "repo");
 
-        Assert.NotNull(identity.SubjectAlternativeNamePattern);
-        Assert.Null(identity.SubjectAlternativeName);
+        Assert.IsNotNull(identity.SubjectAlternativeNamePattern);
+        Assert.IsNull(identity.SubjectAlternativeName);
     }
 
-    [Fact]
+    [TestMethod]
     public void ExactMatch_SetsSubjectAlternativeName()
     {
         var identity = new CertificateIdentity
@@ -60,11 +61,11 @@ public class CertificateIdentityTests
             Issuer = "https://accounts.google.com"
         };
 
-        Assert.Equal("user@example.com", identity.SubjectAlternativeName);
-        Assert.Null(identity.SubjectAlternativeNamePattern);
+        Assert.AreEqual("user@example.com", identity.SubjectAlternativeName);
+        Assert.IsNull(identity.SubjectAlternativeNamePattern);
     }
 
-    [Fact]
+    [TestMethod]
     public void RegexMatch_SetsPattern()
     {
         var identity = new CertificateIdentity
@@ -73,7 +74,7 @@ public class CertificateIdentityTests
             Issuer = "https://accounts.google.com"
         };
 
-        Assert.Null(identity.SubjectAlternativeName);
-        Assert.NotNull(identity.SubjectAlternativeNamePattern);
+        Assert.IsNull(identity.SubjectAlternativeName);
+        Assert.IsNotNull(identity.SubjectAlternativeNamePattern);
     }
 }

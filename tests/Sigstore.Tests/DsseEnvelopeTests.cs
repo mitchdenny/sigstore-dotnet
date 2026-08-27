@@ -3,6 +3,7 @@ using Sigstore;
 
 namespace Sigstore.Tests;
 
+[TestClass]
 public class DsseEnvelopeTests
 {
     private static readonly string ValidInTotoStatement = """
@@ -23,7 +24,7 @@ public class DsseEnvelopeTests
     }
     """;
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_ValidInTotoPayload_ReturnsStatement()
     {
         var envelope = new DsseEnvelope
@@ -34,13 +35,13 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.NotNull(statement);
-        Assert.Equal("https://in-toto.io/Statement/v1", statement.Type);
-        Assert.Equal("https://slsa.dev/provenance/v1", statement.PredicateType);
-        Assert.Single(statement.Subject);
+        Assert.IsNotNull(statement);
+        Assert.AreEqual("https://in-toto.io/Statement/v1", statement.Type);
+        Assert.AreEqual("https://slsa.dev/provenance/v1", statement.PredicateType);
+        TestSeq.Single(statement.Subject);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_NonInTotoPayloadType_ReturnsNull()
     {
         var envelope = new DsseEnvelope
@@ -51,10 +52,10 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_EmptyPayloadType_ReturnsNull()
     {
         var envelope = new DsseEnvelope
@@ -65,10 +66,10 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_EmptyPayload_ReturnsNull()
     {
         var envelope = new DsseEnvelope
@@ -79,10 +80,10 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_CorruptPayload_ReturnsNull()
     {
         var envelope = new DsseEnvelope
@@ -93,10 +94,10 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_CaseInsensitivePayloadType()
     {
         var envelope = new DsseEnvelope
@@ -107,10 +108,10 @@ public class DsseEnvelopeTests
 
         var statement = envelope.GetStatement();
 
-        Assert.NotNull(statement);
+        Assert.IsNotNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void GetStatement_CanAccessPredicateDetails()
     {
         var envelope = new DsseEnvelope
@@ -126,6 +127,6 @@ public class DsseEnvelopeTests
             .GetProperty("buildType")
             .GetString();
 
-        Assert.Equal("test-type", buildType);
+        Assert.AreEqual("test-type", buildType);
     }
 }

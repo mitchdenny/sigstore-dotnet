@@ -2,6 +2,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Conformance;
 
+[TestClass]
 public class ConformanceTests
 {
     private static readonly string AssetsDir = GetTestAssetsDir();
@@ -26,8 +27,8 @@ public class ConformanceTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(TestCases))]
+    [TestMethod]
+    [DynamicData(nameof(TestCases))]
     public async Task BundleVerify(string testCaseName)
     {
         var testDir = Path.Combine(AssetsDir, testCaseName);
@@ -79,11 +80,11 @@ public class ConformanceTests
 
         if (expectFailure)
         {
-            Assert.False(success, $"Expected verification to fail for '{testCaseName}' but it succeeded");
+            Assert.IsFalse(success, $"Expected verification to fail for '{testCaseName}' but it succeeded");
         }
         else
         {
-            Assert.True(success,
+            Assert.IsTrue(success,
                 $"Expected verification to succeed for '{testCaseName}' but it failed: {result?.FailureReason}");
         }
     }

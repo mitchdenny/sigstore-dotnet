@@ -4,13 +4,10 @@ using System.Diagnostics.Metrics;
 
 namespace Sigstore.Tests;
 
-[CollectionDefinition("Telemetry", DisableParallelization = true)]
-public sealed class TelemetryTestCollection;
-
-[Collection("Telemetry")]
+[TestClass]
 public sealed class TelemetryTests
 {
-    [Fact]
+    [TestMethod]
     public async Task VerifyFailureEmitsActivityAndMetrics()
     {
         using var activityListener = CreateActivityListener(out var activities);
@@ -32,34 +29,34 @@ public sealed class TelemetryTests
             new VerificationPolicy());
         meterListener.RecordObservableInstruments();
 
-        Assert.False(success);
+        Assert.IsFalse(success);
 
-        var verify = Assert.Single(
+        var verify = TestSeq.Single(
             activities,
             activity =>
                 activity.TraceId == parent.TraceId &&
                 activity.OperationName == "sigstore.verify");
-        Assert.Equal(ActivityStatusCode.Error, verify.Status);
-        Assert.Same(parent, verify.Parent);
-        Assert.Equal("inherited", verify.GetBaggageItem("telemetry-test"));
-        Assert.Equal("bundle_invalid", verify.GetTagItem("error.type"));
-        Assert.Equal("stream", verify.GetTagItem("sigstore.verify.input_type"));
-        Assert.Equal("unknown", verify.GetTagItem("sigstore.bundle.type"));
-        Assert.Equal(
+        Assert.AreEqual(ActivityStatusCode.Error, verify.Status);
+        Assert.AreSame(parent, verify.Parent);
+        Assert.AreEqual("inherited", verify.GetBaggageItem("telemetry-test"));
+        Assert.AreEqual("bundle_invalid", verify.GetTagItem("error.type"));
+        Assert.AreEqual("stream", verify.GetTagItem("sigstore.verify.input_type"));
+        Assert.AreEqual("unknown", verify.GetTagItem("sigstore.bundle.type"));
+        Assert.AreEqual(
             "certificate",
             verify.GetTagItem("sigstore.verification.material"));
 
-        var duration = Assert.Single(
+        var duration = TestSeq.Single(
             measurements,
             measurement =>
                 measurement.Name == "sigstore.verify.duration");
-        Assert.Equal("bundle_invalid", duration.Tags["error.type"]);
-        Assert.Equal("stream", duration.Tags["sigstore.verify.input_type"]);
+        Assert.AreEqual("bundle_invalid", duration.Tags["error.type"]);
+        Assert.AreEqual("stream", duration.Tags["sigstore.verify.input_type"]);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "sigstore.verify.active" &&
-                measurement.Value == 0);
+                measurement.Value == 0,
+            measurements);
 
         Assert.Contains("sigstore.sign.duration", instruments);
         Assert.Contains("sigstore.sign.active", instruments);
@@ -69,7 +66,7 @@ public sealed class TelemetryTests
         Assert.Contains("sigstore.verify.active", instruments);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignFailureEmitsNestedOidcActivity()
     {
         using var activityListener = CreateActivityListener(out var activities);
@@ -92,44 +89,44 @@ public sealed class TelemetryTests
         await tokenProvider.Started.WaitAsync(TimeSpan.FromSeconds(5));
         meterListener.RecordObservableInstruments();
         tokenProvider.Fail(new InvalidOperationException("Token acquisition failed."));
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => signTask);
         meterListener.RecordObservableInstruments();
 
         var traceActivities = activities
             .Where(activity => activity.TraceId == parent.TraceId)
             .ToList();
-        var sign = Assert.Single(
+        var sign = TestSeq.Single(
             traceActivities,
             activity => activity.OperationName == "sigstore.sign");
-        var oidc = Assert.Single(
+        var oidc = TestSeq.Single(
             traceActivities,
             activity =>
                 activity.OperationName == "sigstore.oidc.token.get");
 
-        Assert.Equal(sign.SpanId, oidc.ParentSpanId);
-        Assert.Equal(ActivityStatusCode.Error, sign.Status);
-        Assert.Equal(ActivityStatusCode.Error, oidc.Status);
-        Assert.Equal(
+        Assert.AreEqual(sign.SpanId, oidc.ParentSpanId);
+        Assert.AreEqual(ActivityStatusCode.Error, sign.Status);
+        Assert.AreEqual(ActivityStatusCode.Error, oidc.Status);
+        Assert.AreEqual(
             typeof(InvalidOperationException).FullName,
             sign.GetTagItem("error.type"));
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "sigstore.sign.duration" &&
                 Equals(
                     measurement.Tags["error.type"],
-                    typeof(InvalidOperationException).FullName));
+                    typeof(InvalidOperationException).FullName),
+            measurements);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "sigstore.sign.active" &&
-                measurement.Value == 1);
+                measurement.Value == 1,
+            measurements);
         Assert.Contains(
-            measurements,
             measurement =>
                 measurement.Name == "sigstore.sign.active" &&
-                measurement.Value == 0);
+                measurement.Value == 0,
+            measurements);
     }
 
     private static ActivityListener CreateActivityListener(

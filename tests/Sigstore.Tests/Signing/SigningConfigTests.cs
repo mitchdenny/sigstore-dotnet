@@ -2,6 +2,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Signing;
 
+[TestClass]
 public class SigningConfigTests
 {
     private const string SampleConfig = """
@@ -45,59 +46,59 @@ public class SigningConfigTests
     }
     """;
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesAllServiceLists()
     {
         var config = SigningConfig.Deserialize(SampleConfig);
 
-        Assert.Single(config.CaUrls);
-        Assert.Equal(2, config.RekorTlogUrls.Count);
-        Assert.Single(config.TsaUrls);
+        TestSeq.Single(config.CaUrls);
+        Assert.AreEqual(2, config.RekorTlogUrls.Count);
+        TestSeq.Single(config.TsaUrls);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesUrls()
     {
         var config = SigningConfig.Deserialize(SampleConfig);
 
-        Assert.Equal(new Uri("https://fulcio.sigstage.dev"), config.CaUrls[0].Url);
-        Assert.Equal(new Uri("https://rekor.sigstage.dev"), config.RekorTlogUrls[0].Url);
-        Assert.Equal(new Uri("https://rekor-new.sigstage.dev"), config.RekorTlogUrls[1].Url);
+        Assert.AreEqual(new Uri("https://fulcio.sigstage.dev"), config.CaUrls[0].Url);
+        Assert.AreEqual(new Uri("https://rekor.sigstage.dev"), config.RekorTlogUrls[0].Url);
+        Assert.AreEqual(new Uri("https://rekor-new.sigstage.dev"), config.RekorTlogUrls[1].Url);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesApiVersions()
     {
         var config = SigningConfig.Deserialize(SampleConfig);
 
-        Assert.Equal(2, config.CaUrls[0].MajorApiVersion);
-        Assert.Equal(1, config.RekorTlogUrls[0].MajorApiVersion);
-        Assert.Equal(2, config.RekorTlogUrls[1].MajorApiVersion);
+        Assert.AreEqual(2, config.CaUrls[0].MajorApiVersion);
+        Assert.AreEqual(1, config.RekorTlogUrls[0].MajorApiVersion);
+        Assert.AreEqual(2, config.RekorTlogUrls[1].MajorApiVersion);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesValidityPeriods()
     {
         var config = SigningConfig.Deserialize(SampleConfig);
 
-        Assert.Equal(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), config.CaUrls[0].ValidFrom);
-        Assert.Null(config.CaUrls[0].ValidTo);
+        Assert.AreEqual(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), config.CaUrls[0].ValidFrom);
+        Assert.IsNull(config.CaUrls[0].ValidTo);
 
-        Assert.Equal(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), config.RekorTlogUrls[0].ValidTo);
+        Assert.AreEqual(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), config.RekorTlogUrls[0].ValidTo);
     }
 
-    [Fact]
+    [TestMethod]
     public void SelectBest_ReturnsHighestApiVersion()
     {
         var config = SigningConfig.Deserialize(SampleConfig);
         var best = SigningConfig.SelectBest(config.RekorTlogUrls);
 
-        Assert.NotNull(best);
-        Assert.Equal(new Uri("https://rekor-new.sigstage.dev"), best.Url);
-        Assert.Equal(2, best.MajorApiVersion);
+        Assert.IsNotNull(best);
+        Assert.AreEqual(new Uri("https://rekor-new.sigstage.dev"), best.Url);
+        Assert.AreEqual(2, best.MajorApiVersion);
     }
 
-    [Fact]
+    [TestMethod]
     public void SelectBest_FiltersExpiredEndpoints()
     {
         var endpoints = new List<SigningServiceEndpoint>
@@ -120,11 +121,11 @@ public class SigningConfigTests
 
         var best = SigningConfig.SelectBest(endpoints);
 
-        Assert.NotNull(best);
-        Assert.Equal(new Uri("https://current.example.com"), best.Url);
+        Assert.IsNotNull(best);
+        Assert.AreEqual(new Uri("https://current.example.com"), best.Url);
     }
 
-    [Fact]
+    [TestMethod]
     public void SelectBest_ReturnsNull_WhenNoValidEndpoints()
     {
         var endpoints = new List<SigningServiceEndpoint>
@@ -139,20 +140,20 @@ public class SigningConfigTests
         };
 
         var best = SigningConfig.SelectBest(endpoints);
-        Assert.Null(best);
+        Assert.IsNull(best);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_EmptyConfig()
     {
         var config = SigningConfig.Deserialize("{}");
 
-        Assert.Empty(config.CaUrls);
-        Assert.Empty(config.RekorTlogUrls);
-        Assert.Empty(config.TsaUrls);
+        Assert.IsEmpty(config.CaUrls);
+        Assert.IsEmpty(config.RekorTlogUrls);
+        Assert.IsEmpty(config.TsaUrls);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_DefaultApiVersion_Is1()
     {
         var json = """
@@ -167,6 +168,6 @@ public class SigningConfigTests
         """;
 
         var config = SigningConfig.Deserialize(json);
-        Assert.Equal(1, config.CaUrls[0].MajorApiVersion);
+        Assert.AreEqual(1, config.CaUrls[0].MajorApiVersion);
     }
 }

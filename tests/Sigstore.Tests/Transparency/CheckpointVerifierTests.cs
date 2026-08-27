@@ -2,9 +2,10 @@ using Sigstore;
 
 namespace Sigstore.Tests.Transparency;
 
+[TestClass]
 public class CheckpointVerifierTests
 {
-    [Fact]
+    [TestMethod]
     public void ParseCheckpoint_ValidFormat_ReturnsData()
     {
         var rootHashBytes = new byte[32];
@@ -15,37 +16,37 @@ public class CheckpointVerifierTests
 
         var data = CheckpointVerifier.ParseCheckpoint(checkpoint);
 
-        Assert.NotNull(data);
-        Assert.Equal("rekor.sigstore.dev", data.Origin);
-        Assert.Equal(123456, data.TreeSize);
-        Assert.Equal(rootHashBytes, data.RootHash);
+        Assert.IsNotNull(data);
+        Assert.AreEqual("rekor.sigstore.dev", data.Origin);
+        Assert.AreEqual(123456, data.TreeSize);
+        TestSeq.AreEqual(rootHashBytes, data.RootHash);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseCheckpoint_MissingTreeSize_ReturnsNull()
     {
         var checkpoint = "rekor.sigstore.dev\nnotanumber\nAAAA\n\n\u2014 sig\n";
         var data = CheckpointVerifier.ParseCheckpoint(checkpoint);
-        Assert.Null(data);
+        Assert.IsNull(data);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseCheckpoint_TooFewLines_ReturnsNull()
     {
         var checkpoint = "rekor.sigstore.dev\n";
         var data = CheckpointVerifier.ParseCheckpoint(checkpoint);
-        Assert.Null(data);
+        Assert.IsNull(data);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseCheckpoint_InvalidBase64RootHash_ReturnsNull()
     {
         var checkpoint = "rekor.sigstore.dev\n100\n!!!invalid-base64!!!\n\n\u2014 sig\n";
         var data = CheckpointVerifier.ParseCheckpoint(checkpoint);
-        Assert.Null(data);
+        Assert.IsNull(data);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyCheckpoint_InvalidFormat_ReturnsNull()
     {
         var result = CheckpointVerifier.VerifyCheckpoint(
@@ -53,10 +54,10 @@ public class CheckpointVerifierTests
             ReadOnlySpan<byte>.Empty,
             ReadOnlySpan<byte>.Empty);
 
-        Assert.Null(result);
+        Assert.IsNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyCheckpoint_NoMatchingKeyId_ReturnsNull()
     {
         var rootHashBytes = new byte[32];
@@ -77,10 +78,10 @@ public class CheckpointVerifierTests
             pubKey,
             expectedKeyId);
 
-        Assert.Null(result);
+        Assert.IsNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyCheckpoint_WithEcdsaSignature_Verifies()
     {
         using var ecdsa = System.Security.Cryptography.ECDsa.Create(
@@ -109,9 +110,9 @@ public class CheckpointVerifierTests
             pubKeySpki,
             keyId);
 
-        Assert.NotNull(result);
-        Assert.Equal("test-origin", result.Origin);
-        Assert.Equal(42, result.TreeSize);
-        Assert.Equal(rootHash, result.RootHash);
+        Assert.IsNotNull(result);
+        Assert.AreEqual("test-origin", result.Origin);
+        Assert.AreEqual(42, result.TreeSize);
+        TestSeq.AreEqual(rootHash, result.RootHash);
     }
 }

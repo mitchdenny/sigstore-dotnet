@@ -4,9 +4,10 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class VerificationResultTests
 {
-    [Fact]
+    [TestMethod]
     public void VerificationResult_CanRepresentSuccess()
     {
         var result = new VerificationResult
@@ -27,12 +28,12 @@ public class VerificationResultTests
             ]
         };
 
-        Assert.NotNull(result.SignerIdentity);
-        Assert.Null(result.FailureReason);
-        Assert.Single(result.VerifiedTimestamps);
+        Assert.IsNotNull(result.SignerIdentity);
+        Assert.IsNull(result.FailureReason);
+        TestSeq.Single(result.VerifiedTimestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationResult_CanRepresentFailure()
     {
         var result = new VerificationResult
@@ -40,42 +41,42 @@ public class VerificationResultTests
             FailureReason = "Certificate chain validation failed: expired certificate"
         };
 
-        Assert.Null(result.SignerIdentity);
-        Assert.NotNull(result.FailureReason);
+        Assert.IsNull(result.SignerIdentity);
+        Assert.IsNotNull(result.FailureReason);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationException_ContainsMessage()
     {
         var exception = new VerificationException("Certificate expired");
 
-        Assert.Equal("Certificate expired", exception.Message);
+        Assert.AreEqual("Certificate expired", exception.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationException_CanWrapInnerException()
     {
         var inner = new InvalidOperationException("inner");
         var exception = new VerificationException("Verification failed", inner);
 
-        Assert.Same(inner, exception.InnerException);
+        Assert.AreSame(inner, exception.InnerException);
     }
 
-    [Fact]
+    [TestMethod]
     public void TimestampSource_HasExpectedValues()
     {
-        Assert.Equal(0, (int)TimestampSource.TimestampAuthority);
-        Assert.Equal(1, (int)TimestampSource.TransparencyLog);
+        Assert.AreEqual(0, (int)TimestampSource.TimestampAuthority);
+        Assert.AreEqual(1, (int)TimestampSource.TransparencyLog);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationResult_Statement_IsNullByDefault()
     {
         var result = new VerificationResult();
-        Assert.Null(result.Statement);
+        Assert.IsNull(result.Statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationResult_Statement_CanBePopulated()
     {
         var statement = InTotoStatement.Parse("""
@@ -92,11 +93,11 @@ public class VerificationResultTests
             Statement = statement
         };
 
-        Assert.NotNull(result.Statement);
-        Assert.Equal("https://slsa.dev/provenance/v1", result.Statement!.PredicateType);
+        Assert.IsNotNull(result.Statement);
+        Assert.AreEqual("https://slsa.dev/provenance/v1", result.Statement!.PredicateType);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifiedIdentity_Extensions_IsNullByDefault()
     {
         var identity = new VerifiedIdentity
@@ -105,10 +106,10 @@ public class VerificationResultTests
             Issuer = "https://accounts.google.com"
         };
 
-        Assert.Null(identity.Extensions);
+        Assert.IsNull(identity.Extensions);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifiedIdentity_Extensions_CanBePopulated()
     {
         var identity = new VerifiedIdentity
@@ -124,9 +125,9 @@ public class VerificationResultTests
             }
         };
 
-        Assert.NotNull(identity.Extensions);
-        Assert.Equal("https://github.com/myorg/myrepo", identity.Extensions!.SourceRepositoryUri);
-        Assert.Equal("github-hosted", identity.Extensions.RunnerEnvironment);
-        Assert.Equal("push", identity.Extensions.BuildTrigger);
+        Assert.IsNotNull(identity.Extensions);
+        Assert.AreEqual("https://github.com/myorg/myrepo", identity.Extensions!.SourceRepositoryUri);
+        Assert.AreEqual("github-hosted", identity.Extensions.RunnerEnvironment);
+        Assert.AreEqual("push", identity.Extensions.BuildTrigger);
     }
 }
