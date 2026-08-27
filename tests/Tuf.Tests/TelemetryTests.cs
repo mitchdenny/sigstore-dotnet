@@ -5,18 +5,25 @@ using System.Diagnostics.Metrics;
 namespace Tuf.Tests;
 
 [TestClass]
+// The *.active gauges report a process-global in-flight count, so these
+// assertions only hold when nothing else is exercising the library at the
+// same time. Measurement attribution is handled by the TraceId filter in
+// CreateMeterListener, but a global count cannot be filtered, so this class
+// has to run on its own.
+[DoNotParallelize]
 public sealed class TelemetryTests
 {
     [TestMethod]
     public async Task TargetGetEmitsActivitiesAndMetricsForCacheMissAndHit()
     {
-        using var activityListener = CreateActivityListener(out var activities);
-        using var meterListener = CreateMeterListener(
-            out var measurements,
-            out var instruments);
         using var parent = new Activity("telemetry-test")
             .SetIdFormat(ActivityIdFormat.W3C)
             .Start();
+        using var activityListener = CreateActivityListener(out var activities);
+        using var meterListener = CreateMeterListener(
+            parent.TraceId,
+            out var measurements,
+            out var instruments);
 
         var repository = new RepositorySimulator();
         var content = "target-content"u8.ToArray();
@@ -121,13 +128,14 @@ public sealed class TelemetryTests
     [TestMethod]
     public async Task ExpiredMetadataSetsErrorType()
     {
-        using var activityListener = CreateActivityListener(out var activities);
-        using var meterListener = CreateMeterListener(
-            out var measurements,
-            out _);
         using var parent = new Activity("telemetry-test")
             .SetIdFormat(ActivityIdFormat.W3C)
             .Start();
+        using var activityListener = CreateActivityListener(out var activities);
+        using var meterListener = CreateMeterListener(
+            parent.TraceId,
+            out var measurements,
+            out _);
 
         var repository = new RepositorySimulator();
         repository.ExpiredRoles.Add("timestamp");
@@ -177,6 +185,7 @@ public sealed class TelemetryTests
     }
 
     private static MeterListener CreateMeterListener(
+        ActivityTraceId traceId,
         out ConcurrentQueue<MetricMeasurement> measurements,
         out ConcurrentQueue<string> instruments)
     {
@@ -199,20 +208,32 @@ public sealed class TelemetryTests
         };
         listener.SetMeasurementEventCallback<double>(
             (instrument, value, tags, _) =>
-                capturedMeasurements.Enqueue(
-                    new MetricMeasurement(
-                        instrument.Name,
-                        value,
-                        CopyTags(tags))));
+                Capture(instrument.Name, value, tags));
         listener.SetMeasurementEventCallback<long>(
             (instrument, value, tags, _) =>
-                capturedMeasurements.Enqueue(
-                    new MetricMeasurement(
-                        instrument.Name,
-                        value,
-                        CopyTags(tags))));
+                Capture(instrument.Name, value, tags));
         listener.Start();
         return listener;
+
+        // The Meter is process-wide, so without this filter a concurrently
+        // running test's measurements would land in our queue. Durations are
+        // recorded before the owning activity is disposed, and observable
+        // instruments are sampled by the test itself, so in both cases
+        // Activity.Current still belongs to the test that caused the
+        // measurement.
+        void Capture(
+            string name,
+            double value,
+            ReadOnlySpan<KeyValuePair<string, object?>> tags)
+        {
+            if (Activity.Current?.TraceId != traceId)
+            {
+                return;
+            }
+
+            capturedMeasurements.Enqueue(
+                new MetricMeasurement(name, value, CopyTags(tags)));
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> CopyTags(
