@@ -4,9 +4,10 @@ using Tuf.Tests;
 
 namespace Sigstore.Tests;
 
+[TestClass]
 public sealed class TufTrustRootProviderTests
 {
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_UsesMemoryWithinRefreshInterval()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -22,11 +23,11 @@ public sealed class TufTrustRootProviderTests
         var requestCount = countingRepository.RequestCount;
         var second = await provider.GetTrustRootAsync();
 
-        Assert.Same(first, second);
-        Assert.Equal(requestCount, countingRepository.RequestCount);
+        Assert.AreSame(first, second);
+        Assert.AreEqual(requestCount, countingRepository.RequestCount);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_CoalescesConcurrentRefreshes()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -41,11 +42,11 @@ public sealed class TufTrustRootProviderTests
         var results = await Task.WhenAll(
             Enumerable.Range(0, 20).Select(_ => provider.GetTrustRootAsync()));
 
-        Assert.All(results, result => Assert.Same(results[0], result));
-        Assert.Equal(1, countingRepository.TimestampRequests);
+        TestSeq.All(results, result => Assert.AreSame(results[0], result));
+        Assert.AreEqual(1, countingRepository.TimestampRequests);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_RefreshesAfterInterval()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -63,11 +64,11 @@ public sealed class TufTrustRootProviderTests
 
         await provider.GetTrustRootAsync();
 
-        Assert.True(countingRepository.RequestCount > requestCount);
-        Assert.Equal(2, countingRepository.TimestampRequests);
+        Assert.IsTrue(countingRepository.RequestCount > requestCount);
+        Assert.AreEqual(2, countingRepository.TimestampRequests);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_ZeroRefreshIntervalRefreshesEveryRequest()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -82,10 +83,10 @@ public sealed class TufTrustRootProviderTests
         await provider.GetTrustRootAsync();
         await provider.GetTrustRootAsync();
 
-        Assert.Equal(2, countingRepository.TimestampRequests);
+        Assert.AreEqual(2, countingRepository.TimestampRequests);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_ThrottlesRetriesAfterTransientFailure()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -107,16 +108,16 @@ public sealed class TufTrustRootProviderTests
         clock.Advance(TimeSpan.FromMinutes(4));
         var throttled = await provider.GetTrustRootAsync();
 
-        Assert.Same(cached, fallback);
-        Assert.Same(cached, throttled);
-        Assert.Equal(failedRequestCount, countingRepository.RequestCount);
+        Assert.AreSame(cached, fallback);
+        Assert.AreSame(cached, throttled);
+        Assert.AreEqual(failedRequestCount, countingRepository.RequestCount);
 
         clock.Advance(TimeSpan.FromMinutes(1));
         await provider.GetTrustRootAsync();
-        Assert.True(countingRepository.RequestCount > failedRequestCount);
+        Assert.IsTrue(countingRepository.RequestCount > failedRequestCount);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task GetTrustRootAsync_DoesNotUseCachePastSignedExpiry()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
@@ -134,14 +135,14 @@ public sealed class TufTrustRootProviderTests
         clock.Advance(TimeSpan.FromMinutes(31));
         countingRepository.Unavailable = true;
 
-        await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => provider.GetTrustRootAsync());
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_RejectsNegativeRefreshIntervals()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             new TufTrustRootProvider(
                 new Uri("https://example.com/"),
                 new TufTrustRootProviderOptions
@@ -150,7 +151,7 @@ public sealed class TufTrustRootProviderTests
                     RefreshInterval = TimeSpan.FromSeconds(-1)
                 }));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             new TufTrustRootProvider(
                 new Uri("https://example.com/"),
                 new TufTrustRootProviderOptions
@@ -160,7 +161,7 @@ public sealed class TufTrustRootProviderTests
                 }));
     }
 
-    [Fact]
+    [TestMethod]
     public void DefaultCachePath_UsesSemanticVersionFamily()
     {
         var home = Path.Combine(Path.GetTempPath(), "home");
@@ -170,7 +171,7 @@ public sealed class TufTrustRootProviderTests
             TufTrustRootProvider.ProductionUrl,
             "1.2.3-preview.1+build.linux");
 
-        Assert.Equal(
+        Assert.AreEqual(
             Path.Combine(
                 home,
                 ".sigstore",
@@ -181,7 +182,7 @@ public sealed class TufTrustRootProviderTests
             path);
     }
 
-    [Fact]
+    [TestMethod]
     public void DefaultCachePath_UsesStampedAssemblyVersionFamily()
     {
         var informationalVersion = typeof(TufTrustRootProvider)
@@ -195,14 +196,14 @@ public sealed class TufTrustRootProviderTests
             TufTrustRootProvider.ProductionUrl,
             informationalVersion);
 
-        Assert.True(System.Version.TryParse(versionFamily, out var parsedVersion));
-        Assert.Equal(3, parsedVersion.ToString().Split('.').Length);
+        Assert.IsTrue(System.Version.TryParse(versionFamily, out var parsedVersion));
+        Assert.AreEqual(3, parsedVersion.ToString().Split('.').Length);
         Assert.Contains(
             Path.Combine(".sigstore", "dotnet", versionFamily, "tuf"),
             path);
     }
 
-    [Fact]
+    [TestMethod]
     public void PrivateCacheDirectory_RequiresOwnerOnlyUnixMode()
     {
         if (OperatingSystem.IsWindows())
@@ -222,9 +223,9 @@ public sealed class TufTrustRootProviderTests
                 UnixFileMode.GroupRead |
                 UnixFileMode.GroupExecute);
 
-            Assert.False(
+            Assert.IsFalse(
                 TufTrustRootProvider.TryPreparePrivateCacheDirectory(path));
-            Assert.True(
+            Assert.IsTrue(
                 (File.GetUnixFileMode(path) & UnixFileMode.GroupRead) != 0);
         }
         finally

@@ -5,55 +5,56 @@ using Sigstore;
 
 namespace Sigstore.Tests.Signing;
 
+[TestClass]
 public class SigstoreSignerTests
 {
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_Stream_ThrowsOnNull()
     {
         var signer = CreateSigner();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => signer.SignAsync((Stream)null!));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task AttestAsync_ThrowsOnNull()
     {
         var signer = CreateSigner();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => signer.AttestAsync(null!));
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_ThrowsOnNullFulcioClient()
     {
-        Assert.Throws<ArgumentNullException>(
+        Assert.ThrowsExactly<ArgumentNullException>(
             () => new SigstoreSigner(null!, new FakeRekorClient(), new FakeTsa(), new FakeTokenProvider()));
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_ThrowsOnNullRekorClient()
     {
-        Assert.Throws<ArgumentNullException>(
+        Assert.ThrowsExactly<ArgumentNullException>(
             () => new SigstoreSigner(new FakeFulcioClient(), null!, new FakeTsa(), new FakeTokenProvider()));
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_ThrowsOnNullTimestampAuthority()
     {
-        Assert.Throws<ArgumentNullException>(
+        Assert.ThrowsExactly<ArgumentNullException>(
             () => new SigstoreSigner(new FakeFulcioClient(), new FakeRekorClient(), null!, new FakeTokenProvider()));
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_ThrowsOnNullTokenProvider()
     {
-        Assert.Throws<ArgumentNullException>(
+        Assert.ThrowsExactly<ArgumentNullException>(
             () => new SigstoreSigner(new FakeFulcioClient(), new FakeRekorClient(), new FakeTsa(), null!));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_ReturnsBundle_WithCorrectMediaType()
     {
         var (signer, _) = CreateSignerWithTestCert();
@@ -61,10 +62,10 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_ReturnsBundle_WithCertificateFromFulcio()
     {
         var (signer, certBytes) = CreateSignerWithTestCert();
@@ -72,11 +73,11 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Equal(certBytes, bundle.VerificationMaterial.Certificate);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        Assert.AreEqual(certBytes, bundle.VerificationMaterial.Certificate);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_ReturnsBundle_WithSignature()
     {
         var (signer, _) = CreateSignerWithTestCert();
@@ -84,11 +85,11 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.NotNull(bundle.MessageSignature);
-        Assert.True(bundle.MessageSignature.Signature.Length > 0);
+        Assert.IsNotNull(bundle.MessageSignature);
+        Assert.IsTrue(bundle.MessageSignature.Signature.Length > 0);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_ReturnsBundle_WithTlogEntry()
     {
         var (signer, _) = CreateSignerWithTestCert();
@@ -96,12 +97,12 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Single(bundle.VerificationMaterial.TlogEntries);
-        Assert.Equal(42, bundle.VerificationMaterial.TlogEntries[0].LogIndex);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        TestSeq.Single(bundle.VerificationMaterial.TlogEntries);
+        Assert.AreEqual(42, bundle.VerificationMaterial.TlogEntries[0].LogIndex);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_ReturnsBundle_WithTimestamp()
     {
         var (signer, _) = CreateSignerWithTestCert();
@@ -109,12 +110,12 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
-        Assert.Equal(new byte[] { 0xDE, 0xAD }, bundle.VerificationMaterial.Rfc3161Timestamps[0]);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        TestSeq.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
+        TestSeq.AreEqual(new byte[] { 0xDE, 0xAD }, bundle.VerificationMaterial.Rfc3161Timestamps[0].ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public async Task AttestAsync_ReturnsDsseBundle()
     {
         var (signer, certBytes) = CreateSignerWithTestCert();
@@ -122,20 +123,20 @@ public class SigstoreSignerTests
 
         var bundle = await signer.AttestAsync(statement);
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
-        Assert.NotNull(bundle.DsseEnvelope);
-        Assert.Null(bundle.MessageSignature);
-        Assert.Equal("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
-        Assert.Equal(Encoding.UTF8.GetBytes(statement), bundle.DsseEnvelope.Payload);
-        Assert.Single(bundle.DsseEnvelope.Signatures);
-        Assert.True(bundle.DsseEnvelope.Signatures[0].Sig.Length > 0);
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Equal(certBytes, bundle.VerificationMaterial.Certificate);
-        Assert.Single(bundle.VerificationMaterial.TlogEntries);
-        Assert.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
+        Assert.IsNotNull(bundle.DsseEnvelope);
+        Assert.IsNull(bundle.MessageSignature);
+        Assert.AreEqual("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
+        TestSeq.AreEqual(Encoding.UTF8.GetBytes(statement), bundle.DsseEnvelope.Payload.ToArray());
+        TestSeq.Single(bundle.DsseEnvelope.Signatures);
+        Assert.IsTrue(bundle.DsseEnvelope.Signatures[0].Sig.Length > 0);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        Assert.AreEqual(certBytes, bundle.VerificationMaterial.Certificate);
+        TestSeq.Single(bundle.VerificationMaterial.TlogEntries);
+        TestSeq.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SignAsync_DisposesEphemeralKey()
     {
         // If the key were not disposed, we'd just verify the flow completes without error.
@@ -146,8 +147,8 @@ public class SigstoreSignerTests
 
         var bundle = await signer.SignAsync(artifact);
 
-        Assert.NotNull(bundle);
-        Assert.NotNull(bundle.MessageSignature);
+        Assert.IsNotNull(bundle);
+        Assert.IsNotNull(bundle.MessageSignature);
     }
 
     private static SigstoreSigner CreateSigner() =>

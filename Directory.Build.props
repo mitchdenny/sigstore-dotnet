@@ -16,5 +16,29 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <!--
+    MSTEST0032 ("condition known to be always true") fires on the tests that pin
+    enum members to their protobuf wire values, e.g.
+    Assert.AreEqual(1, (int)HashAlgorithmType.Sha256). The compiler can constant-fold
+    those comparisons, but the assertions are the point: they fail the build if
+    someone reorders an enum and silently breaks wire compatibility. Suppressed
+    repo-wide for test projects since TreatWarningsAsErrors is on.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <NoWarn>$(NoWarn);MSTEST0032</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    Link the shared test helpers into every test project. TestSeq covers the
+    assertions MSTest has no direct equivalent for (collection equality,
+    value-returning Single); MSTestSettings sets assembly-wide parallelism.
+    See tests/Shared/.
+  -->
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <Compile Include="$(MSBuildThisFileDirectory)tests\Shared\TestSeq.cs" Link="Shared\TestSeq.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)tests\Shared\MSTestSettings.cs" Link="Shared\MSTestSettings.cs" />
+    <Using Include="Sigstore.Testing" />
+  </ItemGroup>
+
   <Import Project="$(MSBuildThisFileDirectory)PackageValidationBaseline.props" />
 </Project>

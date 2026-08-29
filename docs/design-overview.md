@@ -150,7 +150,7 @@ The `tests/Sigstore.Tests/` project will be the single, comprehensive test proje
 | **Conformance vectors** | Official sigstore-conformance test bundles | Import test vectors, verify expected pass/fail |
 
 Test tooling:
-- **xUnit** as the test framework
+- **MSTest** (on Microsoft.Testing.Platform) as the test framework
 - **NSubstitute** or **Moq** for mocking interfaces (HTTP clients, service abstractions)
 - **FluentAssertions** for readable assertions
 - Embedded test data via `EmbeddedResource` in the test project

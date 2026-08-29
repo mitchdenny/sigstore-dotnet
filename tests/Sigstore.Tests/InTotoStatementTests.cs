@@ -4,6 +4,7 @@ using Sigstore;
 
 namespace Sigstore.Tests;
 
+[TestClass]
 public class InTotoStatementTests
 {
     private const string ValidStatement = """
@@ -31,42 +32,42 @@ public class InTotoStatementTests
     }
     """;
 
-    [Fact]
+    [TestMethod]
     public void Parse_ValidStatement_ReturnsStatement()
     {
         var statement = InTotoStatement.Parse(ValidStatement);
 
-        Assert.NotNull(statement);
-        Assert.Equal("https://in-toto.io/Statement/v1", statement.Type);
-        Assert.Equal("https://slsa.dev/provenance/v1", statement.PredicateType);
+        Assert.IsNotNull(statement);
+        Assert.AreEqual("https://in-toto.io/Statement/v1", statement.Type);
+        Assert.AreEqual("https://slsa.dev/provenance/v1", statement.PredicateType);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_ValidStatement_HasSubject()
     {
         var statement = InTotoStatement.Parse(ValidStatement)!;
 
-        Assert.Single(statement.Subject);
-        Assert.Equal("mypackage-1.0.0.tgz", statement.Subject[0].Name);
-        Assert.Equal("abc123def456789", statement.Subject[0].Digest["sha256"]);
+        TestSeq.Single(statement.Subject);
+        Assert.AreEqual("mypackage-1.0.0.tgz", statement.Subject[0].Name);
+        Assert.AreEqual("abc123def456789", statement.Subject[0].Digest["sha256"]);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_ValidStatement_HasPredicate()
     {
         var statement = InTotoStatement.Parse(ValidStatement)!;
 
-        Assert.NotNull(statement.Predicate);
-        Assert.Equal(JsonValueKind.Object, statement.Predicate.Value.ValueKind);
+        Assert.IsNotNull(statement.Predicate);
+        Assert.AreEqual(JsonValueKind.Object, statement.Predicate.Value.ValueKind);
 
         var buildType = statement.Predicate.Value
             .GetProperty("buildDefinition")
             .GetProperty("buildType")
             .GetString();
-        Assert.Equal("https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1", buildType);
+        Assert.AreEqual("https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1", buildType);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_MultipleSubjects_AllParsed()
     {
         var json = """
@@ -89,15 +90,15 @@ public class InTotoStatementTests
 
         var statement = InTotoStatement.Parse(json)!;
 
-        Assert.Equal(2, statement.Subject.Count);
-        Assert.Equal("artifact-a", statement.Subject[0].Name);
-        Assert.Equal("artifact-b", statement.Subject[1].Name);
-        Assert.Equal("aaa", statement.Subject[0].Digest["sha256"]);
-        Assert.Equal("bbb", statement.Subject[1].Digest["sha256"]);
-        Assert.Equal("ccc", statement.Subject[1].Digest["sha512"]);
+        Assert.AreEqual(2, statement.Subject.Count);
+        Assert.AreEqual("artifact-a", statement.Subject[0].Name);
+        Assert.AreEqual("artifact-b", statement.Subject[1].Name);
+        Assert.AreEqual("aaa", statement.Subject[0].Digest["sha256"]);
+        Assert.AreEqual("bbb", statement.Subject[1].Digest["sha256"]);
+        Assert.AreEqual("ccc", statement.Subject[1].Digest["sha512"]);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_NoSubjects_ReturnsEmptyList()
     {
         var json = """
@@ -110,11 +111,11 @@ public class InTotoStatementTests
 
         var statement = InTotoStatement.Parse(json)!;
 
-        Assert.NotNull(statement);
-        Assert.Empty(statement.Subject);
+        Assert.IsNotNull(statement);
+        Assert.IsEmpty(statement.Subject);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_NoPredicate_PredicateIsNull()
     {
         var json = """
@@ -127,58 +128,58 @@ public class InTotoStatementTests
 
         var statement = InTotoStatement.Parse(json)!;
 
-        Assert.NotNull(statement);
-        Assert.Null(statement.Predicate);
+        Assert.IsNotNull(statement);
+        Assert.IsNull(statement.Predicate);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_MalformedJson_ReturnsNull()
     {
         var statement = InTotoStatement.Parse("{invalid json!!!");
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_EmptyString_ReturnsNull()
     {
         var statement = InTotoStatement.Parse("");
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_NullString_ReturnsNull()
     {
         var statement = InTotoStatement.Parse((string)null!);
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_FromBytes_ValidStatement()
     {
         var bytes = Encoding.UTF8.GetBytes(ValidStatement);
         var statement = InTotoStatement.Parse(new ReadOnlyMemory<byte>(bytes));
 
-        Assert.NotNull(statement);
-        Assert.Equal("https://in-toto.io/Statement/v1", statement.Type);
-        Assert.Equal("https://slsa.dev/provenance/v1", statement.PredicateType);
+        Assert.IsNotNull(statement);
+        Assert.AreEqual("https://in-toto.io/Statement/v1", statement.Type);
+        Assert.AreEqual("https://slsa.dev/provenance/v1", statement.PredicateType);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_FromBytes_EmptyBytes_ReturnsNull()
     {
         var statement = InTotoStatement.Parse(ReadOnlyMemory<byte>.Empty);
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_FromBytes_MalformedBytes_ReturnsNull()
     {
         var bytes = Encoding.UTF8.GetBytes("not json at all {{{");
         var statement = InTotoStatement.Parse(new ReadOnlyMemory<byte>(bytes));
-        Assert.Null(statement);
+        Assert.IsNull(statement);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_MinimalStatement_OnlyTypeAndPredicateType()
     {
         var json = """
@@ -190,14 +191,14 @@ public class InTotoStatementTests
 
         var statement = InTotoStatement.Parse(json)!;
 
-        Assert.NotNull(statement);
-        Assert.Equal("https://in-toto.io/Statement/v1", statement.Type);
-        Assert.Equal("custom/type/v1", statement.PredicateType);
-        Assert.Empty(statement.Subject);
-        Assert.Null(statement.Predicate);
+        Assert.IsNotNull(statement);
+        Assert.AreEqual("https://in-toto.io/Statement/v1", statement.Type);
+        Assert.AreEqual("custom/type/v1", statement.PredicateType);
+        Assert.IsEmpty(statement.Subject);
+        Assert.IsNull(statement.Predicate);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_SlsaProvenanceV1_CanNavigatePredicate()
     {
         var json = """
@@ -242,14 +243,14 @@ public class InTotoStatementTests
         var workflowRef = workflow.GetProperty("ref").GetString();
         var builderId = predicate.GetProperty("runDetails").GetProperty("builder").GetProperty("id").GetString();
 
-        Assert.Equal("https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1", buildType);
-        Assert.Equal("https://github.com/microsoft/playwright-cli", repo);
-        Assert.Equal(".github/workflows/publish.yml", path);
-        Assert.Equal("refs/tags/v0.1.1", workflowRef);
+        Assert.AreEqual("https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1", buildType);
+        Assert.AreEqual("https://github.com/microsoft/playwright-cli", repo);
+        Assert.AreEqual(".github/workflows/publish.yml", path);
+        Assert.AreEqual("refs/tags/v0.1.1", workflowRef);
         Assert.StartsWith("https://github.com/slsa-framework/", builderId);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_SubjectDigest_MultipleAlgorithms()
     {
         var json = """
@@ -272,13 +273,13 @@ public class InTotoStatementTests
         var statement = InTotoStatement.Parse(json)!;
         var digest = statement.Subject[0].Digest;
 
-        Assert.Equal(3, digest.Count);
-        Assert.Equal("sha256value", digest["sha256"]);
-        Assert.Equal("sha384value", digest["sha384"]);
-        Assert.Equal("sha512value", digest["sha512"]);
+        Assert.AreEqual(3, digest.Count);
+        Assert.AreEqual("sha256value", digest["sha256"]);
+        Assert.AreEqual("sha384value", digest["sha384"]);
+        Assert.AreEqual("sha512value", digest["sha512"]);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_PredicateSurvivesDocumentDisposal()
     {
         // The predicate should be cloned so it survives JsonDocument disposal
@@ -289,15 +290,15 @@ public class InTotoStatementTests
         GC.WaitForPendingFinalizers();
 
         // Should still be accessible
-        Assert.NotNull(statement.Predicate);
+        Assert.IsNotNull(statement.Predicate);
         var buildType = statement.Predicate.Value
             .GetProperty("buildDefinition")
             .GetProperty("buildType")
             .GetString();
-        Assert.NotNull(buildType);
+        Assert.IsNotNull(buildType);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_EmptySubjectArray_ReturnsEmptyList()
     {
         var json = """
@@ -310,10 +311,10 @@ public class InTotoStatementTests
         """;
 
         var statement = InTotoStatement.Parse(json)!;
-        Assert.Empty(statement.Subject);
+        Assert.IsEmpty(statement.Subject);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_SubjectWithNoDigest_HasEmptyDigestDictionary()
     {
         var json = """
@@ -329,8 +330,8 @@ public class InTotoStatementTests
         """;
 
         var statement = InTotoStatement.Parse(json)!;
-        Assert.Single(statement.Subject);
-        Assert.Equal("artifact-no-digest", statement.Subject[0].Name);
-        Assert.Empty(statement.Subject[0].Digest);
+        TestSeq.Single(statement.Subject);
+        Assert.AreEqual("artifact-no-digest", statement.Subject[0].Name);
+        Assert.IsEmpty(statement.Subject[0].Digest);
     }
 }

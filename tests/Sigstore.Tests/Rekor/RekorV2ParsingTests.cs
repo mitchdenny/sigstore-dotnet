@@ -2,9 +2,10 @@ using Sigstore;
 
 namespace Sigstore.Tests.Rekor;
 
+[TestClass]
 public class RekorV2ParsingTests
 {
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_FullResponse()
     {
         var json = """
@@ -36,22 +37,22 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Equal(42, entry.LogIndex);
-        Assert.Equal("testlogid", System.Text.Encoding.UTF8.GetString(entry.LogId.Span));
-        Assert.Equal("hashedrekord", entry.Kind);
-        Assert.Equal("0.0.2", entry.KindVersion);
-        Assert.Equal(1700000000, entry.IntegratedTime);
-        Assert.NotNull(entry.InclusionPromise);
-        Assert.Equal("signed", System.Text.Encoding.UTF8.GetString(entry.InclusionPromise.Value.Span));
-        Assert.NotNull(entry.InclusionProof);
-        Assert.Equal(42, entry.InclusionProof.LogIndex);
-        Assert.Equal(100, entry.InclusionProof.TreeSize);
-        Assert.Equal(2, entry.InclusionProof.Hashes.Count);
-        Assert.Contains("rekor.sigstore.dev", entry.InclusionProof.Checkpoint);
-        Assert.Equal("body", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(entry.Body!)));
+        Assert.AreEqual(42, entry.LogIndex);
+        Assert.AreEqual("testlogid", System.Text.Encoding.UTF8.GetString(entry.LogId.Span));
+        Assert.AreEqual("hashedrekord", entry.Kind);
+        Assert.AreEqual("0.0.2", entry.KindVersion);
+        Assert.AreEqual(1700000000, entry.IntegratedTime);
+        Assert.IsNotNull(entry.InclusionPromise);
+        Assert.AreEqual("signed", System.Text.Encoding.UTF8.GetString(entry.InclusionPromise.Value.Span));
+        Assert.IsNotNull(entry.InclusionProof);
+        Assert.AreEqual(42, entry.InclusionProof.LogIndex);
+        Assert.AreEqual(100, entry.InclusionProof.TreeSize);
+        Assert.AreEqual(2, entry.InclusionProof.Hashes.Count);
+        Assert.Contains("rekor.sigstore.dev", entry.InclusionProof.Checkpoint!);
+        Assert.AreEqual("body", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(entry.Body!)));
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_NullInclusionPromise()
     {
         var json = """
@@ -74,11 +75,11 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Null(entry.InclusionPromise);
-        Assert.NotNull(entry.InclusionProof);
+        Assert.IsNull(entry.InclusionPromise);
+        Assert.IsNotNull(entry.InclusionProof);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_NumericValues()
     {
         // protobuf-JSON may encode int64 as number instead of string
@@ -94,11 +95,11 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Equal(99, entry.LogIndex);
-        Assert.Equal(1700000000, entry.IntegratedTime);
+        Assert.AreEqual(99, entry.LogIndex);
+        Assert.AreEqual(1700000000, entry.IntegratedTime);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_MissingOptionalFields()
     {
         var json = """
@@ -113,11 +114,11 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Null(entry.InclusionPromise);
-        Assert.Null(entry.InclusionProof);
+        Assert.IsNull(entry.InclusionPromise);
+        Assert.IsNull(entry.InclusionProof);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_NullLogId()
     {
         var json = """
@@ -132,10 +133,10 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.True(entry.LogId.Length == 0);
+        Assert.IsTrue(entry.LogId.Length == 0);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_NullKindVersion()
     {
         var json = """
@@ -150,11 +151,11 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.Null(entry.Kind);
-        Assert.Null(entry.KindVersion);
+        Assert.IsNull(entry.Kind);
+        Assert.IsNull(entry.KindVersion);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseV2LogEntry_NullCheckpoint()
     {
         var json = """
@@ -176,7 +177,7 @@ public class RekorV2ParsingTests
 
         var entry = RekorHttpClient.ParseV2LogEntry(json);
 
-        Assert.NotNull(entry.InclusionProof);
-        Assert.Null(entry.InclusionProof.Checkpoint);
+        Assert.IsNotNull(entry.InclusionProof);
+        Assert.IsNull(entry.InclusionProof.Checkpoint);
     }
 }

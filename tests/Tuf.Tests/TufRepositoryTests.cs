@@ -2,9 +2,10 @@ using System.Net;
 
 namespace Tuf.Tests;
 
+[TestClass]
 public sealed class TufRepositoryTests
 {
-    [Fact]
+    [TestMethod]
     public async Task HttpTufRepository_FetchMetadata_EncodesRoleName()
     {
         Uri? requestedUri = null;
@@ -21,12 +22,12 @@ public sealed class TufRepositoryTests
 
         await repository.FetchMetadataAsync("../delegatedrole", 2);
 
-        Assert.Equal(
+        Assert.AreEqual(
             "https://example.com/metadata/2...%2Fdelegatedrole.json",
             requestedUri?.ToString());
     }
 
-    [Fact]
+    [TestMethod]
     public async Task HttpTufRepository_FetchMetadata_ServerErrorThrows()
     {
         using var handler = new RecordingMessageHandler(_ =>
@@ -37,11 +38,11 @@ public sealed class TufRepositoryTests
             new Uri("https://example.com/metadata/"),
             new Uri("https://example.com/targets/"));
 
-        await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => repository.FetchMetadataAsync("root", 2));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task HttpTufRepository_FetchTarget_ServerErrorThrows()
     {
         using var handler = new RecordingMessageHandler(_ =>
@@ -52,7 +53,7 @@ public sealed class TufRepositoryTests
             new Uri("https://example.com/metadata/"),
             new Uri("https://example.com/targets/"));
 
-        await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => repository.FetchTargetAsync("artifact.txt"));
     }
 

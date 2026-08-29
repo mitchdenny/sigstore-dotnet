@@ -5,70 +5,71 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class SigstoreVerifierTests
 {
-    [Fact]
+    [TestMethod]
     public async Task VerifyStreamAsync_ThrowsOnNullArtifact()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.VerifyStreamAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task VerifyStreamAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.VerifyStreamAsync(Stream.Null, null!, new VerificationPolicy()));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task VerifyStreamAsync_ThrowsOnNullPolicy()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.VerifyStreamAsync(Stream.Null, new SigstoreBundle(), null!));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ThrowsOnNullArtifact()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.TryVerifyStreamAsync(null!, new SigstoreBundle(), new VerificationPolicy()));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.TryVerifyStreamAsync(Stream.Null, null!, new VerificationPolicy()));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ThrowsOnNullPolicy()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.TryVerifyStreamAsync(Stream.Null, new SigstoreBundle(), null!));
     }
 
-    [Fact]
+    [TestMethod]
     public void Constructor_ThrowsOnNullTrustRootProvider()
     {
-        Assert.Throws<ArgumentNullException>(
+        Assert.ThrowsExactly<ArgumentNullException>(
             () => new SigstoreVerifier(null!));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoVerificationMaterial()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
@@ -76,12 +77,12 @@ public class SigstoreVerifierTests
 
         var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
-        Assert.False(success);
-        Assert.NotNull(result);
+        Assert.IsFalse(success);
+        Assert.IsNotNull(result);
         Assert.Contains("no verification material", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoCertificate()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
@@ -92,11 +93,11 @@ public class SigstoreVerifierTests
 
         var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("no signing certificate", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenNoTimestamps()
     {
         var (cert, _) = CreateSelfSignedCert();
@@ -112,11 +113,11 @@ public class SigstoreVerifierTests
 
         var (success, result) = await verifier.TryVerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy());
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("No verified timestamps", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenIdentityMismatch()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -148,23 +149,23 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("does not match", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task VerifyStreamAsync_ThrowsVerificationException_OnFailure()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
 
-        var ex = await Assert.ThrowsAsync<VerificationException>(
+        var ex = await Assert.ThrowsExactlyAsync<VerificationException>(
             () => verifier.VerifyStreamAsync(Stream.Null, bundle, new VerificationPolicy()));
 
         Assert.Contains("no verification material", ex.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_Succeeds_WithValidSignatureAndNoIdentityPolicy()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -191,12 +192,12 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.True(success);
-        Assert.NotNull(result);
-        Assert.NotEmpty(result!.VerifiedTimestamps);
+        Assert.IsTrue(success);
+        Assert.IsNotNull(result);
+        Assert.IsNotEmpty(result!.VerifiedTimestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenSignatureInvalid()
     {
         var (cert, _) = CreateSelfSignedCert();
@@ -220,11 +221,11 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("Signature verification failed", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_ReturnsFalse_WhenTlogThresholdNotMet()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -260,11 +261,11 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("transparency log entries verified", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyDigestAsync_Succeeds_WithValidSignature()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -299,11 +300,11 @@ public class SigstoreVerifierTests
             HashAlgorithmType.Sha256,
             bundle, policy);
 
-        Assert.True(success);
-        Assert.NotNull(result);
+        Assert.IsTrue(success);
+        Assert.IsNotNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyDigestAsync_Fails_WhenDigestMismatch()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -339,29 +340,29 @@ public class SigstoreVerifierTests
             HashAlgorithmType.Sha256,
             bundle, policy);
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("does not match", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task VerifyDigestAsync_ThrowsOnFailure()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
         var bundle = new SigstoreBundle { VerificationMaterial = null };
         var digest = new ReadOnlyMemory<byte>(new byte[32]);
 
-        var ex = await Assert.ThrowsAsync<VerificationException>(
+        var ex = await Assert.ThrowsExactlyAsync<VerificationException>(
             () => verifier.VerifyDigestAsync(digest, HashAlgorithmType.Sha256, bundle, new VerificationPolicy()));
 
         Assert.Contains("no verification material", ex.Message);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyDigestAsync_ThrowsOnNullBundle()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             () => verifier.TryVerifyDigestAsync(
                 new ReadOnlyMemory<byte>(new byte[32]),
                 HashAlgorithmType.Sha256,
@@ -518,7 +519,7 @@ public class SigstoreVerifierTests
         return writer.Encode();
     }
 
-    [Fact]
+    [TestMethod]
     public async Task VerifyFileAsync_DelegatesToStreamOverload()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
@@ -532,7 +533,7 @@ public class SigstoreVerifierTests
             await File.WriteAllTextAsync(artifactPath, "test artifact");
 
             // Expect verification to fail (no verification material), proving delegation works
-            await Assert.ThrowsAsync<VerificationException>(
+            await Assert.ThrowsExactlyAsync<VerificationException>(
                 () => verifier.VerifyFileAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy()));
         }
         finally
@@ -542,7 +543,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyFileAsync_DelegatesToStreamOverload()
     {
         var verifier = new SigstoreVerifier(new FakeTrustRootProvider());
@@ -557,7 +558,7 @@ public class SigstoreVerifierTests
 
             var (success, result) = await verifier.TryVerifyFileAsync(new FileInfo(artifactPath), new FileInfo(bundlePath), new VerificationPolicy());
 
-            Assert.False(success);
+            Assert.IsFalse(success);
             Assert.Contains("no verification material", result!.FailureReason!);
         }
         finally
@@ -567,7 +568,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_RekorV2Entry_DoesNotContributeTimestamp()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -600,11 +601,11 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, new VerificationPolicy());
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("No verified timestamps", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_RekorV1Entry_IsConsideredForTimestamp()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -638,13 +639,13 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, new VerificationPolicy());
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         // The failure should NOT be "No verified timestamps" from v1 skip,
         // but rather from SET verification failure (entry was considered but SET didn't verify)
         Assert.Contains("No verified timestamps", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_Succeeds_WhenSignedTimestampThresholdMet()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -673,11 +674,11 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.True(success);
-        Assert.NotNull(result);
+        Assert.IsTrue(success);
+        Assert.IsNotNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_Fails_WhenSignedTimestampThresholdNotMet()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -706,11 +707,11 @@ public class SigstoreVerifierTests
         var (success, result) = await verifier.TryVerifyStreamAsync(
             new MemoryStream(artifact), bundle, policy);
 
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("unique TSA timestamps verified", result!.FailureReason!);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task TryVerifyStreamAsync_DeduplicatesTsaTimestamps()
     {
         var (cert, key) = CreateSelfSignedCert();
@@ -764,7 +765,7 @@ public class SigstoreVerifierTests
             new MemoryStream(artifact), bundle, policy);
 
         // Should fail because both timestamps are from the same TSA authority (deduped to 1)
-        Assert.False(success);
+        Assert.IsFalse(success);
         Assert.Contains("unique TSA timestamps verified", result!.FailureReason!);
     }
 
@@ -782,17 +783,17 @@ public class SigstoreVerifierTests
             => Task.FromResult(new Sigstore.TrustedRoot());
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_MatchingHash_ReturnsTrue()
     {
         var hashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
         var spec = CreateHashedrekordSpec(hashHex, "sha256");
         var bundle = CreateBundleWithDigest(hashHex, HashAlgorithmType.Sha256);
 
-        Assert.True(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsTrue(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_MismatchedHash_ReturnsFalse()
     {
         var entryHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -800,10 +801,10 @@ public class SigstoreVerifierTests
         var spec = CreateHashedrekordSpec(entryHash, "sha256");
         var bundle = CreateBundleWithDigest(bundleHash, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_NoDigestInBundle_ReturnsFalse()
     {
         var hashHex = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -812,10 +813,10 @@ public class SigstoreVerifierTests
         // bundle there is nothing for the entry's hash to be bound to, so it must not pass.
         var bundle = new SigstoreBundle();
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_NoHashInSpec_ReturnsFalse()
     {
         // data.hash.value is required by the schema; without it the entry is not bound to
@@ -824,10 +825,10 @@ public class SigstoreVerifierTests
         var doc = JsonDocument.Parse(json);
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(doc.RootElement, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(doc.RootElement, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_DifferentAlgorithms_ReturnsFalse()
     {
         // Entry says sha512, bundle says sha256. The digests are not comparable, so the
@@ -837,19 +838,19 @@ public class SigstoreVerifierTests
         var spec = CreateHashedrekordSpec(hashHex, "sha512");
         var bundle = CreateBundleWithDigest("0000000000000000000000000000000000000000000000000000000000000000", HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_UnknownAlgorithm_ReturnsFalse()
     {
         var spec = CreateHashedrekordSpec(ValidHashHex, "md5");
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyHashedrekordArtifactHash_MissingAlgorithm_ReturnsFalse()
     {
         var json = $$"""
@@ -858,7 +859,7 @@ public class SigstoreVerifierTests
         var spec = JsonDocument.Parse(json).RootElement;
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyHashedrekordArtifactHash(spec, bundle));
     }
 
     private static JsonElement CreateHashedrekordSpec(string hashHex, string algorithm)
@@ -961,19 +962,19 @@ public class SigstoreVerifierTests
         }
         """;
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_SupportedSchemaWithMatchingContents_ReturnsTrue()
     {
         // Positive control: the gate must let a schema we do support through.
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsTrue(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_HashedrekordV001WithoutPublicKey_ReturnsFalse()
     {
         // The certificate binding is required: without it the entry is not tied to the
@@ -990,77 +991,77 @@ public class SigstoreVerifierTests
         """;
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.1"),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_HashedrekordV001WithDifferentCertificate_ReturnsFalse()
     {
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
             bundle,
             new byte[] { 0x30, 0x82, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00 }));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_UnknownKind_ReturnsFalse()
     {
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(kind: "rekord")),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_UnsupportedApiVersionOfKnownKind_ReturnsFalse()
     {
         // The Rekor v2 regression in miniature: a kind we handle, carrying a schema
         // version we do not. Every v0.0.1 field lookup would miss and pass silently.
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(apiVersion: "0.0.3")),
             bundle,
             FakeCertDer));
     }
 
-    [Theory]
-    [InlineData("{\"apiVersion\": \"0.0.1\", \"spec\": {}}")]                        // no kind
-    [InlineData("{\"kind\": \"hashedrekord\", \"spec\": {}}")]                       // no apiVersion
-    [InlineData("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\"}")]          // no spec
-    [InlineData("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\", \"spec\": 1}")] // spec not an object
-    [InlineData("{\"kind\": 1, \"apiVersion\": \"0.0.1\", \"spec\": {}}")]           // kind not a string
+    [TestMethod]
+    [DataRow("{\"apiVersion\": \"0.0.1\", \"spec\": {}}")]                        // no kind
+    [DataRow("{\"kind\": \"hashedrekord\", \"spec\": {}}")]                       // no apiVersion
+    [DataRow("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\"}")]          // no spec
+    [DataRow("{\"kind\": \"hashedrekord\", \"apiVersion\": \"0.0.1\", \"spec\": 1}")] // spec not an object
+    [DataRow("{\"kind\": 1, \"apiVersion\": \"0.0.1\", \"spec\": {}}")]           // kind not a string
     public void CrossVerifyTlogBody_MalformedBody_ReturnsFalse(string bodyJson)
     {
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(bodyJson),
             new SigstoreBundle(),
             ReadOnlyMemory<byte>.Empty));
     }
 
-    [Theory]
-    [InlineData("intoto", "0.0.1")]
-    [InlineData("hashedrekord", "0.0.2")]
+    [TestMethod]
+    [DataRow("intoto", "0.0.1")]
+    [DataRow("hashedrekord", "0.0.2")]
     public void CrossVerifyTlogBody_BundleKindVersionDisagreesWithBody_ReturnsFalse(string kind, string version)
     {
         // The bundle states the entry's kind/version out of band. If that disagrees with
         // the signed body, the entry is not the one the bundle claims it is.
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), kind, version),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_DeclaredVersionWithoutMatchingShape_ReturnsFalse()
     {
         // Declares v0.0.2 but carries the v0.0.1 shape. Dispatching by sniffing for a
@@ -1078,13 +1079,13 @@ public class SigstoreVerifierTests
         """;
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.2"),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_HashedrekordV001WithoutSignature_ReturnsFalse()
     {
         // `signature` is required by the v0.0.1 schema and carries the bindings we check.
@@ -1097,13 +1098,13 @@ public class SigstoreVerifierTests
         """;
         var bundle = CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.1"),
             bundle,
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_ArtifactHashMismatchStillRejected_ReturnsFalse()
     {
         // Guards against the schema gate short-circuiting the content checks behind it.
@@ -1111,7 +1112,7 @@ public class SigstoreVerifierTests
             "1111110123456789abcdef0123456789abcdef0123456789abcdef0123456789",
             HashAlgorithmType.Sha256);
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(HashedrekordV001Body(), "hashedrekord", "0.0.1"),
             bundle,
             FakeCertDer));
@@ -1157,16 +1158,16 @@ public class SigstoreVerifierTests
         }
         """;
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_IntotoV002WithMatchingContents_ReturnsTrue()
     {
-        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsTrue(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(IntotoV002Body(), "intoto", "0.0.2"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_IntotoV002WithDifferentCertificate_ReturnsFalse()
     {
         // intoto stores the certificate under `publicKey`. Checking only `verifier` meant
@@ -1174,37 +1175,37 @@ public class SigstoreVerifierTests
         var otherCertPem = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
             $"-----BEGIN CERTIFICATE-----\n{Convert.ToBase64String(new byte[] { 0x30, 0x82, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00 })}\n-----END CERTIFICATE-----"));
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(IntotoV002Body(certPemBase64: otherCertPem), "intoto", "0.0.2"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_IntotoV002WithMismatchedPayloadHash_ReturnsFalse()
     {
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(IntotoV002Body(payloadHashHex: ValidHashHex), "intoto", "0.0.2"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Theory]
+    [TestMethod]
     // no envelope to cross-check — previously accepted outright
-    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{}}}""")]
+    [DataRow("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{}}}""")]
     // envelope present but no signatures
-    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[]},"payloadHash":{"algorithm":"sha256","value":"x"}}}}""")]
+    [DataRow("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[]},"payloadHash":{"algorithm":"sha256","value":"x"}}}}""")]
     // no payloadHash to bind the envelope contents
-    [InlineData("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[{"sig":"ESIzRA==","publicKey":"eA=="}]}}}}""")]
+    [DataRow("""{"kind":"intoto","apiVersion":"0.0.2","spec":{"content":{"envelope":{"signatures":[{"sig":"ESIzRA==","publicKey":"eA=="}]}}}}""")]
     public void CrossVerifyTlogBody_IntotoV002WithMissingBindings_ReturnsFalse(string bodyJson)
     {
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(bodyJson, "intoto", "0.0.2"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_DsseV001WithMissingPayloadHash_ReturnsFalse()
     {
         var body = $$"""
@@ -1220,13 +1221,13 @@ public class SigstoreVerifierTests
         }
         """;
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "dsse", "0.0.1"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Fact]
+    [TestMethod]
     public void CrossVerifyTlogBody_DsseV001WithMatchingContents_ReturnsTrue()
     {
         var body = $$"""
@@ -1243,28 +1244,28 @@ public class SigstoreVerifierTests
         }
         """;
 
-        Assert.True(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsTrue(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "dsse", "0.0.1"),
             CreateDsseBundle(),
             FakeCertDer));
     }
 
-    [Theory]
+    [TestMethod]
     // no data.digest to bind the signed content
-    [InlineData("""{"data":{"algorithm":"SHA2_256"},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
+    [DataRow("""{"data":{"algorithm":"SHA2_256"},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
     // no data.algorithm, so the digest is not interpretable
-    [InlineData("""{"data":{"digest":"3q2+7w=="},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
+    [DataRow("""{"data":{"digest":"3q2+7w=="},"signature":{"content":"ESIzRA==","verifier":{"x509Certificate":{"rawBytes":"MIIBAt6tvu8="}}}}""")]
     // no certificate binding
-    [InlineData("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="},"signature":{"content":"ESIzRA=="}}""")]
+    [DataRow("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="},"signature":{"content":"ESIzRA=="}}""")]
     // no signature at all
-    [InlineData("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="}}""")]
+    [DataRow("""{"data":{"algorithm":"SHA2_256","digest":"3q2+7w=="}}""")]
     public void CrossVerifyTlogBody_HashedrekordV002WithMissingBindings_ReturnsFalse(string v002Json)
     {
         var body = $$"""
         {"kind":"hashedrekord","apiVersion":"0.0.2","spec":{"hashedRekordV002":{{v002Json}} } }
         """;
 
-        Assert.False(SigstoreVerifier.CrossVerifyTlogBody(
+        Assert.IsFalse(SigstoreVerifier.CrossVerifyTlogBody(
             TlogEntryFor(body, "hashedrekord", "0.0.2"),
             CreateBundleWithDigest(ValidHashHex, HashAlgorithmType.Sha256),
             FakeCertDer));
@@ -1317,7 +1318,7 @@ public class SigstoreVerifierTests
         };
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveIssuerCandidates_CasShareSubjectName_SelectsAuthorityKeyIdentifierMatch()
     {
         using var oldCa = CreateTestCa(out var oldKey);
@@ -1327,7 +1328,7 @@ public class SigstoreVerifierTests
         using (var leaf = CreateTestLeaf(newCa, includeAuthorityKeyIdentifier: true))
         {
             // Both authorities share a subject name, and the one that did not issue the leaf is listed first.
-            Assert.Equal(oldCa.SubjectName.RawData, newCa.SubjectName.RawData);
+            TestSeq.AreEqual(oldCa.SubjectName.RawData, newCa.SubjectName.RawData);
             var trustedRoot = TrustedRootWith(oldCa, newCa);
 
             var owned = new List<X509Certificate2>();
@@ -1336,8 +1337,8 @@ public class SigstoreVerifierTests
                 var candidates = SigstoreVerifier.ResolveIssuerCandidates(leaf, null, trustedRoot, owned);
 
                 // The other authority publishes a different key, so it cannot have issued the leaf.
-                Assert.Single(candidates);
-                Assert.Equal(newCa.Thumbprint, candidates[0].Thumbprint);
+                TestSeq.Single(candidates);
+                Assert.AreEqual(newCa.Thumbprint, candidates[0].Thumbprint);
             }
             finally
             {
@@ -1347,7 +1348,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveIssuerCandidates_CaWithoutSubjectKeyIdentifier_IsKeptAsFallback()
     {
         using var namedCa = CreateTestCa(out var namedKey);
@@ -1369,9 +1370,9 @@ public class SigstoreVerifierTests
                 var candidates = SigstoreVerifier.ResolveIssuerCandidates(
                     leaf, null, TrustedRootWith(anonymousCa, namedCa), owned);
 
-                Assert.Equal(2, candidates.Count);
-                Assert.Equal(namedCa.Thumbprint, candidates[0].Thumbprint);
-                Assert.Contains(candidates, c => c.Thumbprint == anonymousCa.Thumbprint);
+                Assert.AreEqual(2, candidates.Count);
+                Assert.AreEqual(namedCa.Thumbprint, candidates[0].Thumbprint);
+                Assert.Contains(c => c.Thumbprint == anonymousCa.Thumbprint, candidates);
             }
             finally
             {
@@ -1381,7 +1382,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveIssuerCandidates_LeafWithoutAuthorityKeyIdentifier_ReturnsEveryNameMatch()
     {
         using var oldCa = CreateTestCa(out var oldKey);
@@ -1398,8 +1399,8 @@ public class SigstoreVerifierTests
                 var candidates = SigstoreVerifier.ResolveIssuerCandidates(leaf, null, trustedRoot, owned);
 
                 // Nothing distinguishes the authorities, so the real issuer must still be tried.
-                Assert.Equal(2, candidates.Count);
-                Assert.Contains(candidates, c => c.Thumbprint == newCa.Thumbprint);
+                Assert.AreEqual(2, candidates.Count);
+                Assert.Contains(c => c.Thumbprint == newCa.Thumbprint, candidates);
             }
             finally
             {
@@ -1409,7 +1410,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveIssuerCandidates_NonMatchingSubjectName_IsExcluded()
     {
         using var ca = CreateTestCa(out var caKey);
@@ -1428,8 +1429,8 @@ public class SigstoreVerifierTests
                 var candidates = SigstoreVerifier.ResolveIssuerCandidates(
                     leaf, null, TrustedRootWith(unrelatedCa, ca), owned);
 
-                Assert.Single(candidates);
-                Assert.Equal(ca.Thumbprint, candidates[0].Thumbprint);
+                TestSeq.Single(candidates);
+                Assert.AreEqual(ca.Thumbprint, candidates[0].Thumbprint);
             }
             finally
             {
@@ -1439,7 +1440,7 @@ public class SigstoreVerifierTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveIssuerCandidates_BundleSuppliesIntermediates_UsesThemVerbatim()
     {
         using var ca = CreateTestCa(out var caKey);
@@ -1452,9 +1453,9 @@ public class SigstoreVerifierTests
             var candidates = SigstoreVerifier.ResolveIssuerCandidates(
                 leaf, intermediates, TrustedRootWith(), owned);
 
-            Assert.Single(candidates);
-            Assert.Equal(ca.Thumbprint, candidates[0].Thumbprint);
-            Assert.Empty(owned);
+            TestSeq.Single(candidates);
+            Assert.AreEqual(ca.Thumbprint, candidates[0].Thumbprint);
+            Assert.IsEmpty(owned);
         }
     }
 }

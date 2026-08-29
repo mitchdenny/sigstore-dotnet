@@ -3,48 +3,49 @@ using Sigstore;
 
 namespace Sigstore.Tests.Bundle;
 
+[TestClass]
 public class SigstoreBundleTests
 {
-    [Fact]
+    [TestMethod]
     public void DefaultMediaType_IsV03()
     {
         var bundle = new SigstoreBundle();
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
     }
 
-    [Fact]
+    [TestMethod]
     public void NewBundle_HasNullOptionalProperties()
     {
         var bundle = new SigstoreBundle();
 
-        Assert.Null(bundle.VerificationMaterial);
-        Assert.Null(bundle.MessageSignature);
-        Assert.Null(bundle.DsseEnvelope);
+        Assert.IsNull(bundle.VerificationMaterial);
+        Assert.IsNull(bundle.MessageSignature);
+        Assert.IsNull(bundle.DsseEnvelope);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerificationMaterial_DefaultsToEmptyCollections()
     {
         var material = new VerificationMaterial();
 
-        Assert.Empty(material.TlogEntries);
-        Assert.Empty(material.Rfc3161Timestamps);
-        Assert.Null(material.Certificate);
-        Assert.Null(material.CertificateChain);
-        Assert.Null(material.PublicKeyHint);
+        Assert.IsEmpty(material.TlogEntries);
+        Assert.IsEmpty(material.Rfc3161Timestamps);
+        Assert.IsNull(material.Certificate);
+        Assert.IsNull(material.CertificateChain);
+        Assert.IsNull(material.PublicKeyHint);
     }
 
-    [Fact]
+    [TestMethod]
     public void MessageSignature_DefaultsToEmptySignature()
     {
         var sig = new MessageSignature();
 
-        Assert.True(sig.Signature.Length == 0);
-        Assert.Null(sig.MessageDigest);
+        Assert.IsTrue(sig.Signature.Length == 0);
+        Assert.IsNull(sig.MessageDigest);
     }
 
-    [Fact]
+    [TestMethod]
     public void HashOutput_SetsAlgorithmAndDigest()
     {
         var hash = new HashOutput
@@ -53,50 +54,50 @@ public class SigstoreBundleTests
             Digest = new byte[] { 1, 2, 3 }
         };
 
-        Assert.Equal(HashAlgorithmType.Sha256, hash.Algorithm);
-        Assert.Equal(new byte[] { 1, 2, 3 }, hash.Digest);
+        Assert.AreEqual(HashAlgorithmType.Sha256, hash.Algorithm);
+        TestSeq.AreEqual(new byte[] { 1, 2, 3 }, hash.Digest.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void TransparencyLogEntry_DefaultsToEmptyCollections()
     {
         var entry = new TransparencyLogEntry();
 
-        Assert.True(entry.LogId.Length == 0);
-        Assert.Null(entry.Body);
-        Assert.Null(entry.InclusionProof);
-        Assert.Null(entry.InclusionPromise);
+        Assert.IsTrue(entry.LogId.Length == 0);
+        Assert.IsNull(entry.Body);
+        Assert.IsNull(entry.InclusionProof);
+        Assert.IsNull(entry.InclusionPromise);
     }
 
-    [Fact]
+    [TestMethod]
     public void InclusionProof_DefaultsToEmptyCollections()
     {
         var proof = new InclusionProof();
 
-        Assert.True(proof.RootHash.Length == 0);
-        Assert.Empty(proof.Hashes);
-        Assert.Null(proof.Checkpoint);
+        Assert.IsTrue(proof.RootHash.Length == 0);
+        Assert.IsEmpty(proof.Hashes);
+        Assert.IsNull(proof.Checkpoint);
     }
 
-    [Fact]
+    [TestMethod]
     public void DsseEnvelope_DefaultsToEmptyCollections()
     {
         var envelope = new DsseEnvelope();
 
-        Assert.Equal("", envelope.PayloadType);
-        Assert.True(envelope.Payload.Length == 0);
-        Assert.Empty(envelope.Signatures);
+        Assert.AreEqual("", envelope.PayloadType);
+        Assert.IsTrue(envelope.Payload.Length == 0);
+        Assert.IsEmpty(envelope.Signatures);
     }
 
-    [Fact]
+    [TestMethod]
     public void HashAlgorithmType_HasExpectedValues()
     {
-        Assert.Equal(0, (int)HashAlgorithmType.Unspecified);
-        Assert.Equal(1, (int)HashAlgorithmType.Sha256);
-        Assert.Equal(2, (int)HashAlgorithmType.Sha384);
-        Assert.Equal(3, (int)HashAlgorithmType.Sha512);
-        Assert.Equal(4, (int)HashAlgorithmType.Sha3256);
-        Assert.Equal(5, (int)HashAlgorithmType.Sha3384);
+        Assert.AreEqual(0, (int)HashAlgorithmType.Unspecified);
+        Assert.AreEqual(1, (int)HashAlgorithmType.Sha256);
+        Assert.AreEqual(2, (int)HashAlgorithmType.Sha384);
+        Assert.AreEqual(3, (int)HashAlgorithmType.Sha512);
+        Assert.AreEqual(4, (int)HashAlgorithmType.Sha3256);
+        Assert.AreEqual(5, (int)HashAlgorithmType.Sha3384);
     }
 
     // --- Serialization / Deserialization tests ---
@@ -139,47 +140,47 @@ public class SigstoreBundleTests
         }
         """;
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_V01Bundle_ParsesCorrectly()
     {
         var bundle = SigstoreBundle.Deserialize(V01BundleJson);
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle+json;version=0.1", bundle.MediaType);
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.NotNull(bundle.MessageSignature);
-        Assert.Null(bundle.DsseEnvelope);
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle+json;version=0.1", bundle.MediaType);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        Assert.IsNotNull(bundle.MessageSignature);
+        Assert.IsNull(bundle.DsseEnvelope);
 
         // Certificate chain
-        Assert.NotNull(bundle.VerificationMaterial.CertificateChain);
-        Assert.Single(bundle.VerificationMaterial.CertificateChain);
-        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.CertificateChain[0].ToArray());
+        Assert.IsNotNull(bundle.VerificationMaterial.CertificateChain);
+        TestSeq.Single(bundle.VerificationMaterial.CertificateChain);
+        TestSeq.AreEqual(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.CertificateChain[0].ToArray());
 
         // Tlog entry
-        Assert.Single(bundle.VerificationMaterial.TlogEntries);
+        TestSeq.Single(bundle.VerificationMaterial.TlogEntries);
         var entry = bundle.VerificationMaterial.TlogEntries[0];
-        Assert.Equal(27246492L, entry.LogIndex);
-        Assert.Equal(new byte[] { 4, 5, 6 }, entry.LogId.ToArray());
-        Assert.Equal(1689177396L, entry.IntegratedTime);
-        Assert.Equal("EBES", entry.Body);
-        Assert.NotNull(entry.InclusionPromise);
-        Assert.Equal(new byte[] { 7, 8, 9 }, entry.InclusionPromise.Value.ToArray());
+        Assert.AreEqual(27246492L, entry.LogIndex);
+        TestSeq.AreEqual(new byte[] { 4, 5, 6 }, entry.LogId.ToArray());
+        Assert.AreEqual(1689177396L, entry.IntegratedTime);
+        Assert.AreEqual("EBES", entry.Body);
+        Assert.IsNotNull(entry.InclusionPromise);
+        TestSeq.AreEqual(new byte[] { 7, 8, 9 }, entry.InclusionPromise.Value.ToArray());
 
         // Inclusion proof
-        Assert.NotNull(entry.InclusionProof);
-        Assert.Equal(23083061L, entry.InclusionProof.LogIndex);
-        Assert.Equal(23083062L, entry.InclusionProof.TreeSize);
-        Assert.Equal(new byte[] { 10, 11, 12 }, entry.InclusionProof.RootHash.ToArray());
-        Assert.Single(entry.InclusionProof.Hashes);
-        Assert.Equal(new byte[] { 13, 14, 15 }, entry.InclusionProof.Hashes[0].ToArray());
-        Assert.Equal("rekor.sigstore.dev - 12345", entry.InclusionProof.Checkpoint);
+        Assert.IsNotNull(entry.InclusionProof);
+        Assert.AreEqual(23083061L, entry.InclusionProof.LogIndex);
+        Assert.AreEqual(23083062L, entry.InclusionProof.TreeSize);
+        TestSeq.AreEqual(new byte[] { 10, 11, 12 }, entry.InclusionProof.RootHash.ToArray());
+        TestSeq.Single(entry.InclusionProof.Hashes);
+        TestSeq.AreEqual(new byte[] { 13, 14, 15 }, entry.InclusionProof.Hashes[0].ToArray());
+        Assert.AreEqual("rekor.sigstore.dev - 12345", entry.InclusionProof.Checkpoint);
 
         // Message signature
-        Assert.Equal(HashAlgorithmType.Sha256, bundle.MessageSignature.MessageDigest!.Algorithm);
-        Assert.Equal(new byte[] { 20, 21, 22, 23, 24, 25 }, bundle.MessageSignature.MessageDigest.Digest.ToArray());
-        Assert.Equal(new byte[] { 26, 27, 28, 29, 30, 31 }, bundle.MessageSignature.Signature.ToArray());
+        Assert.AreEqual(HashAlgorithmType.Sha256, bundle.MessageSignature.MessageDigest!.Algorithm);
+        TestSeq.AreEqual(new byte[] { 20, 21, 22, 23, 24, 25 }, bundle.MessageSignature.MessageDigest.Digest.ToArray());
+        TestSeq.AreEqual(new byte[] { 26, 27, 28, 29, 30, 31 }, bundle.MessageSignature.Signature.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_V03BundleWithCertificate_ParsesCorrectly()
     {
         var json = """
@@ -201,15 +202,15 @@ public class SigstoreBundleTests
 
         var bundle = SigstoreBundle.Deserialize(json);
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Equal(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.Certificate!.Value.ToArray());
-        Assert.Null(bundle.VerificationMaterial.CertificateChain);
-        Assert.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
-        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.VerificationMaterial.Rfc3161Timestamps[0].ToArray());
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle.v0.3+json", bundle.MediaType);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        TestSeq.AreEqual(new byte[] { 1, 2, 3 }, bundle.VerificationMaterial.Certificate!.Value.ToArray());
+        Assert.IsNull(bundle.VerificationMaterial.CertificateChain);
+        TestSeq.Single(bundle.VerificationMaterial.Rfc3161Timestamps);
+        TestSeq.AreEqual(new byte[] { 4, 5, 6 }, bundle.VerificationMaterial.Rfc3161Timestamps[0].ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_DsseEnvelope_ParsesCorrectly()
     {
         var json = """
@@ -229,26 +230,26 @@ public class SigstoreBundleTests
 
         var bundle = SigstoreBundle.Deserialize(json);
 
-        Assert.NotNull(bundle.DsseEnvelope);
-        Assert.Null(bundle.MessageSignature);
-        Assert.Equal("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
-        Assert.Equal(new byte[] { 4, 5, 6 }, bundle.DsseEnvelope.Payload.ToArray());
-        Assert.Single(bundle.DsseEnvelope.Signatures);
-        Assert.Equal(new byte[] { 7, 8, 9 }, bundle.DsseEnvelope.Signatures[0].Sig.ToArray());
+        Assert.IsNotNull(bundle.DsseEnvelope);
+        Assert.IsNull(bundle.MessageSignature);
+        Assert.AreEqual("application/vnd.in-toto+json", bundle.DsseEnvelope.PayloadType);
+        TestSeq.AreEqual(new byte[] { 4, 5, 6 }, bundle.DsseEnvelope.Payload.ToArray());
+        TestSeq.Single(bundle.DsseEnvelope.Signatures);
+        TestSeq.AreEqual(new byte[] { 7, 8, 9 }, bundle.DsseEnvelope.Signatures[0].Sig.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_Stream_ParsesCorrectly()
     {
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(V01BundleJson));
         var bundle = SigstoreBundle.Deserialize(stream);
 
-        Assert.Equal("application/vnd.dev.sigstore.bundle+json;version=0.1", bundle.MediaType);
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Single(bundle.VerificationMaterial.TlogEntries);
+        Assert.AreEqual("application/vnd.dev.sigstore.bundle+json;version=0.1", bundle.MediaType);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        TestSeq.Single(bundle.VerificationMaterial.TlogEntries);
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_ProducesLowerCamelCaseKeys()
     {
         var bundle = SigstoreBundle.Deserialize(V01BundleJson);
@@ -262,7 +263,7 @@ public class SigstoreBundleTests
         Assert.DoesNotContain("\"VerificationMaterial\"", json);
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_NumericFieldsAsStrings()
     {
         var bundle = SigstoreBundle.Deserialize(V01BundleJson);
@@ -274,7 +275,7 @@ public class SigstoreBundleTests
         Assert.Contains("\"23083062\"", json);
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_Base64EncodesBytes()
     {
         var bundle = SigstoreBundle.Deserialize(V01BundleJson);
@@ -284,48 +285,48 @@ public class SigstoreBundleTests
         Assert.Contains("AQID", json);  // base64 of [1,2,3]
     }
 
-    [Fact]
+    [TestMethod]
     public void RoundTrip_V01Bundle_PreservesData()
     {
         var bundle1 = SigstoreBundle.Deserialize(V01BundleJson);
         var json = bundle1.Serialize();
         var bundle2 = SigstoreBundle.Deserialize(json);
 
-        Assert.Equal(bundle1.MediaType, bundle2.MediaType);
+        Assert.AreEqual(bundle1.MediaType, bundle2.MediaType);
 
         // Verification material
-        Assert.NotNull(bundle2.VerificationMaterial);
-        Assert.Equal(
+        Assert.IsNotNull(bundle2.VerificationMaterial);
+        TestSeq.AreEqual(
             bundle1.VerificationMaterial!.CertificateChain![0].ToArray(),
             bundle2.VerificationMaterial.CertificateChain![0].ToArray());
 
         // Tlog entry
         var e1 = bundle1.VerificationMaterial.TlogEntries[0];
         var e2 = bundle2.VerificationMaterial.TlogEntries[0];
-        Assert.Equal(e1.LogIndex, e2.LogIndex);
-        Assert.Equal(e1.LogId.ToArray(), e2.LogId.ToArray());
-        Assert.Equal(e1.IntegratedTime, e2.IntegratedTime);
-        Assert.Equal(e1.Body, e2.Body);
-        Assert.Equal(e1.InclusionPromise!.Value.ToArray(), e2.InclusionPromise!.Value.ToArray());
+        Assert.AreEqual(e1.LogIndex, e2.LogIndex);
+        TestSeq.AreEqual(e1.LogId.ToArray(), e2.LogId.ToArray());
+        Assert.AreEqual(e1.IntegratedTime, e2.IntegratedTime);
+        Assert.AreEqual(e1.Body, e2.Body);
+        TestSeq.AreEqual(e1.InclusionPromise!.Value.ToArray(), e2.InclusionPromise!.Value.ToArray());
 
         // Inclusion proof
-        Assert.Equal(e1.InclusionProof!.LogIndex, e2.InclusionProof!.LogIndex);
-        Assert.Equal(e1.InclusionProof.TreeSize, e2.InclusionProof.TreeSize);
-        Assert.Equal(e1.InclusionProof.RootHash.ToArray(), e2.InclusionProof.RootHash.ToArray());
-        Assert.Equal(e1.InclusionProof.Hashes[0].ToArray(), e2.InclusionProof.Hashes[0].ToArray());
-        Assert.Equal(e1.InclusionProof.Checkpoint, e2.InclusionProof.Checkpoint);
+        Assert.AreEqual(e1.InclusionProof!.LogIndex, e2.InclusionProof!.LogIndex);
+        Assert.AreEqual(e1.InclusionProof.TreeSize, e2.InclusionProof.TreeSize);
+        TestSeq.AreEqual(e1.InclusionProof.RootHash.ToArray(), e2.InclusionProof.RootHash.ToArray());
+        TestSeq.AreEqual(e1.InclusionProof.Hashes[0].ToArray(), e2.InclusionProof.Hashes[0].ToArray());
+        Assert.AreEqual(e1.InclusionProof.Checkpoint, e2.InclusionProof.Checkpoint);
 
         // Message signature
-        Assert.Equal(bundle1.MessageSignature!.Signature.ToArray(), bundle2.MessageSignature!.Signature.ToArray());
-        Assert.Equal(
+        TestSeq.AreEqual(bundle1.MessageSignature!.Signature.ToArray(), bundle2.MessageSignature!.Signature.ToArray());
+        Assert.AreEqual(
             bundle1.MessageSignature.MessageDigest!.Algorithm,
             bundle2.MessageSignature.MessageDigest!.Algorithm);
-        Assert.Equal(
+        TestSeq.AreEqual(
             bundle1.MessageSignature.MessageDigest.Digest.ToArray(),
             bundle2.MessageSignature.MessageDigest.Digest.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void RoundTrip_DsseEnvelope_PreservesData()
     {
         var json = """
@@ -347,14 +348,14 @@ public class SigstoreBundleTests
         var serialized = bundle1.Serialize();
         var bundle2 = SigstoreBundle.Deserialize(serialized);
 
-        Assert.NotNull(bundle2.DsseEnvelope);
-        Assert.Equal(bundle1.DsseEnvelope!.PayloadType, bundle2.DsseEnvelope.PayloadType);
-        Assert.Equal(bundle1.DsseEnvelope.Payload.ToArray(), bundle2.DsseEnvelope.Payload.ToArray());
-        Assert.Equal(bundle1.DsseEnvelope.Signatures[0].KeyId, bundle2.DsseEnvelope.Signatures[0].KeyId);
-        Assert.Equal(bundle1.DsseEnvelope.Signatures[0].Sig.ToArray(), bundle2.DsseEnvelope.Signatures[0].Sig.ToArray());
+        Assert.IsNotNull(bundle2.DsseEnvelope);
+        Assert.AreEqual(bundle1.DsseEnvelope!.PayloadType, bundle2.DsseEnvelope.PayloadType);
+        TestSeq.AreEqual(bundle1.DsseEnvelope.Payload.ToArray(), bundle2.DsseEnvelope.Payload.ToArray());
+        Assert.AreEqual(bundle1.DsseEnvelope.Signatures[0].KeyId, bundle2.DsseEnvelope.Signatures[0].KeyId);
+        TestSeq.AreEqual(bundle1.DsseEnvelope.Signatures[0].Sig.ToArray(), bundle2.DsseEnvelope.Signatures[0].Sig.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_NullOptionalFields_HandlesGracefully()
     {
         var json = """
@@ -371,16 +372,16 @@ public class SigstoreBundleTests
 
         var bundle = SigstoreBundle.Deserialize(json);
 
-        Assert.NotNull(bundle.VerificationMaterial);
-        Assert.Null(bundle.VerificationMaterial.Certificate);
-        Assert.Null(bundle.VerificationMaterial.CertificateChain);
-        Assert.Null(bundle.VerificationMaterial.PublicKeyHint);
-        Assert.Empty(bundle.VerificationMaterial.TlogEntries);
-        Assert.Empty(bundle.VerificationMaterial.Rfc3161Timestamps);
-        Assert.Null(bundle.MessageSignature!.MessageDigest);
+        Assert.IsNotNull(bundle.VerificationMaterial);
+        Assert.IsNull(bundle.VerificationMaterial.Certificate);
+        Assert.IsNull(bundle.VerificationMaterial.CertificateChain);
+        Assert.IsNull(bundle.VerificationMaterial.PublicKeyHint);
+        Assert.IsEmpty(bundle.VerificationMaterial.TlogEntries);
+        Assert.IsEmpty(bundle.VerificationMaterial.Rfc3161Timestamps);
+        Assert.IsNull(bundle.MessageSignature!.MessageDigest);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_EmptyCollections_HandlesGracefully()
     {
         var json = """
@@ -397,11 +398,11 @@ public class SigstoreBundleTests
 
         var bundle = SigstoreBundle.Deserialize(json);
 
-        Assert.Empty(bundle.VerificationMaterial!.TlogEntries);
-        Assert.Empty(bundle.VerificationMaterial.Rfc3161Timestamps);
+        Assert.IsEmpty(bundle.VerificationMaterial!.TlogEntries);
+        Assert.IsEmpty(bundle.VerificationMaterial.Rfc3161Timestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_OmitsNullFields()
     {
         var bundle = new SigstoreBundle
@@ -417,7 +418,7 @@ public class SigstoreBundleTests
         Assert.DoesNotContain("x509CertificateChain", json);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_PublicKeyHint_ParsesCorrectly()
     {
         var json = """
@@ -435,16 +436,16 @@ public class SigstoreBundleTests
 
         var bundle = SigstoreBundle.Deserialize(json);
 
-        Assert.Equal("my-key-id", bundle.VerificationMaterial!.PublicKeyHint);
+        Assert.AreEqual("my-key-id", bundle.VerificationMaterial!.PublicKeyHint);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_InvalidJson_Throws()
     {
-        Assert.Throws<JsonException>(() => SigstoreBundle.Deserialize("not json"));
+        Assert.ThrowsExactly<JsonException>(() => SigstoreBundle.Deserialize("not json"));
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_HashAlgorithms_UseStringValues()
     {
         var bundle = new SigstoreBundle
@@ -465,7 +466,7 @@ public class SigstoreBundleTests
         Assert.Contains("SHA2_384", json);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task LoadAsync_DeserializesFromFile()
     {
         var original = new SigstoreBundle
@@ -489,9 +490,9 @@ public class SigstoreBundleTests
 
             var loaded = await SigstoreBundle.LoadAsync(new FileInfo(path));
 
-            Assert.Equal(original.MediaType, loaded.MediaType);
-            Assert.NotNull(loaded.MessageSignature);
-            Assert.Equal(original.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+            Assert.AreEqual(original.MediaType, loaded.MediaType);
+            Assert.IsNotNull(loaded.MessageSignature);
+            TestSeq.AreEqual(original.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
         }
         finally
         {
@@ -499,7 +500,7 @@ public class SigstoreBundleTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SaveAsync_WritesToFile()
     {
         var bundle = new SigstoreBundle
@@ -519,9 +520,9 @@ public class SigstoreBundleTests
             var json = await File.ReadAllTextAsync(path);
             var loaded = SigstoreBundle.Deserialize(json);
 
-            Assert.Equal(bundle.MediaType, loaded.MediaType);
-            Assert.NotNull(loaded.MessageSignature);
-            Assert.Equal(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+            Assert.AreEqual(bundle.MediaType, loaded.MediaType);
+            Assert.IsNotNull(loaded.MessageSignature);
+            TestSeq.AreEqual(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
         }
         finally
         {
@@ -529,7 +530,7 @@ public class SigstoreBundleTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void Serialize_Stream_WritesJson()
     {
         var bundle = new SigstoreBundle
@@ -547,8 +548,8 @@ public class SigstoreBundleTests
         stream.Position = 0;
         var loaded = SigstoreBundle.Deserialize(stream);
 
-        Assert.Equal(bundle.MediaType, loaded.MediaType);
-        Assert.NotNull(loaded.MessageSignature);
-        Assert.Equal(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
+        Assert.AreEqual(bundle.MediaType, loaded.MediaType);
+        Assert.IsNotNull(loaded.MessageSignature);
+        TestSeq.AreEqual(bundle.MessageSignature.Signature.ToArray(), loaded.MessageSignature!.Signature.ToArray());
     }
 }

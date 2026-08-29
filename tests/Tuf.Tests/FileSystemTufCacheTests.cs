@@ -3,9 +3,10 @@ using System.Text.Json;
 
 namespace Tuf.Tests;
 
+[TestClass]
 public sealed class FileSystemTufCacheTests
 {
-    [Fact]
+    [TestMethod]
     public void TargetKeys_CannotEscapeCacheDirectory()
     {
         using var directory = new TemporaryDirectory();
@@ -18,16 +19,16 @@ public sealed class FileSystemTufCacheTests
         cache.StoreTarget("../../outside", data);
         cache.StoreTarget(absolutePath, data);
 
-        Assert.Equal(data, cache.LoadTarget("../../outside"));
-        Assert.Equal(data, cache.LoadTarget(absolutePath));
-        Assert.False(File.Exists(Path.Combine(directory.Path, "outside")));
-        Assert.False(File.Exists(absolutePath));
-        Assert.All(
+        TestSeq.AreEqual(data, cache.LoadTarget("../../outside"));
+        TestSeq.AreEqual(data, cache.LoadTarget(absolutePath));
+        Assert.IsFalse(File.Exists(Path.Combine(directory.Path, "outside")));
+        Assert.IsFalse(File.Exists(absolutePath));
+        TestSeq.All(
             Directory.GetFiles(Path.Combine(directory.Path, "targets")),
-            path => Assert.Equal(Path.Combine(directory.Path, "targets"), Path.GetDirectoryName(path)));
+            path => Assert.AreEqual(Path.Combine(directory.Path, "targets"), Path.GetDirectoryName(path)));
     }
 
-    [Fact]
+    [TestMethod]
     public void MetadataKeys_AreFlattenedAndRoundTrip()
     {
         using var directory = new TemporaryDirectory();
@@ -36,13 +37,13 @@ public sealed class FileSystemTufCacheTests
 
         cache.StoreMetadata("../delegatedrole", data);
 
-        Assert.Equal(data, cache.LoadMetadata("../delegatedrole"));
+        TestSeq.AreEqual(data, cache.LoadMetadata("../delegatedrole"));
         Assert.DoesNotContain(
-            Directory.GetFiles(directory.Path),
-            path => Path.GetFileName(path).Contains("delegatedrole", StringComparison.Ordinal));
+            path => Path.GetFileName(path).Contains("delegatedrole", StringComparison.Ordinal),
+            Directory.GetFiles(directory.Path));
     }
 
-    [Fact]
+    [TestMethod]
     public void NewUnixPaths_AreOwnerOnly()
     {
         if (OperatingSystem.IsWindows())
@@ -55,21 +56,21 @@ public sealed class FileSystemTufCacheTests
 
         cache.StoreTarget("trusted_root.json", "target"u8.ToArray());
 
-        Assert.Equal(
+        Assert.AreEqual(
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
             File.GetUnixFileMode(directory.Path));
-        Assert.Equal(
+        Assert.AreEqual(
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
             File.GetUnixFileMode(Path.Combine(directory.Path, "targets")));
         foreach (var path in Directory.GetFiles(directory.Path, "*", SearchOption.AllDirectories))
         {
-            Assert.Equal(
+            Assert.AreEqual(
                 UnixFileMode.UserRead | UnixFileMode.UserWrite,
                 File.GetUnixFileMode(path));
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void IncorrectUnixFileMode_DisablesCache()
     {
         if (OperatingSystem.IsWindows())
@@ -81,7 +82,7 @@ public sealed class FileSystemTufCacheTests
         var cache = new FileSystemTufCache(directory.Path);
         cache.StoreTarget("trusted_root.json", "current"u8.ToArray());
         var targetsPath = Path.Combine(directory.Path, "targets");
-        var cachedTarget = Assert.Single(
+        var cachedTarget = TestSeq.Single(
             Directory.GetFiles(targetsPath, "target-*.bin"));
         File.SetUnixFileMode(
             cachedTarget,
@@ -92,10 +93,10 @@ public sealed class FileSystemTufCacheTests
 
         cache = new FileSystemTufCache(directory.Path);
 
-        Assert.Null(cache.LoadTarget("trusted_root.json"));
+        Assert.IsNull(cache.LoadTarget("trusted_root.json"));
         cache.StoreTarget("other.json", "other"u8.ToArray());
-        Assert.Null(cache.LoadTarget("other.json"));
-        Assert.Equal(
+        Assert.IsNull(cache.LoadTarget("other.json"));
+        Assert.AreEqual(
             UnixFileMode.UserRead |
             UnixFileMode.UserWrite |
             UnixFileMode.GroupRead |
@@ -103,7 +104,7 @@ public sealed class FileSystemTufCacheTests
             File.GetUnixFileMode(cachedTarget));
     }
 
-    [Fact]
+    [TestMethod]
     public void IncorrectUnixDirectoryMode_DisablesCache()
     {
         if (OperatingSystem.IsWindows())
@@ -126,18 +127,18 @@ public sealed class FileSystemTufCacheTests
         var cache = new FileSystemTufCache(directory.Path);
         cache.StoreTarget("artifact", "data"u8.ToArray());
 
-        Assert.Null(cache.LoadTarget("artifact"));
-        Assert.Equal(incorrectMode, File.GetUnixFileMode(directory.Path));
-        Assert.Equal(incorrectMode, File.GetUnixFileMode(targetsPath));
+        Assert.IsNull(cache.LoadTarget("artifact"));
+        Assert.AreEqual(incorrectMode, File.GetUnixFileMode(directory.Path));
+        Assert.AreEqual(incorrectMode, File.GetUnixFileMode(targetsPath));
     }
 
-    [Fact]
+    [TestMethod]
     public void LeafSymlink_DisablesCacheWithoutFollowing()
     {
         using var directory = new TemporaryDirectory();
         var cache = new FileSystemTufCache(directory.Path);
         cache.StoreTarget("trusted_root.json", "initial"u8.ToArray());
-        var cachedPath = Assert.Single(
+        var cachedPath = TestSeq.Single(
             Directory.GetFiles(Path.Combine(directory.Path, "targets"), "target-*.bin"));
         File.Delete(cachedPath);
 
@@ -148,16 +149,16 @@ public sealed class FileSystemTufCacheTests
             return;
         }
 
-        Assert.Null(cache.LoadTarget("trusted_root.json"));
+        Assert.IsNull(cache.LoadTarget("trusted_root.json"));
 
         cache.StoreTarget("trusted_root.json", "replacement"u8.ToArray());
 
-        Assert.Equal("outside", File.ReadAllText(outsidePath));
-        Assert.Null(cache.LoadTarget("trusted_root.json"));
-        Assert.NotNull(new FileInfo(cachedPath).LinkTarget);
+        Assert.AreEqual("outside", File.ReadAllText(outsidePath));
+        Assert.IsNull(cache.LoadTarget("trusted_root.json"));
+        Assert.IsNotNull(new FileInfo(cachedPath).LinkTarget);
     }
 
-    [Fact]
+    [TestMethod]
     public void ManagedTargetsDirectorySymlink_DisablesCache()
     {
         using var outside = new TemporaryDirectory();
@@ -171,11 +172,11 @@ public sealed class FileSystemTufCacheTests
         var cache = new FileSystemTufCache(directory.Path);
         cache.StoreTarget("artifact", "data"u8.ToArray());
 
-        Assert.Null(cache.LoadTarget("artifact"));
-        Assert.Empty(Directory.GetFiles(outside.Path));
+        Assert.IsNull(cache.LoadTarget("artifact"));
+        Assert.IsEmpty(Directory.GetFiles(outside.Path));
     }
 
-    [Fact]
+    [TestMethod]
     public void CallerSuppliedCacheRootSymlink_IsSupported()
     {
         using var destination = new TemporaryDirectory();
@@ -189,10 +190,10 @@ public sealed class FileSystemTufCacheTests
         var cache = new FileSystemTufCache(cachePath);
         cache.StoreTarget("artifact", "data"u8.ToArray());
 
-        Assert.Equal("data"u8.ToArray(), cache.LoadTarget("artifact"));
+        TestSeq.AreEqual("data"u8.ToArray(), cache.LoadTarget("artifact"));
     }
 
-    [Fact]
+    [TestMethod]
     public void MetadataVersion_NeverMovesBackward()
     {
         using var directory = new TemporaryDirectory();
@@ -201,10 +202,10 @@ public sealed class FileSystemTufCacheTests
         cache.StoreMetadata("targets", Metadata(10));
         cache.StoreMetadata("targets", Metadata(9));
 
-        Assert.Equal(10, ReadVersion(cache.LoadMetadata("targets")!));
+        Assert.AreEqual(10, ReadVersion(cache.LoadMetadata("targets")!));
     }
 
-    [Fact]
+    [TestMethod]
     public async Task CrossProcessReads_ObserveOnlyCompleteFiles()
     {
         using var directory = new TemporaryDirectory();
@@ -226,16 +227,16 @@ public sealed class FileSystemTufCacheTests
         while (!writer.HasExited)
         {
             var value = cache.LoadTarget("artifact");
-            Assert.NotNull(value);
-            Assert.True(value.AsSpan().SequenceEqual(first) || value.AsSpan().SequenceEqual(second));
+            Assert.IsNotNull(value);
+            Assert.IsTrue(value.AsSpan().SequenceEqual(first) || value.AsSpan().SequenceEqual(second));
             reads++;
         }
 
         await AssertWorkerSucceeded(writer);
-        Assert.True(reads > 0);
+        Assert.IsTrue(reads > 0);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task CrossProcessLockContention_DoesNotBlockOrPersist()
     {
         using var directory = new TemporaryDirectory();
@@ -248,12 +249,12 @@ public sealed class FileSystemTufCacheTests
         await Task.Run(() => cache.StoreTarget("blocked", "data"u8.ToArray()))
             .WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.Null(cache.LoadTarget("blocked"));
+        Assert.IsNull(cache.LoadTarget("blocked"));
         File.WriteAllText(release.Path, "release");
         await AssertWorkerSucceeded(holder);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task CrossProcessLock_IsReleasedWhenHolderExits()
     {
         using var directory = new TemporaryDirectory();
@@ -279,10 +280,10 @@ public sealed class FileSystemTufCacheTests
         }
         while (actual is null && DateTime.UtcNow < timeout);
 
-        Assert.Equal(expected, actual);
+        TestSeq.AreEqual(expected, actual);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task CrossProcessStaleWriters_CannotRollMetadataBack()
     {
         using var directory = new TemporaryDirectory();
@@ -312,7 +313,7 @@ public sealed class FileSystemTufCacheTests
             }
         }
 
-        Assert.Equal(10, ReadVersion(cache.LoadMetadata("targets")!));
+        Assert.AreEqual(10, ReadVersion(cache.LoadMetadata("targets")!));
     }
 
     private static byte[] Metadata(int version) =>
@@ -426,7 +427,7 @@ public sealed class FileSystemTufCacheTests
             await Task.Delay(10);
         }
 
-        Assert.True(File.Exists(path), $"Worker did not create '{path}'.");
+        Assert.IsTrue(File.Exists(path), $"Worker did not create '{path}'.");
     }
 
     private sealed class TemporaryDirectory : IDisposable

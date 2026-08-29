@@ -3,28 +3,29 @@ using Sigstore;
 
 namespace Sigstore.Tests.TrustRoot;
 
+[TestClass]
 public class TrustedRootTests
 {
-    [Fact]
+    [TestMethod]
     public void DefaultMediaType_IsV02()
     {
         var root = new TrustedRoot();
 
-        Assert.Equal("application/vnd.dev.sigstore.trustedroot.v0.2+json", root.MediaType);
+        Assert.AreEqual("application/vnd.dev.sigstore.trustedroot.v0.2+json", root.MediaType);
     }
 
-    [Fact]
+    [TestMethod]
     public void NewTrustedRoot_HasEmptyCollections()
     {
         var root = new TrustedRoot();
 
-        Assert.Empty(root.TransparencyLogs);
-        Assert.Empty(root.CertificateAuthorities);
-        Assert.Empty(root.CtLogs);
-        Assert.Empty(root.TimestampAuthorities);
+        Assert.IsEmpty(root.TransparencyLogs);
+        Assert.IsEmpty(root.CertificateAuthorities);
+        Assert.IsEmpty(root.CtLogs);
+        Assert.IsEmpty(root.TimestampAuthorities);
     }
 
-    [Fact]
+    [TestMethod]
     public void TransparencyLogInfo_SetsProperties()
     {
         var logInfo = new TransparencyLogInfo
@@ -36,12 +37,12 @@ public class TrustedRootTests
             Operator = "sigstore.dev"
         };
 
-        Assert.Equal(new Uri("https://rekor.sigstore.dev"), logInfo.BaseUrl);
-        Assert.Equal(HashAlgorithmType.Sha256, logInfo.HashAlgorithm);
-        Assert.Equal("sigstore.dev", logInfo.Operator);
+        Assert.AreEqual(new Uri("https://rekor.sigstore.dev"), logInfo.BaseUrl);
+        Assert.AreEqual(HashAlgorithmType.Sha256, logInfo.HashAlgorithm);
+        Assert.AreEqual("sigstore.dev", logInfo.Operator);
     }
 
-    [Fact]
+    [TestMethod]
     public void CertificateAuthorityInfo_SetsProperties()
     {
         var caInfo = new CertificateAuthorityInfo
@@ -53,10 +54,10 @@ public class TrustedRootTests
             ValidTo = DateTimeOffset.Parse("2030-01-01T00:00:00Z")
         };
 
-        Assert.Equal(new Uri("https://fulcio.sigstore.dev"), caInfo.Uri);
-        Assert.Single(caInfo.CertificateChain);
-        Assert.NotNull(caInfo.ValidFrom);
-        Assert.NotNull(caInfo.ValidTo);
+        Assert.AreEqual(new Uri("https://fulcio.sigstore.dev"), caInfo.Uri);
+        TestSeq.Single(caInfo.CertificateChain);
+        Assert.IsNotNull(caInfo.ValidFrom);
+        Assert.IsNotNull(caInfo.ValidTo);
     }
 
     // --- Deserialization tests ---
@@ -107,68 +108,68 @@ public class TrustedRootTests
         }
         """;
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesMediaType()
     {
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
-        Assert.Equal("application/vnd.dev.sigstore.trustedroot+json;version=0.1", root.MediaType);
+        Assert.AreEqual("application/vnd.dev.sigstore.trustedroot+json;version=0.1", root.MediaType);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesTransparencyLogs()
     {
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
-        Assert.Single(root.TransparencyLogs);
+        TestSeq.Single(root.TransparencyLogs);
         var tlog = root.TransparencyLogs[0];
-        Assert.Equal(new Uri("https://rekor.sigstore.dev"), tlog.BaseUrl);
-        Assert.Equal(HashAlgorithmType.Sha256, tlog.HashAlgorithm);
-        Assert.Equal(new byte[] { 1, 2, 3 }, tlog.PublicKeyBytes);
-        Assert.Equal(PublicKeyDetails.PkixEcdsaP256Sha256, tlog.KeyDetails);
-        Assert.Equal(new byte[] { 4, 5, 6 }, tlog.LogId);
-        Assert.NotNull(tlog.ValidFrom);
-        Assert.Null(tlog.ValidTo);
+        Assert.AreEqual(new Uri("https://rekor.sigstore.dev"), tlog.BaseUrl);
+        Assert.AreEqual(HashAlgorithmType.Sha256, tlog.HashAlgorithm);
+        TestSeq.AreEqual(new byte[] { 1, 2, 3 }, tlog.PublicKeyBytes.ToArray());
+        Assert.AreEqual(PublicKeyDetails.PkixEcdsaP256Sha256, tlog.KeyDetails);
+        TestSeq.AreEqual(new byte[] { 4, 5, 6 }, tlog.LogId.ToArray());
+        Assert.IsNotNull(tlog.ValidFrom);
+        Assert.IsNull(tlog.ValidTo);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesCertificateAuthorities()
     {
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
-        Assert.Single(root.CertificateAuthorities);
+        TestSeq.Single(root.CertificateAuthorities);
         var ca = root.CertificateAuthorities[0];
-        Assert.Equal(new Uri("https://fulcio.sigstore.dev"), ca.Uri);
-        Assert.Single(ca.CertificateChain);
-        Assert.Equal(new byte[] { 7, 8, 9 }, ca.CertificateChain[0]);
-        Assert.NotNull(ca.ValidFrom);
-        Assert.NotNull(ca.ValidTo);
+        Assert.AreEqual(new Uri("https://fulcio.sigstore.dev"), ca.Uri);
+        TestSeq.Single(ca.CertificateChain);
+        TestSeq.AreEqual(new byte[] { 7, 8, 9 }, ca.CertificateChain[0].ToArray());
+        Assert.IsNotNull(ca.ValidFrom);
+        Assert.IsNotNull(ca.ValidTo);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_ParsesCtLogs()
     {
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
-        Assert.Single(root.CtLogs);
-        Assert.Equal(new Uri("https://ctfe.sigstore.dev/test"), root.CtLogs[0].BaseUrl);
+        TestSeq.Single(root.CtLogs);
+        Assert.AreEqual(new Uri("https://ctfe.sigstore.dev/test"), root.CtLogs[0].BaseUrl);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_EmptyTimestampAuthorities()
     {
         var root = TrustedRoot.Deserialize(TrustedRootJson);
 
-        Assert.Empty(root.TimestampAuthorities);
+        Assert.IsEmpty(root.TimestampAuthorities);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_InvalidJson_Throws()
     {
-        Assert.Throws<JsonException>(() => TrustedRoot.Deserialize("not json"));
+        Assert.ThrowsExactly<JsonException>(() => TrustedRoot.Deserialize("not json"));
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_MinimalTrustedRoot_HandlesGracefully()
     {
         var json = """
@@ -183,13 +184,13 @@ public class TrustedRootTests
 
         var root = TrustedRoot.Deserialize(json);
 
-        Assert.Empty(root.TransparencyLogs);
-        Assert.Empty(root.CertificateAuthorities);
-        Assert.Empty(root.CtLogs);
-        Assert.Empty(root.TimestampAuthorities);
+        Assert.IsEmpty(root.TransparencyLogs);
+        Assert.IsEmpty(root.CertificateAuthorities);
+        Assert.IsEmpty(root.CtLogs);
+        Assert.IsEmpty(root.TimestampAuthorities);
     }
 
-    [Fact]
+    [TestMethod]
     public void Deserialize_TimestampAuthorities_ParsesCorrectly()
     {
         var json = """
@@ -214,11 +215,11 @@ public class TrustedRootTests
 
         var root = TrustedRoot.Deserialize(json);
 
-        Assert.Single(root.TimestampAuthorities);
+        TestSeq.Single(root.TimestampAuthorities);
         var tsa = root.TimestampAuthorities[0];
-        Assert.Equal(new Uri("https://timestamp.sigstore.dev"), tsa.Uri);
-        Assert.Single(tsa.CertificateChain);
-        Assert.NotNull(tsa.ValidFrom);
-        Assert.Null(tsa.ValidTo);
+        Assert.AreEqual(new Uri("https://timestamp.sigstore.dev"), tsa.Uri);
+        TestSeq.Single(tsa.CertificateChain);
+        Assert.IsNotNull(tsa.ValidFrom);
+        Assert.IsNull(tsa.ValidTo);
     }
 }

@@ -2,6 +2,7 @@ using Tuf.Serialization;
 
 namespace Tuf.Tests;
 
+[TestClass]
 public class TufMetadataParserTests
 {
     private static byte[] LoadFixture(string name)
@@ -10,43 +11,43 @@ public class TufMetadataParserTests
         return File.ReadAllBytes(path);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_ValidSigstoreRoot_ReturnsRootMetadata()
     {
         var json = LoadFixture("root.json");
         var result = TufMetadataParser.ParseRoot(json);
 
-        Assert.Equal("root", result.Signed.Type);
-        Assert.Equal("1.0", result.Signed.SpecVersion);
-        Assert.True(result.Signed.Version > 0);
-        Assert.True(result.Signed.ConsistentSnapshot);
-        Assert.True(result.Signed.Expires > DateTimeOffset.UnixEpoch);
+        Assert.AreEqual("root", result.Signed.Type);
+        Assert.AreEqual("1.0", result.Signed.SpecVersion);
+        Assert.IsTrue(result.Signed.Version > 0);
+        Assert.IsTrue(result.Signed.ConsistentSnapshot);
+        Assert.IsTrue(result.Signed.Expires > DateTimeOffset.UnixEpoch);
 
-        Assert.NotEmpty(result.Signed.Keys);
+        Assert.IsNotEmpty(result.Signed.Keys);
 
         // Should have 4 roles
-        Assert.Equal(4, result.Signed.Roles.Count);
+        Assert.AreEqual(4, result.Signed.Roles.Count);
         Assert.Contains("root", result.Signed.Roles.Keys);
         Assert.Contains("targets", result.Signed.Roles.Keys);
         Assert.Contains("snapshot", result.Signed.Roles.Keys);
         Assert.Contains("timestamp", result.Signed.Roles.Keys);
 
         var rootRole = result.Signed.Roles["root"];
-        Assert.True(rootRole.Threshold > 0);
-        Assert.True(rootRole.KeyIds.Count >= rootRole.Threshold);
+        Assert.IsTrue(rootRole.Threshold > 0);
+        Assert.IsTrue(rootRole.KeyIds.Count >= rootRole.Threshold);
 
         // Timestamp/snapshot use online key with threshold 1
-        Assert.Equal(1, result.Signed.Roles["timestamp"].Threshold);
-        Assert.Equal(1, result.Signed.Roles["snapshot"].Threshold);
+        Assert.AreEqual(1, result.Signed.Roles["timestamp"].Threshold);
+        Assert.AreEqual(1, result.Signed.Roles["snapshot"].Threshold);
 
-        Assert.True(result.Signatures.Count >= rootRole.Threshold);
-        Assert.All(result.Signatures, s => Assert.NotEmpty(s.KeyId));
+        Assert.IsTrue(result.Signatures.Count >= rootRole.Threshold);
+        TestSeq.All(result.Signatures, s => Assert.IsNotEmpty(s.KeyId));
 
         // SignedBytes should be non-empty (used for signature verification)
-        Assert.NotEmpty(result.SignedBytes);
+        Assert.IsNotEmpty(result.SignedBytes);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_KeysHaveCorrectStructure()
     {
         var json = LoadFixture("root.json");
@@ -54,92 +55,92 @@ public class TufMetadataParserTests
 
         foreach (var (keyId, key) in result.Signed.Keys)
         {
-            Assert.NotEmpty(keyId);
-            Assert.NotEmpty(key.KeyType);
-            Assert.NotEmpty(key.Scheme);
-            Assert.NotEmpty(key.KeyVal);
-            Assert.True(key.KeyVal.ContainsKey("public"), $"Key {keyId} missing 'public' keyval");
+            Assert.IsNotEmpty(keyId);
+            Assert.IsNotEmpty(key.KeyType);
+            Assert.IsNotEmpty(key.Scheme);
+            Assert.IsNotEmpty(key.KeyVal);
+            Assert.IsTrue(key.KeyVal.ContainsKey("public"), $"Key {keyId} missing 'public' keyval");
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseTimestamp_ValidSigstoreTimestamp_ReturnsTimestampMetadata()
     {
         var json = LoadFixture("timestamp.json");
         var result = TufMetadataParser.ParseTimestamp(json);
 
-        Assert.Equal("timestamp", result.Signed.Type);
-        Assert.Equal("1.0", result.Signed.SpecVersion);
-        Assert.True(result.Signed.Version > 0);
-        Assert.True(result.Signed.Expires > DateTimeOffset.UnixEpoch);
+        Assert.AreEqual("timestamp", result.Signed.Type);
+        Assert.AreEqual("1.0", result.Signed.SpecVersion);
+        Assert.IsTrue(result.Signed.Version > 0);
+        Assert.IsTrue(result.Signed.Expires > DateTimeOffset.UnixEpoch);
 
         // Should reference snapshot.json
-        Assert.True(result.Signed.SnapshotMeta.Version > 0);
+        Assert.IsTrue(result.Signed.SnapshotMeta.Version > 0);
 
         // Should have at least 1 signature
-        Assert.NotEmpty(result.Signatures);
-        Assert.NotEmpty(result.SignedBytes);
+        Assert.IsNotEmpty(result.Signatures);
+        Assert.IsNotEmpty(result.SignedBytes);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseSnapshot_ValidSigstoreSnapshot_ReturnsSnapshotMetadata()
     {
         var json = LoadFixture("snapshot.json");
         var result = TufMetadataParser.ParseSnapshot(json);
 
-        Assert.Equal("snapshot", result.Signed.Type);
-        Assert.Equal("1.0", result.Signed.SpecVersion);
-        Assert.True(result.Signed.Version > 0);
-        Assert.True(result.Signed.Expires > DateTimeOffset.UnixEpoch);
+        Assert.AreEqual("snapshot", result.Signed.Type);
+        Assert.AreEqual("1.0", result.Signed.SpecVersion);
+        Assert.IsTrue(result.Signed.Version > 0);
+        Assert.IsTrue(result.Signed.Expires > DateTimeOffset.UnixEpoch);
 
         // Should have meta entries including targets.json
-        Assert.NotEmpty(result.Signed.Meta);
+        Assert.IsNotEmpty(result.Signed.Meta);
         Assert.Contains("targets.json", result.Signed.Meta.Keys);
 
         var targetsMeta = result.Signed.Meta["targets.json"];
-        Assert.True(targetsMeta.Version > 0);
+        Assert.IsTrue(targetsMeta.Version > 0);
 
-        Assert.NotEmpty(result.Signatures);
-        Assert.NotEmpty(result.SignedBytes);
+        Assert.IsNotEmpty(result.Signatures);
+        Assert.IsNotEmpty(result.SignedBytes);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseTargets_ValidSigstoreTargets_ReturnsTargetsMetadata()
     {
         var json = LoadFixture("targets.json");
         var result = TufMetadataParser.ParseTargets(json);
 
-        Assert.Equal("targets", result.Signed.Type);
-        Assert.Equal("1.0", result.Signed.SpecVersion);
-        Assert.True(result.Signed.Version > 0);
-        Assert.True(result.Signed.Expires > DateTimeOffset.UnixEpoch);
+        Assert.AreEqual("targets", result.Signed.Type);
+        Assert.AreEqual("1.0", result.Signed.SpecVersion);
+        Assert.IsTrue(result.Signed.Version > 0);
+        Assert.IsTrue(result.Signed.Expires > DateTimeOffset.UnixEpoch);
 
         // Should have targets including trusted_root.json
-        Assert.NotEmpty(result.Signed.Targets);
+        Assert.IsNotEmpty(result.Signed.Targets);
         Assert.Contains("trusted_root.json", result.Signed.Targets.Keys);
 
         var trustedRoot = result.Signed.Targets["trusted_root.json"];
-        Assert.True(trustedRoot.Length > 0);
-        Assert.NotEmpty(trustedRoot.Hashes);
+        Assert.IsTrue(trustedRoot.Length > 0);
+        Assert.IsNotEmpty(trustedRoot.Hashes);
         Assert.Contains("sha256", trustedRoot.Hashes.Keys);
 
-        Assert.NotEmpty(result.Signatures);
-        Assert.NotEmpty(result.SignedBytes);
+        Assert.IsNotEmpty(result.Signatures);
+        Assert.IsNotEmpty(result.SignedBytes);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseTargets_HasDelegations()
     {
         var json = LoadFixture("targets.json");
         var result = TufMetadataParser.ParseTargets(json);
 
         // Sigstore targets metadata has delegations (to rekor, registry.npmjs.org, etc.)
-        Assert.NotNull(result.Signed.Delegations);
-        Assert.NotEmpty(result.Signed.Delegations.Keys);
-        Assert.NotEmpty(result.Signed.Delegations.Roles);
+        Assert.IsNotNull(result.Signed.Delegations);
+        Assert.IsNotEmpty(result.Signed.Delegations.Keys);
+        Assert.IsNotEmpty(result.Signed.Delegations.Roles);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_WrongType_ThrowsJsonException()
     {
         // Create a fake "root" that has _type: "timestamp"
@@ -156,10 +157,10 @@ public class TufMetadataParserTests
         }
         """u8.ToArray();
 
-        Assert.Throws<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_MissingExpires_ThrowsJsonException()
     {
         var json = """
@@ -176,10 +177,10 @@ public class TufMetadataParserTests
         }
         """u8.ToArray();
 
-        Assert.Throws<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_MissingVersion_ThrowsJsonException()
     {
         var json = """
@@ -196,10 +197,10 @@ public class TufMetadataParserTests
         }
         """u8.ToArray();
 
-        Assert.Throws<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
+        Assert.ThrowsExactly<System.Text.Json.JsonException>(() => TufMetadataParser.ParseRoot(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_UnrecognizedFields_AreIgnored()
     {
         var json = """
@@ -220,10 +221,10 @@ public class TufMetadataParserTests
         """u8.ToArray();
 
         var result = TufMetadataParser.ParseRoot(json);
-        Assert.Equal(1, result.Signed.Version);
+        Assert.AreEqual(1, result.Signed.Version);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseRoot_DeprecatedKeyIdHashAlgorithms_IsIgnored()
     {
         var json = """
@@ -257,8 +258,8 @@ public class TufMetadataParserTests
 
         var result = TufMetadataParser.ParseRoot(json);
 
-        Assert.Single(result.Signed.Keys);
-        Assert.Equal("ed25519", result.Signed.Keys["keyid"].KeyType);
+        TestSeq.Single(result.Signed.Keys);
+        Assert.AreEqual("ed25519", result.Signed.Keys["keyid"].KeyType);
     }
 
 }

@@ -3,6 +3,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Transparency;
 
+[TestClass]
 public class MerkleVerifierTests
 {
     private static byte[] HashLeaf(byte[] data)
@@ -22,7 +23,7 @@ public class MerkleVerifierTests
         return SHA256.HashData(buffer);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_SingleLeafTree_EmptyProof()
     {
         // Tree with one leaf: leaf IS the root
@@ -34,10 +35,10 @@ public class MerkleVerifierTests
             proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_TwoLeafTree_VerifyLeft()
     {
         // Tree: root = H(leaf0 || leaf1)
@@ -51,10 +52,10 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { leaf1 },
             expectedRootHash: root);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_TwoLeafTree_VerifyRight()
     {
         var leaf0 = HashLeaf("a"u8.ToArray());
@@ -67,10 +68,10 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { leaf0 },
             expectedRootHash: root);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_FourLeafTree()
     {
         //       root
@@ -94,10 +95,10 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { l3, n01 },
             expectedRootHash: root);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_WrongRootHash_ReturnsFalse()
     {
         var leaf0 = HashLeaf("a"u8.ToArray());
@@ -110,10 +111,10 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { leaf1 },
             expectedRootHash: wrongRoot);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_TamperedProofHash_ReturnsFalse()
     {
         var leaf0 = HashLeaf("a"u8.ToArray());
@@ -128,10 +129,10 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { tamperedProof },
             expectedRootHash: root);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_InvalidIndex_ReturnsFalse()
     {
         var leafHash = HashLeaf("a"u8.ToArray());
@@ -141,10 +142,10 @@ public class MerkleVerifierTests
             proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_IndexOutOfRange_ReturnsFalse()
     {
         var leafHash = HashLeaf("a"u8.ToArray());
@@ -154,10 +155,10 @@ public class MerkleVerifierTests
             proofHashes: Array.Empty<ReadOnlyMemory<byte>>(),
             expectedRootHash: leafHash);
 
-        Assert.False(result);
+        Assert.IsFalse(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyInclusionProof_ThreeLeafTree()
     {
         //       root
@@ -177,7 +178,7 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { l1, l2 },
             expectedRootHash: root);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
 
         // Prove l2 (index 2, size 3): proof is [n01]
         // index=2, size=3 -> index == size-1, proof on left: H(n01 || l2) = root
@@ -186,6 +187,6 @@ public class MerkleVerifierTests
             proofHashes: new ReadOnlyMemory<byte>[] { n01 },
             expectedRootHash: root);
 
-        Assert.True(result);
+        Assert.IsTrue(result);
     }
 }

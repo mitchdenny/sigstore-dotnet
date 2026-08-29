@@ -5,6 +5,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class FulcioCertificateExtensionsTests
 {
     /// <summary>
@@ -38,7 +39,7 @@ public class FulcioCertificateExtensionsTests
         return cert;
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesIssuerV2()
     {
         var cert = CreateCertWithExtensions(
@@ -46,10 +47,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://token.actions.githubusercontent.com", ext.Issuer);
+        Assert.AreEqual("https://token.actions.githubusercontent.com", ext.Issuer);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesIssuerV1_RawBytes()
     {
         // V1 uses raw bytes, not DER-encoded
@@ -59,10 +60,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://accounts.google.com", ext.Issuer);
+        Assert.AreEqual("https://accounts.google.com", ext.Issuer);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_IssuerV2_TakesPrecedenceOverV1()
     {
         var cert = CreateCertWithExtensions(
@@ -71,10 +72,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("v2-issuer", ext.Issuer);
+        Assert.AreEqual("v2-issuer", ext.Issuer);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryUri()
     {
         var cert = CreateCertWithExtensions(
@@ -82,10 +83,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://github.com/myorg/myrepo", ext.SourceRepositoryUri);
+        Assert.AreEqual("https://github.com/myorg/myrepo", ext.SourceRepositoryUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryDigest()
     {
         var cert = CreateCertWithExtensions(
@@ -93,10 +94,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("abc123def456", ext.SourceRepositoryDigest);
+        Assert.AreEqual("abc123def456", ext.SourceRepositoryDigest);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryRef()
     {
         var cert = CreateCertWithExtensions(
@@ -104,10 +105,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("refs/heads/main", ext.SourceRepositoryRef);
+        Assert.AreEqual("refs/heads/main", ext.SourceRepositoryRef);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryIdentifier()
     {
         var cert = CreateCertWithExtensions(
@@ -115,10 +116,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("12345", ext.SourceRepositoryIdentifier);
+        Assert.AreEqual("12345", ext.SourceRepositoryIdentifier);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryOwnerUri()
     {
         var cert = CreateCertWithExtensions(
@@ -126,10 +127,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://github.com/myorg", ext.SourceRepositoryOwnerUri);
+        Assert.AreEqual("https://github.com/myorg", ext.SourceRepositoryOwnerUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryOwnerIdentifier()
     {
         var cert = CreateCertWithExtensions(
@@ -137,10 +138,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("67890", ext.SourceRepositoryOwnerIdentifier);
+        Assert.AreEqual("67890", ext.SourceRepositoryOwnerIdentifier);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesBuildSignerUri()
     {
         var cert = CreateCertWithExtensions(
@@ -148,10 +149,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main", ext.BuildSignerUri);
+        Assert.AreEqual("https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main", ext.BuildSignerUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesBuildSignerDigest()
     {
         var cert = CreateCertWithExtensions(
@@ -159,10 +160,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("sha256:abcdef", ext.BuildSignerDigest);
+        Assert.AreEqual("sha256:abcdef", ext.BuildSignerDigest);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesRunnerEnvironment()
     {
         var cert = CreateCertWithExtensions(
@@ -170,10 +171,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("github-hosted", ext.RunnerEnvironment);
+        Assert.AreEqual("github-hosted", ext.RunnerEnvironment);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesBuildConfigUri()
     {
         var cert = CreateCertWithExtensions(
@@ -181,10 +182,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://github.com/myorg/myrepo/.github/workflows/build.yml@refs/tags/v1.0", ext.BuildConfigUri);
+        Assert.AreEqual("https://github.com/myorg/myrepo/.github/workflows/build.yml@refs/tags/v1.0", ext.BuildConfigUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesBuildConfigDigest()
     {
         var cert = CreateCertWithExtensions(
@@ -192,10 +193,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("digest123", ext.BuildConfigDigest);
+        Assert.AreEqual("digest123", ext.BuildConfigDigest);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesBuildTrigger()
     {
         var cert = CreateCertWithExtensions(
@@ -203,10 +204,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("push", ext.BuildTrigger);
+        Assert.AreEqual("push", ext.BuildTrigger);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesRunInvocationUri()
     {
         var cert = CreateCertWithExtensions(
@@ -214,10 +215,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://github.com/myorg/myrepo/actions/runs/123456", ext.RunInvocationUri);
+        Assert.AreEqual("https://github.com/myorg/myrepo/actions/runs/123456", ext.RunInvocationUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesSourceRepositoryVisibilityAtSigning()
     {
         var cert = CreateCertWithExtensions(
@@ -225,10 +226,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("public", ext.SourceRepositoryVisibilityAtSigning);
+        Assert.AreEqual("public", ext.SourceRepositoryVisibilityAtSigning);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesDeprecatedGithubWorkflowTrigger()
     {
         var cert = CreateCertWithExtensions(
@@ -236,10 +237,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("push", ext.GithubWorkflowTrigger);
+        Assert.AreEqual("push", ext.GithubWorkflowTrigger);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesDeprecatedGithubWorkflowSha()
     {
         var cert = CreateCertWithExtensions(
@@ -247,10 +248,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("abc123", ext.GithubWorkflowSha);
+        Assert.AreEqual("abc123", ext.GithubWorkflowSha);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesDeprecatedGithubWorkflowName()
     {
         var cert = CreateCertWithExtensions(
@@ -258,10 +259,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("release", ext.GithubWorkflowName);
+        Assert.AreEqual("release", ext.GithubWorkflowName);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesDeprecatedGithubWorkflowRepository()
     {
         var cert = CreateCertWithExtensions(
@@ -269,10 +270,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("myorg/myrepo", ext.GithubWorkflowRepository);
+        Assert.AreEqual("myorg/myrepo", ext.GithubWorkflowRepository);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesDeprecatedGithubWorkflowRef()
     {
         var cert = CreateCertWithExtensions(
@@ -280,10 +281,10 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("refs/heads/main", ext.GithubWorkflowRef);
+        Assert.AreEqual("refs/heads/main", ext.GithubWorkflowRef);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_HandlesNoFulcioExtensions()
     {
         // Certificate with no Fulcio extensions at all
@@ -293,14 +294,14 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Null(ext.Issuer);
-        Assert.Null(ext.SourceRepositoryUri);
-        Assert.Null(ext.BuildSignerUri);
-        Assert.Null(ext.RunnerEnvironment);
-        Assert.Null(ext.BuildTrigger);
+        Assert.IsNull(ext.Issuer);
+        Assert.IsNull(ext.SourceRepositoryUri);
+        Assert.IsNull(ext.BuildSignerUri);
+        Assert.IsNull(ext.RunnerEnvironment);
+        Assert.IsNull(ext.BuildTrigger);
     }
 
-    [Fact]
+    [TestMethod]
     public void FromCertificate_ParsesAllExtensionsTogether()
     {
         var cert = CreateCertWithExtensions(
@@ -314,23 +315,23 @@ public class FulcioCertificateExtensionsTests
 
         var ext = FulcioCertificateExtensions.FromCertificate(cert);
 
-        Assert.Equal("https://token.actions.githubusercontent.com", ext.Issuer);
-        Assert.Equal("https://github.com/sigstore/sigstore-dotnet", ext.SourceRepositoryUri);
-        Assert.Equal("refs/tags/v1.0.0", ext.SourceRepositoryRef);
-        Assert.Equal("https://github.com/sigstore/sigstore-dotnet/.github/workflows/release.yml@refs/tags/v1.0.0", ext.BuildSignerUri);
-        Assert.Equal("github-hosted", ext.RunnerEnvironment);
-        Assert.Equal("push", ext.BuildTrigger);
-        Assert.Equal("public", ext.SourceRepositoryVisibilityAtSigning);
+        Assert.AreEqual("https://token.actions.githubusercontent.com", ext.Issuer);
+        Assert.AreEqual("https://github.com/sigstore/sigstore-dotnet", ext.SourceRepositoryUri);
+        Assert.AreEqual("refs/tags/v1.0.0", ext.SourceRepositoryRef);
+        Assert.AreEqual("https://github.com/sigstore/sigstore-dotnet/.github/workflows/release.yml@refs/tags/v1.0.0", ext.BuildSignerUri);
+        Assert.AreEqual("github-hosted", ext.RunnerEnvironment);
+        Assert.AreEqual("push", ext.BuildTrigger);
+        Assert.AreEqual("public", ext.SourceRepositoryVisibilityAtSigning);
     }
 
-    [Fact]
+    [TestMethod]
     public void ReadDerString_ParsesUtf8String()
     {
         var value = FulcioCertificateExtensions.ReadDerString(DerUtf8String("hello world"));
-        Assert.Equal("hello world", value);
+        Assert.AreEqual("hello world", value);
     }
 
-    [Fact]
+    [TestMethod]
     public void ReadDerString_ParsesIA5String()
     {
         var utf8Bytes = Encoding.UTF8.GetBytes("test-value");
@@ -340,29 +341,29 @@ public class FulcioCertificateExtensionsTests
         utf8Bytes.CopyTo(result, 2);
 
         var value = FulcioCertificateExtensions.ReadDerString(result);
-        Assert.Equal("test-value", value);
+        Assert.AreEqual("test-value", value);
     }
 
-    [Fact]
+    [TestMethod]
     public void ReadDerString_FallsBackToRawUtf8()
     {
         // Not a recognized DER tag — falls back to raw UTF-8
         var rawBytes = Encoding.UTF8.GetBytes("raw-value");
         var value = FulcioCertificateExtensions.ReadDerString(rawBytes);
-        Assert.Equal("raw-value", value);
+        Assert.AreEqual("raw-value", value);
     }
 
-    [Fact]
+    [TestMethod]
     public void ReadDerString_ReturnsNullForEmptyInput()
     {
         var value = FulcioCertificateExtensions.ReadDerString([]);
-        Assert.Null(value);
+        Assert.IsNull(value);
     }
 
-    [Fact]
+    [TestMethod]
     public void ReadDerString_ReturnsNullForSingleByte()
     {
         var value = FulcioCertificateExtensions.ReadDerString([0x0C]);
-        Assert.Null(value);
+        Assert.IsNull(value);
     }
 }

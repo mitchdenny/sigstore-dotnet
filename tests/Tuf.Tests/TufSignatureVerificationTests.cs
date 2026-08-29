@@ -4,6 +4,7 @@ using Tuf.Serialization;
 
 namespace Tuf.Tests;
 
+[TestClass]
 public class TufSignatureVerificationTests
 {
     private static byte[] LoadFixture(string name)
@@ -12,7 +13,7 @@ public class TufSignatureVerificationTests
         return File.ReadAllBytes(path);
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_SigstoreRoot_ThresholdMet()
     {
         // Parse the real Sigstore root.json and verify its own signatures
@@ -28,10 +29,10 @@ public class TufSignatureVerificationTests
             rootRole,
             root.Signed.Keys);
 
-        Assert.True(result, "Root metadata should pass threshold verification with real Sigstore signatures.");
+        Assert.IsTrue(result, "Root metadata should pass threshold verification with real Sigstore signatures.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_SigstoreTimestamp_ThresholdMet()
     {
         // First parse root to get keys and roles
@@ -50,10 +51,10 @@ public class TufSignatureVerificationTests
             timestampRole,
             root.Signed.Keys);
 
-        Assert.True(result, "Timestamp should pass threshold verification.");
+        Assert.IsTrue(result, "Timestamp should pass threshold verification.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_SigstoreSnapshot_ThresholdMet()
     {
         var rootJson = LoadFixture("root.json");
@@ -70,10 +71,10 @@ public class TufSignatureVerificationTests
             snapshotRole,
             root.Signed.Keys);
 
-        Assert.True(result, "Snapshot should pass threshold verification.");
+        Assert.IsTrue(result, "Snapshot should pass threshold verification.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_SigstoreTargets_ThresholdMet()
     {
         var rootJson = LoadFixture("root.json");
@@ -90,10 +91,10 @@ public class TufSignatureVerificationTests
             targetsRole,
             root.Signed.Keys);
 
-        Assert.True(result, "Targets should pass threshold verification.");
+        Assert.IsTrue(result, "Targets should pass threshold verification.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_EmptySignatures_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -107,10 +108,10 @@ public class TufSignatureVerificationTests
             rootRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Empty signatures should not meet threshold.");
+        Assert.IsFalse(result, "Empty signatures should not meet threshold.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_TamperedData_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -128,10 +129,10 @@ public class TufSignatureVerificationTests
             rootRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Tampered data should not pass verification.");
+        Assert.IsFalse(result, "Tampered data should not pass verification.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_BelowThreshold_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -150,10 +151,10 @@ public class TufSignatureVerificationTests
             strictRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Should fail when threshold is impossibly high.");
+        Assert.IsFalse(result, "Should fail when threshold is impossibly high.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_ZeroThreshold_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -171,10 +172,10 @@ public class TufSignatureVerificationTests
             zeroRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Zero threshold should always fail.");
+        Assert.IsFalse(result, "Zero threshold should always fail.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_CorruptedSignature_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -195,10 +196,10 @@ public class TufSignatureVerificationTests
             rootRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Corrupted signatures should not pass verification.");
+        Assert.IsFalse(result, "Corrupted signatures should not pass verification.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_UnauthorizedKeys_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -217,10 +218,10 @@ public class TufSignatureVerificationTests
             noKeysRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Signatures from unauthorized keys should not count.");
+        Assert.IsFalse(result, "Signatures from unauthorized keys should not count.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_DuplicateSignatureKeyIds_Fails()
     {
         var rootJson = LoadFixture("root.json");
@@ -240,10 +241,10 @@ public class TufSignatureVerificationTests
             rootRole,
             root.Signed.Keys);
 
-        Assert.False(result, "Duplicate keyids in signatures should invalidate the metadata.");
+        Assert.IsFalse(result, "Duplicate keyids in signatures should invalidate the metadata.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_Ed25519RawHexPublicKey_ThresholdMet()
     {
         var signingKey = new Ed25519PrivateKeyParameters(new byte[Ed25519PrivateKeyParameters.KeySize]);
@@ -282,10 +283,10 @@ public class TufSignatureVerificationTests
 
         var result = TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys);
 
-        Assert.True(result, "Ed25519 raw-hex public keys should verify successfully.");
+        Assert.IsTrue(result, "Ed25519 raw-hex public keys should verify successfully.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_Ed25519PemPublicKey_Rfc8032Vector_ThresholdMet()
     {
         var publicKey = Convert.FromHexString(
@@ -324,26 +325,26 @@ public class TufSignatureVerificationTests
 
         var result = TufMetadataVerifier.VerifyThreshold(signatures, [], role, keys);
 
-        Assert.True(result, "Ed25519 SPKI PEM public keys should verify successfully.");
+        Assert.IsTrue(result, "Ed25519 SPKI PEM public keys should verify successfully.");
     }
 
-    [Theory]
+    [TestMethod]
     // Well-formed SPKI carrying an unrecognised algorithm OID (1.2.3.4).
-    [InlineData("MCwwBwYDKgMEBQADIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==")]
+    [DataRow("MCwwBwYDKgMEBQADIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==")]
     // Structurally invalid DER.
-    [InlineData("AQIDBA==")]
+    [DataRow("AQIDBA==")]
     // Ed25519 OID with a key that is not 32 bytes.
-    [InlineData("MBIwBQYDK2VwAwkAAAAAAAAAAAA=")]
+    [DataRow("MBIwBQYDK2VwAwkAAAAAAAAAAAA=")]
     public void VerifyThreshold_Ed25519MalformedPemPublicKey_ReturnsFalse(string base64Der)
     {
         var pem = $"-----BEGIN PUBLIC KEY-----\n{base64Der}\n-----END PUBLIC KEY-----";
 
         var result = VerifyWithEd25519PemKey(pem);
 
-        Assert.False(result, "Malformed Ed25519 public keys must fail verification without throwing.");
+        Assert.IsFalse(result, "Malformed Ed25519 public keys must fail verification without throwing.");
     }
 
-    [Fact]
+    [TestMethod]
     public void VerifyThreshold_Ed25519KeyTypeWithRsaPemPublicKey_ReturnsFalse()
     {
         using var rsa = System.Security.Cryptography.RSA.Create(2048);
@@ -351,7 +352,7 @@ public class TufSignatureVerificationTests
 
         var result = VerifyWithEd25519PemKey(pem);
 
-        Assert.False(result, "A non-Ed25519 key must not satisfy an ed25519 key entry.");
+        Assert.IsFalse(result, "A non-Ed25519 key must not satisfy an ed25519 key entry.");
     }
 
     private static bool VerifyWithEd25519PemKey(string pem)

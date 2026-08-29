@@ -2,6 +2,7 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class CertificateExtensionPolicyTests
 {
     private static FulcioCertificateExtensions CreateExtensions(
@@ -37,7 +38,7 @@ public class CertificateExtensionPolicyTests
         };
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_EmptyPolicy_AlwaysMatches()
     {
         var policy = new CertificateExtensionPolicy();
@@ -47,11 +48,11 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.True(isMatch);
-        Assert.Null(reason);
+        Assert.IsTrue(isMatch);
+        Assert.IsNull(reason);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryUri_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -62,10 +63,10 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, _) = policy.Matches(extensions);
 
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryUri_Fails()
     {
         var policy = new CertificateExtensionPolicy
@@ -76,12 +77,12 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.False(isMatch);
-        Assert.Contains("SourceRepositoryUri", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("SourceRepositoryUri", reason!);
         Assert.Contains("attacker/evil", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryUri_FailsWhenNull()
     {
         var policy = new CertificateExtensionPolicy
@@ -92,11 +93,11 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.False(isMatch);
-        Assert.Contains("SourceRepositoryUri", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("SourceRepositoryUri", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_BuildSignerUri_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -108,10 +109,10 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, _) = policy.Matches(extensions);
 
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_BuildSignerUri_Fails()
     {
         var policy = new CertificateExtensionPolicy
@@ -123,11 +124,11 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.False(isMatch);
-        Assert.Contains("BuildSignerUri", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("BuildSignerUri", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_RunnerEnvironment_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -138,10 +139,10 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, _) = policy.Matches(extensions);
 
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_RunnerEnvironment_Fails()
     {
         var policy = new CertificateExtensionPolicy
@@ -152,11 +153,11 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.False(isMatch);
-        Assert.Contains("RunnerEnvironment", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("RunnerEnvironment", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_MultipleFields_AllMustMatch()
     {
         var policy = new CertificateExtensionPolicy
@@ -172,10 +173,10 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, _) = policy.Matches(extensions);
 
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_MultipleFields_FailsOnFirst()
     {
         var policy = new CertificateExtensionPolicy
@@ -191,11 +192,11 @@ public class CertificateExtensionPolicyTests
 
         var (isMatch, reason) = policy.Matches(extensions);
 
-        Assert.False(isMatch);
-        Assert.Contains("SourceRepositoryUri", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("SourceRepositoryUri", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryDigest_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -205,10 +206,10 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryDigest: "abc123");
 
         var (isMatch, _) = policy.Matches(extensions);
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryRef_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -218,10 +219,10 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryRef: "refs/tags/v1.0.0");
 
         var (isMatch, _) = policy.Matches(extensions);
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryRef_Fails()
     {
         var policy = new CertificateExtensionPolicy
@@ -231,11 +232,11 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryRef: "refs/heads/main");
 
         var (isMatch, reason) = policy.Matches(extensions);
-        Assert.False(isMatch);
-        Assert.Contains("SourceRepositoryRef", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("SourceRepositoryRef", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_BuildConfigUri_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -246,10 +247,10 @@ public class CertificateExtensionPolicyTests
             buildConfigUri: "https://github.com/myorg/myrepo/.github/workflows/build.yml@refs/tags/v1.0");
 
         var (isMatch, _) = policy.Matches(extensions);
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryOwnerUri_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -259,10 +260,10 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryOwnerUri: "https://github.com/myorg");
 
         var (isMatch, _) = policy.Matches(extensions);
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryVisibilityAtSigning_Matches()
     {
         var policy = new CertificateExtensionPolicy
@@ -272,10 +273,10 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryVisibilityAtSigning: "public");
 
         var (isMatch, _) = policy.Matches(extensions);
-        Assert.True(isMatch);
+        Assert.IsTrue(isMatch);
     }
 
-    [Fact]
+    [TestMethod]
     public void Matches_SourceRepositoryVisibilityAtSigning_Fails()
     {
         var policy = new CertificateExtensionPolicy
@@ -285,11 +286,11 @@ public class CertificateExtensionPolicyTests
         var extensions = CreateExtensions(sourceRepositoryVisibilityAtSigning: "private");
 
         var (isMatch, reason) = policy.Matches(extensions);
-        Assert.False(isMatch);
-        Assert.Contains("SourceRepositoryVisibilityAtSigning", reason);
+        Assert.IsFalse(isMatch);
+        Assert.Contains("SourceRepositoryVisibilityAtSigning", reason!);
     }
 
-    [Fact]
+    [TestMethod]
     public void BackwardCompatibility_ExistingSanAndIssuerOnlyPolicy()
     {
         // Ensure that existing policies without Extensions still work
@@ -299,24 +300,24 @@ public class CertificateExtensionPolicyTests
             Issuer = "https://accounts.google.com"
         };
 
-        Assert.Null(policy.Extensions);
+        Assert.IsNull(policy.Extensions);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_SetsSourceRepositoryUri()
     {
         var identity = CertificateIdentity.ForGitHubActions("myorg", "myrepo");
 
-        Assert.NotNull(identity.Extensions);
-        Assert.Equal("https://github.com/myorg/myrepo", identity.Extensions.SourceRepositoryUri);
+        Assert.IsNotNull(identity.Extensions);
+        Assert.AreEqual("https://github.com/myorg/myrepo", identity.Extensions.SourceRepositoryUri);
     }
 
-    [Fact]
+    [TestMethod]
     public void ForGitHubActions_WithWorkflowRef_StillSetsExtensions()
     {
         var identity = CertificateIdentity.ForGitHubActions("myorg", "myrepo", workflowRef: "refs/heads/main");
 
-        Assert.NotNull(identity.Extensions);
-        Assert.Equal("https://github.com/myorg/myrepo", identity.Extensions.SourceRepositoryUri);
+        Assert.IsNotNull(identity.Extensions);
+        Assert.AreEqual("https://github.com/myorg/myrepo", identity.Extensions.SourceRepositoryUri);
     }
 }

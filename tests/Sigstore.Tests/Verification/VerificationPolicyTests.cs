@@ -2,34 +2,35 @@ using Sigstore;
 
 namespace Sigstore.Tests.Verification;
 
+[TestClass]
 public class VerificationPolicyTests
 {
-    [Fact]
+    [TestMethod]
     public void DefaultPolicy_RequiresTransparencyLog()
     {
         var policy = new VerificationPolicy();
 
-        Assert.True(policy.RequireTransparencyLog);
-        Assert.Equal(1, policy.TransparencyLogThreshold);
+        Assert.IsTrue(policy.RequireTransparencyLog);
+        Assert.AreEqual(1, policy.TransparencyLogThreshold);
     }
 
-    [Fact]
+    [TestMethod]
     public void DefaultPolicy_RequiresSignedCertificateTimestamps()
     {
         var policy = new VerificationPolicy();
 
-        Assert.True(policy.RequireSignedCertificateTimestamps);
+        Assert.IsTrue(policy.RequireSignedCertificateTimestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public void DefaultPolicy_DoesNotRequireSignedTimestamps()
     {
         var policy = new VerificationPolicy();
 
-        Assert.False(policy.RequireSignedTimestamps);
+        Assert.IsFalse(policy.RequireSignedTimestamps);
     }
 
-    [Fact]
+    [TestMethod]
     public void Policy_CanSetCertificateIdentity()
     {
         var policy = new VerificationPolicy
@@ -41,7 +42,7 @@ public class VerificationPolicyTests
             }
         };
 
-        Assert.Equal("user@example.com", policy.CertificateIdentity.SubjectAlternativeName);
-        Assert.Equal("https://accounts.google.com", policy.CertificateIdentity.Issuer);
+        Assert.AreEqual("user@example.com", policy.CertificateIdentity.SubjectAlternativeName);
+        Assert.AreEqual("https://accounts.google.com", policy.CertificateIdentity.Issuer);
     }
 }
