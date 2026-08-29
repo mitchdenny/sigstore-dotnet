@@ -45,17 +45,6 @@ internal static class TestSeq
     }
 
     /// <summary>
-    /// Assert that <paramref name="value"/> is of type <typeparamref name="T"/> and return
-    /// the cast value. MSTest's <c>Assert.IsInstanceOfType&lt;T&gt;</c> returns
-    /// <see langword="void"/>.
-    /// </summary>
-    public static T IsType<T>(object? value)
-    {
-        Assert.IsInstanceOfType<T>(value);
-        return (T)value!;
-    }
-
-    /// <summary>
     /// Apply <paramref name="action"/> to every element of <paramref name="source"/>, so each
     /// element can be asserted individually.
     /// </summary>
