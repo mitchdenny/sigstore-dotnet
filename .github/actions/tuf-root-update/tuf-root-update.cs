@@ -530,6 +530,22 @@ internal static partial class TufRootUpdateApp
         var temporaryDirectory = CreateTemporaryDirectory();
         try
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                Require(
+                    File.GetUnixFileMode(temporaryDirectory) ==
+                        (UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute),
+                    "the temporary cache directory is not owner-only");
+            }
+
+            var cache = new FileSystemTufCache(temporaryDirectory);
+            var cachedRoot = CreateTestRoot(14);
+            cache.StoreMetadata("root", cachedRoot);
+            var loadedRoot = cache.LoadMetadata("root");
+            Require(
+                loadedRoot is not null && loadedRoot.AsSpan().SequenceEqual(cachedRoot),
+                "the temporary cache did not persist root metadata");
+
             var embeddedRoot = Path.Combine(temporaryDirectory, "root.json");
             var rootFixture = Path.Combine(temporaryDirectory, "root-fixture.json");
             var rootV14 = CreateTestRoot(14);
@@ -836,7 +852,18 @@ internal static partial class TufRootUpdateApp
     private static string CreateTemporaryDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), $"tuf-root-update-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(path);
+        }
+        else
+        {
+            // FileSystemTufCache rejects existing directories that are not owner-only.
+            Directory.CreateDirectory(
+                path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
         return path;
     }
 
