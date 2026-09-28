@@ -69,17 +69,17 @@ public sealed class TufSignature
 public sealed class TufKey
 {
     /// <summary>
-    /// The key type (e.g., "ed25519", "ecdsa-sha2-nistp256", "rsa").
+    /// The key type (e.g., "ed25519", "ecdsa", "rsa", or "ml-dsa").
     /// </summary>
     public required string KeyType { get; init; }
 
     /// <summary>
-    /// The signing scheme (e.g., "ed25519", "ecdsa-sha2-nistp256", "rsassa-pss-sha256").
+    /// The signing scheme (e.g., "ed25519", "ecdsa-sha2-nistp256", or "ml-dsa-65/1").
     /// </summary>
     public required string Scheme { get; init; }
 
     /// <summary>
-    /// The key value dictionary. Typically contains "public" with the hex-encoded public key.
+    /// The key value dictionary. Typically contains "public" with a raw or PEM-encoded public key.
     /// </summary>
     public required Dictionary<string, string> KeyVal { get; init; }
 }

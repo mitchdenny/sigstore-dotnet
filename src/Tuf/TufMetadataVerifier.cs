@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Math.EC.Rfc8032;
 using Org.BouncyCastle.Security;
 using Tuf.Metadata;
@@ -79,6 +80,12 @@ public static class TufMetadataVerifier
 
             return scheme switch
             {
+                "ml-dsa-44/1" when keyType == "ml-dsa" =>
+                    VerifyMlDsa(signedBytes, sigBytes, publicKeyPem, MLDsaParameters.ml_dsa_44),
+                "ml-dsa-65/1" when keyType == "ml-dsa" =>
+                    VerifyMlDsa(signedBytes, sigBytes, publicKeyPem, MLDsaParameters.ml_dsa_65),
+                "ml-dsa-87/1" when keyType == "ml-dsa" =>
+                    VerifyMlDsa(signedBytes, sigBytes, publicKeyPem, MLDsaParameters.ml_dsa_87),
                 "ecdsa-sha2-nistp256" => VerifyEcdsa(signedBytes, sigBytes, publicKeyPem, HashAlgorithmName.SHA256),
                 "ecdsa-sha2-nistp384" => VerifyEcdsa(signedBytes, sigBytes, publicKeyPem, HashAlgorithmName.SHA384),
                 "ed25519" => VerifyEd25519(signedBytes, sigBytes, publicKeyPem),
@@ -95,6 +102,37 @@ public static class TufMetadataVerifier
         {
             return false;
         }
+    }
+
+    private static bool VerifyMlDsa(
+        byte[] data,
+        byte[] signature,
+        string publicKeyPem,
+        MLDsaParameters parameters)
+    {
+        var publicKeyDer = ExtractDerFromPem(Encoding.ASCII.GetBytes(publicKeyPem));
+        var publicKeyInfo = Org.BouncyCastle.Asn1.X509.SubjectPublicKeyInfo.GetInstance(
+            Org.BouncyCastle.Asn1.Asn1Object.FromByteArray(publicKeyDer));
+        if (PublicKeyFactory.CreateKey(publicKeyInfo) is not MLDsaPublicKeyParameters publicKey ||
+            publicKey.Parameters.ParameterSet != parameters.ParameterSet)
+        {
+            return false;
+        }
+
+        // TAP 21 v1 signs the "tuf" domain separator, version byte, and SHA-512
+        // digest of canonical metadata using pure ML-DSA with an empty context.
+        var digest = SHA512.HashData(data);
+        var message = new byte[4 + digest.Length];
+        message[0] = (byte)'t';
+        message[1] = (byte)'u';
+        message[2] = (byte)'f';
+        message[3] = 0x01;
+        digest.CopyTo(message, 4);
+
+        var verifier = new MLDsaSigner(parameters, deterministic: true);
+        verifier.Init(forSigning: false, publicKey);
+        verifier.BlockUpdate(message, 0, message.Length);
+        return verifier.VerifySignature(signature);
     }
 
     private static bool VerifyEcdsa(byte[] data, byte[] signature, string pem, HashAlgorithmName hashAlgorithm)

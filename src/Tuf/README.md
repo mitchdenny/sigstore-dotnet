@@ -11,10 +11,15 @@ A .NET implementation of [The Update Framework (TUF)](https://theupdateframework
 - **TUF specification compliant** — implements the client workflow from the [TUF specification](https://theupdateframework.github.io/specification/latest/)
 - **Secure root rotation** — safely updates trust anchors across key rotations
 - **Metadata verification** — validates signatures, expiration, and version consistency
+- **Experimental ML-DSA verification** — supports TAP 21 v1 `ml-dsa-44/1`, `ml-dsa-65/1`, and `ml-dsa-87/1` signatures
 - **Pluggable caching** — in-memory and file-system cache implementations included
 - **Pluggable repository** — HTTP repository included, custom transports supported
 - **AOT-compatible** — fully trimmer and NativeAOT safe
 - **OpenTelemetry-ready** — emits native .NET activities and metrics without an exporter dependency
+
+ML-DSA verification uses the draft [TAP 21](https://github.com/theupdateframework/taps/blob/master/tap21.md)
+scheme and Bouncy Castle's experimental ML-DSA implementation. Treat this support as
+experimental until TAP 21 and the underlying cryptographic implementation are finalized.
 
 ## Quick Start
 
