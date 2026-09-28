@@ -1,5 +1,11 @@
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Math.EC.Rfc8032;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.X509;
 using Tuf.Serialization;
 
 namespace Tuf.Tests;
@@ -326,6 +332,120 @@ public class TufSignatureVerificationTests
         var result = TufMetadataVerifier.VerifyThreshold(signatures, [], role, keys);
 
         Assert.IsTrue(result, "Ed25519 SPKI PEM public keys should verify successfully.");
+    }
+
+    [TestMethod]
+    [DataRow("ml-dsa-44/1")]
+    [DataRow("ml-dsa-65/1")]
+    [DataRow("ml-dsa-87/1")]
+    public void VerifyThreshold_MlDsaTap21Signature_ThresholdMet(string scheme)
+    {
+        var parameters = scheme switch
+        {
+            "ml-dsa-44/1" => MLDsaParameters.ml_dsa_44,
+            "ml-dsa-65/1" => MLDsaParameters.ml_dsa_65,
+            "ml-dsa-87/1" => MLDsaParameters.ml_dsa_87,
+            _ => throw new ArgumentOutOfRangeException(nameof(scheme))
+        };
+
+        var keyPairGenerator = new MLDsaKeyPairGenerator();
+        keyPairGenerator.Init(new MLDsaKeyGenerationParameters(new SecureRandom(), parameters));
+        var keyPair = keyPairGenerator.GenerateKeyPair();
+        var publicKey = (MLDsaPublicKeyParameters)keyPair.Public;
+
+        var data = "canonical TUF metadata"u8.ToArray();
+        var digest = System.Security.Cryptography.SHA512.HashData(data);
+        var tap21Message = new byte[4 + digest.Length];
+        tap21Message[0] = (byte)'t';
+        tap21Message[1] = (byte)'u';
+        tap21Message[2] = (byte)'f';
+        tap21Message[3] = 0x01;
+        digest.CopyTo(tap21Message, 4);
+
+        var signer = new MLDsaSigner(parameters, deterministic: true);
+        signer.Init(forSigning: true, keyPair.Private);
+        signer.BlockUpdate(tap21Message, 0, tap21Message.Length);
+        var signature = signer.GenerateSignature();
+
+        var publicKeyDer = SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(publicKey).GetDerEncoded();
+        var publicKeyPem =
+            $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(publicKeyDer)}\n-----END PUBLIC KEY-----";
+        var role = new Tuf.Metadata.TufRole
+        {
+            KeyIds = ["ml-dsa-key"],
+            Threshold = 1
+        };
+        var keys = new Dictionary<string, Tuf.Metadata.TufKey>
+        {
+            ["ml-dsa-key"] = new()
+            {
+                KeyType = "ml-dsa",
+                Scheme = scheme,
+                KeyVal = new Dictionary<string, string> { ["public"] = publicKeyPem }
+            }
+        };
+        var signatures = new List<Tuf.Metadata.TufSignature>
+        {
+            new()
+            {
+                KeyId = "ml-dsa-key",
+                Sig = Convert.ToHexString(signature)
+            }
+        };
+
+        Assert.IsTrue(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            $"{scheme} TUF signatures should verify.");
+
+        data[0] ^= 0x01;
+        Assert.IsFalse(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            $"{scheme} signatures should not verify after the signed data changes.");
+        data[0] ^= 0x01;
+
+        var validKey = keys["ml-dsa-key"];
+        var hashMlDsaOid = scheme switch
+        {
+            "ml-dsa-44/1" => "2.16.840.1.101.3.4.3.32",
+            "ml-dsa-65/1" => "2.16.840.1.101.3.4.3.33",
+            "ml-dsa-87/1" => "2.16.840.1.101.3.4.3.34",
+            _ => throw new ArgumentOutOfRangeException(nameof(scheme))
+        };
+        var hashMlDsaDer = new SubjectPublicKeyInfo(
+            new AlgorithmIdentifier(new DerObjectIdentifier(hashMlDsaOid)),
+            publicKey.GetEncoded()).GetDerEncoded();
+        keys["ml-dsa-key"] = new Tuf.Metadata.TufKey
+        {
+            KeyType = validKey.KeyType,
+            Scheme = scheme,
+            KeyVal = new Dictionary<string, string>
+            {
+                ["public"] = $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(hashMlDsaDer)}\n-----END PUBLIC KEY-----"
+            }
+        };
+        Assert.IsFalse(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            "A HashML-DSA SPKI must not be accepted for a pure ML-DSA TUF scheme.");
+
+        keys["ml-dsa-key"] = new Tuf.Metadata.TufKey
+        {
+            KeyType = "unsupported",
+            Scheme = scheme,
+            KeyVal = validKey.KeyVal
+        };
+        Assert.IsFalse(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            "An ML-DSA scheme must not be accepted with a different key type.");
+
+        keys["ml-dsa-key"] = new Tuf.Metadata.TufKey
+        {
+            KeyType = validKey.KeyType,
+            Scheme = scheme[..^1] + "2",
+            KeyVal = validKey.KeyVal
+        };
+        Assert.IsFalse(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            "Unsupported ML-DSA scheme versions must fail verification.");
     }
 
     [TestMethod]
