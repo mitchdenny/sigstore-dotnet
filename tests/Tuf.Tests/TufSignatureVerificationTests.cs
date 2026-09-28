@@ -1,3 +1,5 @@
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
@@ -402,6 +404,29 @@ public class TufSignatureVerificationTests
         data[0] ^= 0x01;
 
         var validKey = keys["ml-dsa-key"];
+        var hashMlDsaOid = scheme switch
+        {
+            "ml-dsa-44/1" => "2.16.840.1.101.3.4.3.32",
+            "ml-dsa-65/1" => "2.16.840.1.101.3.4.3.33",
+            "ml-dsa-87/1" => "2.16.840.1.101.3.4.3.34",
+            _ => throw new ArgumentOutOfRangeException(nameof(scheme))
+        };
+        var hashMlDsaDer = new SubjectPublicKeyInfo(
+            new AlgorithmIdentifier(new DerObjectIdentifier(hashMlDsaOid)),
+            publicKey.GetEncoded()).GetDerEncoded();
+        keys["ml-dsa-key"] = new Tuf.Metadata.TufKey
+        {
+            KeyType = validKey.KeyType,
+            Scheme = scheme,
+            KeyVal = new Dictionary<string, string>
+            {
+                ["public"] = $"-----BEGIN PUBLIC KEY-----\n{Convert.ToBase64String(hashMlDsaDer)}\n-----END PUBLIC KEY-----"
+            }
+        };
+        Assert.IsFalse(
+            TufMetadataVerifier.VerifyThreshold(signatures, data, role, keys),
+            "A HashML-DSA SPKI must not be accepted for a pure ML-DSA TUF scheme.");
+
         keys["ml-dsa-key"] = new Tuf.Metadata.TufKey
         {
             KeyType = "unsupported",

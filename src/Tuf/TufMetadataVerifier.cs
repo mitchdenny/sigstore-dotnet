@@ -114,6 +114,7 @@ public static class TufMetadataVerifier
         var publicKeyInfo = Org.BouncyCastle.Asn1.X509.SubjectPublicKeyInfo.GetInstance(
             Org.BouncyCastle.Asn1.Asn1Object.FromByteArray(publicKeyDer));
         if (PublicKeyFactory.CreateKey(publicKeyInfo) is not MLDsaPublicKeyParameters publicKey ||
+            publicKey.Parameters.IsPreHash ||
             publicKey.Parameters.ParameterSet != parameters.ParameterSet)
         {
             return false;
