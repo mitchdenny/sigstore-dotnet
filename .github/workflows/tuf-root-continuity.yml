@@ -18,14 +18,14 @@ jobs:
       # pull_request_target deliberately uses trusted code. Never check out or execute the
       # pull request; the verifier downloads only its two root JSON files.
       - name: Checkout trusted verifier
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: verifier
           persist-credentials: false
 
       - name: Checkout trusted base
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: repository
