@@ -206,6 +206,24 @@ public sealed class FileSystemTufCacheTests
     }
 
     [TestMethod]
+    public void StagingFailure_DisablesCacheWithoutThrowing()
+    {
+        using var directory = new TemporaryDirectory();
+        var cache = new FileSystemTufCache(directory.Path);
+        var targetsPath = Path.Combine(directory.Path, "targets");
+        Directory.Delete(targetsPath);
+        File.WriteAllText(targetsPath, "not a directory");
+
+        cache.StoreTarget("artifact", "data"u8.ToArray());
+
+        File.Delete(targetsPath);
+        Directory.CreateDirectory(targetsPath);
+        cache.StoreTarget("other", "other"u8.ToArray());
+        Assert.IsNull(cache.LoadTarget("other"));
+        Assert.IsEmpty(Directory.GetFiles(targetsPath));
+    }
+
+    [TestMethod]
     public async Task CrossProcessReads_ObserveOnlyCompleteFiles()
     {
         using var directory = new TemporaryDirectory();

@@ -205,7 +205,7 @@ public sealed class TufTrustRootProviderTests
     }
 
     [TestMethod]
-    public void Constructor_DisablesWindowsCacheWhenDirectoryDeniesWrites()
+    public async Task GetTrustRootAsync_DisablesWindowsCacheWhenDirectoryDeniesWrites()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -236,12 +236,19 @@ public sealed class TufTrustRootProviderTests
                 "/deny",
                 $"*{sid}:(OI)(CI)(W)");
 
-            using var provider = new TufTrustRootProvider(
-                TufTrustRootProvider.ProductionUrl,
-                new TufTrustRootProviderOptions
-                {
-                    Cache = new FileSystemTufCache(cachePath)
-                });
+            var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+            var (repository, countingRepository) = CreateRepository(clock);
+            using var provider = CreateProvider(
+                repository,
+                countingRepository,
+                new FileSystemTufCache(cachePath),
+                clock,
+                refreshInterval: TimeSpan.FromHours(1));
+
+            var trustRoot = await provider.GetTrustRootAsync();
+
+            Assert.IsNotNull(trustRoot);
+            Assert.IsTrue(countingRepository.RequestCount > 0);
         }
         finally
         {
