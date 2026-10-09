@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using Tuf;
 using Tuf.Tests;
@@ -204,6 +205,58 @@ public sealed class TufTrustRootProviderTests
     }
 
     [TestMethod]
+    public void Constructor_DisablesWindowsCacheWhenDirectoryDeniesWrites()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var parentPath = Path.Combine(
+            Path.GetTempPath(),
+            Guid.NewGuid().ToString("N"));
+        var cachePath = Path.Combine(parentPath, "tuf");
+        Directory.CreateDirectory(Path.Combine(cachePath, "targets"));
+        var sid = RunWindowsCommand(
+            "whoami.exe",
+            "/user",
+            "/fo",
+            "csv",
+            "/nh")
+            .Split(',')
+            .Last()
+            .Trim()
+            .Trim('"');
+
+        try
+        {
+            RunWindowsCommand(
+                "icacls.exe",
+                cachePath,
+                "/deny",
+                $"*{sid}:(OI)(CI)(W)");
+
+            using var provider = new TufTrustRootProvider(
+                TufTrustRootProvider.ProductionUrl,
+                new TufTrustRootProviderOptions
+                {
+                    Cache = new FileSystemTufCache(cachePath)
+                });
+        }
+        finally
+        {
+            RunWindowsCommand(
+                "icacls.exe",
+                cachePath,
+                "/remove:d",
+                $"*{sid}",
+                "/t",
+                "/c");
+            Directory.Delete(parentPath, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void PrivateCacheDirectory_RequiresOwnerOnlyUnixMode()
     {
         if (OperatingSystem.IsWindows())
@@ -232,6 +285,33 @@ public sealed class TufTrustRootProviderTests
         {
             Directory.Delete(path);
         }
+    }
+
+    private static string RunWindowsCommand(
+        string fileName,
+        params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo(fileName)
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.AreEqual(
+            0,
+            process.ExitCode,
+            $"'{fileName}' failed.{Environment.NewLine}{output}{error}");
+        return output;
     }
 
     private static TufTrustRootProvider CreateProvider(
