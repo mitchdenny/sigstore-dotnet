@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- BEGIN: bot-managed baseline -->
-    <PackageValidationBaselineVersion>1.1.0</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion>1.1.1</PackageValidationBaselineVersion>
     <!-- END: bot-managed baseline -->
   </PropertyGroup>
 </Project>
