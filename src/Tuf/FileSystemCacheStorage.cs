@@ -85,9 +85,10 @@ internal sealed class FileSystemCacheStorage
             return;
         }
 
-        var tempPath = StageFile(destinationPath, data);
+        var tempPath = "";
         try
         {
+            tempPath = StageFile(destinationPath, data);
             using var cacheLock = TryAcquireLock();
             if (cacheLock is null || Directory.Exists(destinationPath))
             {
@@ -107,6 +108,10 @@ internal sealed class FileSystemCacheStorage
             {
                 tempPath = "";
             }
+        }
+        catch (Exception ex) when (IsFileSystemFailure(ex))
+        {
+            IsEnabled = false;
         }
         finally
         {
@@ -139,6 +144,7 @@ internal sealed class FileSystemCacheStorage
         }
         catch (Exception ex) when (IsFileSystemFailure(ex))
         {
+            IsEnabled = false;
             return null;
         }
     }
@@ -148,13 +154,25 @@ internal sealed class FileSystemCacheStorage
         var tempPath = Path.Combine(
             Path.GetDirectoryName(destinationPath)!,
             $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
-        using var stream = CreatePrivateFile(
-            tempPath,
-            FileMode.CreateNew,
-            FileShare.None);
-        stream.Write(data);
-        stream.Flush(flushToDisk: true);
-        return tempPath;
+        var staged = false;
+        try
+        {
+            using var stream = CreatePrivateFile(
+                tempPath,
+                FileMode.CreateNew,
+                FileShare.None);
+            stream.Write(data);
+            stream.Flush(flushToDisk: true);
+            staged = true;
+            return tempPath;
+        }
+        finally
+        {
+            if (!staged)
+            {
+                DeleteStagedFile(tempPath);
+            }
+        }
     }
 
     private static void DeleteStagedFile(string tempPath)
@@ -168,13 +186,12 @@ internal sealed class FileSystemCacheStorage
         {
             File.Delete(tempPath);
         }
-        catch (Exception ex) when (
-            ex is FileNotFoundException or DirectoryNotFoundException)
+        catch (Exception ex) when (IsFileSystemFailure(ex))
         {
         }
     }
 
-    private static bool TryReplace(string sourcePath, string destinationPath)
+    private bool TryReplace(string sourcePath, string destinationPath)
     {
         try
         {
@@ -183,6 +200,7 @@ internal sealed class FileSystemCacheStorage
         }
         catch (Exception exception) when (IsFileSystemFailure(exception))
         {
+            IsEnabled = false;
             return false;
         }
     }
